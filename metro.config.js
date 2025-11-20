@@ -1,15 +1,39 @@
-const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
+const { getDefaultConfig } = require('expo/metro-config');
+const { resolve } = require('metro-resolver');
 
 const config = getDefaultConfig(__dirname);
 
-// Add alias for @ to point to ./app
 config.resolver.alias = {
   '@': path.resolve(__dirname, 'app'),
 };
 
-// Fix for iOS 18.6 compatibility issues
-config.resolver.sourceExts = [...config.resolver.sourceExts, 'cjs'];
+config.resolver.sourceExts = Array.from(
+  new Set([...config.resolver.sourceExts, 'ts', 'tsx', 'cjs'])
+);
+
+const missingAssetRegistryPath = path.resolve(
+  __dirname,
+  'missing-asset-registry-path.js'
+);
+
+config.resolver.assetRegistryPath = missingAssetRegistryPath;
+
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'missing-asset-registry-path') {
+    return {
+      type: 'sourceFile',
+      filePath: missingAssetRegistryPath,
+    };
+  }
+
+  if (context.resolveRequest) {
+    return context.resolveRequest(context, moduleName, platform);
+  }
+
+  return resolve(context, moduleName, platform);
+};
+
 config.transformer.minifierConfig = {
   ...config.transformer.minifierConfig,
   keep_fnames: true,
@@ -18,7 +42,6 @@ config.transformer.minifierConfig = {
   },
 };
 
-// Configure for GitHub Pages deployment
 if (process.env.NODE_ENV === 'production') {
   config.transformer.publicPath = '/integra-markets/_expo/static/';
 }

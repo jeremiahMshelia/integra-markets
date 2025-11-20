@@ -1,101 +1,112 @@
-/**
- * API Service for Integra Markets
- * Handles communication with the Python FastAPI backend
- */
+import Constants from 'expo-constants';
 
-const API_BASE_URL = 'http://172.20.10.7:8000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8000';
 const API_URL = `${API_BASE_URL}/api`;
+console.log('[api] API_BASE_URL', API_BASE_URL);
 
-/**
- * Fetches market sentiment data from the Python backend
- * @returns {Promise<Object>} Market sentiment data
- */
-export const fetchMarketSentiment = async () => {
+const request = async (path, options = {}) => {
+  const url = `${API_URL}${path}`;
+
   try {
-    const response = await fetch(`${API_URL}/sentiment/market`);
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching market sentiment:', error);
-    // Return default data if API is unreachable
-    return {
-      overall: 'NEUTRAL',
-      confidence: 50,
-      commodities: [
-        { name: 'OIL', change: 0.0 },
-        { name: 'NAT GAS', change: 0.0 },
-        { name: 'WHEAT', change: 0.0 },
-        { name: 'GOLD', change: 0.0 },
-      ]
-    };
+    console.log('[api]', (options.method || 'GET'), url);
+  } catch {}
+
+  const response = await fetch(url, {
+    headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+    ...options,
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    try { console.log('[api] error', response.status, message?.slice?.(0, 200)); } catch {}
+    throw new Error(`API error ${response.status}: ${message}`);
   }
+
+  return response.status === 204 ? null : response.json();
 };
 
-/**
- * Fetches top market movers data
- * @returns {Promise<Array>} Top market movers
- */
-export const fetchTopMovers = async () => {
-  try {
-    const response = await fetch(`${API_URL}/sentiment/movers`);
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+export const dashboardApi = {
+  /**
+   * Aggregates the Today dashboard data from backend endpoints.
+   * Backend exposes /api/sentiment/market, /api/sentiment/movers, /api/news/analysis, /api/weather/alerts.
+   * We merge them client-side for now.
+   */
+  async getTodayDashboard(trackedCommodities = []) {
+    try {
+      const [marketSentiment, topMovers, _unused, weatherAlerts] = await Promise.all([
+        request('/sentiment/market'),
+        request('/sentiment/movers'),
+        Promise.resolve(null),
+        request('/weather/alerts'),
+      ]);
+
+      // Single news request with fallback to analysis
+      const hours = 6;
+      let newsData = { articles: [] };
+      try {
+        newsData = await request('/news/latest', {
+          method: 'POST',
+          body: JSON.stringify({ commodities: trackedCommodities, hours }),
+        });
+      } catch {
+        newsData = { articles: [] };
+      }
+      if (!Array.isArray(newsData?.articles) || newsData.articles.length === 0) {
+        try {
+          newsData = await request(`/news/analysis?hours=${hours}`, { method: 'GET' });
+        } catch {
+          newsData = { articles: [] };
+        }
+      }
+
+      return {
+        sentiment: marketSentiment,
+        movers: topMovers,
+        weather: weatherAlerts,
+        news: Array.isArray(newsData?.articles)
+          ? newsData.articles
+          : Array.isArray(newsData)
+            ? newsData
+            : [],
+      };
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      throw error;
     }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching top movers:', error);
-    return [
-      { symbol: 'OIL', sentiment: 0.0, trend: 'neutral' },
-      { symbol: 'CORN', sentiment: 0.0, trend: 'neutral' },
-      { symbol: 'COPPER', sentiment: 0.0, trend: 'neutral' },
-      { symbol: 'SILVER', sentiment: 0.0, trend: 'neutral' },
-    ];
-  }
+  },
 };
 
-/**
- * Fetches latest news analysis
- * @returns {Promise<Array>} News items with sentiment analysis
- */
-export const fetchNewsAnalysis = async () => {
-  try {
-    const response = await fetch(`${API_URL}/news/analysis`);
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching news analysis:', error);
-    return [];
-  }
+export const sentimentApi = {
+  async analyzeEnhanced(text, commodity = null) {
+    return request('/sentiment', {
+      method: 'POST',
+      body: JSON.stringify({ text, commodity, enhanced: true }),
+    });
+  },
+
+  async getMarketSentiment() {
+    return request('/sentiment/market');
+  },
+
+  async getTopMovers() {
+    return request('/sentiment/movers');
+  },
 };
 
-/**
- * Fetches latest weather alerts
- * @returns {Promise<Object>} Weather alerts
- */
-export const fetchWeatherAlerts = async () => {
-  try {
-    const response = await fetch(`${API_URL}/weather/alerts`);
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching weather alerts:', error);
-    return null;
-  }
+export const marketDataApi = {
+  async getWeatherAlerts() {
+    return request('/weather/alerts');
+  },
+
+  async getNewsAnalysis() {
+    return request('/news/analysis', { method: 'GET' });
+  },
 };
+
+export const fetchMarketSentiment = sentimentApi.getMarketSentiment;
+export const fetchTopMovers = sentimentApi.getTopMovers;
+export const fetchNewsAnalysis = marketDataApi.getNewsAnalysis;
+export const fetchWeatherAlerts = marketDataApi.getWeatherAlerts;
 
 /**
  * Checks status of the Python backend

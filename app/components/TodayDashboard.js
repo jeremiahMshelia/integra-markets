@@ -47,14 +47,14 @@ const [marketData, setMarketData] = useState(null);
 
         setNewsData(processedNews);
       } else {
-        setNewsData(sampleNewsData);
+        setNewsData([]);
       }
 
       setMarketData(dashboardData);
       setIsLoading(false);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      setNewsData(sampleNewsData);
+      setNewsData([]);
       setIsLoading(false);
     }
   };
@@ -641,7 +641,7 @@ const renderNewsCard = (item) => {
       {renderSentimentModal()}
       <AIAnalysisOverlay 
         isVisible={aiOverlayVisible} 
-        onClose={() => setAiOverlayVisible(false)}
+        onClose={() => setAiOverlayVisible(false)}
         news={selectedNews}
       />
     </SafeAreaView>

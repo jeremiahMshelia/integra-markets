@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
+import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configure how notifications are handled when the app is running
@@ -64,11 +65,28 @@ const defaultNotificationSettings = {
   vibrationEnabled: true,
 };
 
+// Helper: robustly determine if notifications are effectively enabled on iOS
+const isPermEnabled = (perm) => {
+  try {
+    const iosStatus = perm?.ios?.status;
+    const IOS = Notifications?.IosAuthorizationStatus || {};
+    return (
+      !!perm?.granted ||
+      iosStatus === IOS?.PROVISIONAL ||
+      iosStatus === IOS?.EPHEMERAL ||
+      perm?.ios?.allowsAlert === true
+    );
+  } catch (_e) {
+    return !!perm?.granted;
+  }
+};
+
 /**
  * Register for push notifications and get push token
  */
-export async function registerForPushNotificationsAsync() {
+export async function registerForPushNotificationsAsync(options = {}) {
   let token;
+  const silent = !!(options && options.silent);
   
   try {
     // Set up notification channel for Android
@@ -100,26 +118,31 @@ export async function registerForPushNotificationsAsync() {
     }
 
     // Check existing permission status
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    const perm0 = await Notifications.getPermissionsAsync();
+    let finalEnabled = isPermEnabled(perm0);
 
     // Request permission if not already granted
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    if (!finalEnabled) {
+      const perm1 = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowBadge: true, allowSound: true, allowProvisional: true } });
+      finalEnabled = isPermEnabled(perm1);
     }
 
     // If permission not granted, show user-friendly message
-    if (finalStatus !== 'granted') {
-      Alert.alert('Notifications Disabled', 'Enable notifications in settings to receive market alerts');
+    if (!finalEnabled) {
+      if (!silent) {
+        Alert.alert('Notifications Disabled', 'Enable notifications in settings to receive market alerts');
+      }
       return null;
     }
 
     // Get push token
-    token = await Notifications.getExpoPushTokenAsync();
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId || Constants?.expoConfig?.projectId;
+    token = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
     
     // Store the token locally
-    await AsyncStorage.setItem(PUSH_TOKEN_KEY, token.data);
+    if (token?.data) {
+      await AsyncStorage.setItem(PUSH_TOKEN_KEY, token.data);
+    }
     
     // Register token with backend if user is authenticated
     try {
@@ -137,12 +160,14 @@ export async function registerForPushNotificationsAsync() {
         console.error('Error registering token with backend:', error);
     }
     
-    console.log('Push notification token obtained:', token.data);
-    return token.data;
+    console.log('Push notification token obtained:', token?.data);
+    return token?.data ?? null;
     
   } catch (error) {
     console.error('Error registering for push notifications:', error);
-    Alert.alert('Notification Error', 'Failed to setup push notifications');
+    if (!silent) {
+      Alert.alert('Notification Error', 'Failed to setup push notifications');
+    }
     return null;
   }
 }
@@ -155,9 +180,8 @@ export async function getNotificationSettings() {
     const settings = await AsyncStorage.getItem(NOTIFICATION_SETTINGS_KEY);
     const parsedSettings = settings ? JSON.parse(settings) : defaultNotificationSettings;
     
-    // Check actual iOS permission status and sync with stored settings
-    const { status } = await Notifications.getPermissionsAsync();
-    const hasPermission = status === 'granted';
+    const perm = await Notifications.getPermissionsAsync();
+    const hasPermission = isPermEnabled(perm);
     
     // Update pushNotifications based on actual permission status
     if (parsedSettings.pushNotifications !== hasPermission) {
@@ -369,8 +393,8 @@ export async function sendBreakingNewsAlert(headline, source) {
  */
 export async function checkNotificationPermissions() {
   try {
-    const { status } = await Notifications.getPermissionsAsync();
-    return status === 'granted';
+    const perm = await Notifications.getPermissionsAsync();
+    return isPermEnabled(perm);
   } catch (error) {
     console.error('Error checking notification permissions:', error);
     return false;
@@ -392,3 +416,46 @@ export default {
   sendBreakingNewsAlert,
   checkNotificationPermissions,
 };
+
+/**
+ * Open the system settings page for this app
+ */
+export async function openSystemSettings() {
+  try {
+    if (typeof Linking.openSettings === 'function') {
+      await Linking.openSettings();
+      return;
+    }
+    if (Platform.OS === 'ios') {
+      const can = await Linking.canOpenURL('app-settings:');
+      if (can) {
+        await Linking.openURL('app-settings:');
+        return;
+      }
+    }
+  } catch (e) {
+    try {
+      if (Platform.OS === 'ios') {
+        await Linking.openURL('app-settings:');
+        return;
+      }
+    } catch (e2) {
+      console.warn('Unable to open settings', e2);
+    }
+  }
+}
+
+/**
+ * Ensure push notifications are enabled: request permission if needed,
+ * and if still disabled, open Settings. Returns boolean enabled.
+ */
+export async function ensurePushEnabled() {
+  const enabled0 = await checkNotificationPermissions();
+  if (enabled0) return true;
+  await registerForPushNotificationsAsync({ silent: true });
+  const enabled1 = await checkNotificationPermissions();
+  if (enabled1) return true;
+  await openSystemSettings();
+  // We cannot know result immediately; caller may re-check later
+  return false;
+}

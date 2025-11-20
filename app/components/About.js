@@ -9,6 +9,7 @@ import {
   StatusBar 
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import Logo from '../../components/mediakit/Logo';
 
 const colors = {
   bgPrimary: '#121212',
@@ -37,9 +38,7 @@ const About = ({ onBack }) => {
       
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.content}>
         <View style={styles.logoSection}>
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>i</Text>
-          </View>
+          <Logo variant="icon" size="large" />
           <Text style={styles.appName}>Integra Markets</Text>
           <Text style={styles.appVersion}>Version 1.0.0</Text>
         </View>

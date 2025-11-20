@@ -12,10 +12,11 @@ import {
   Image,
   Platform,
   DevSettings,
+  Modal,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { registerForPushNotificationsAsync, setupNotificationListeners } from './services/notificationService';
+import { registerForPushNotificationsAsync, setupNotificationListeners, ensurePushEnabled, openSystemSettings, checkNotificationPermissions, getNotificationSettings } from './services/notificationService';
 
 // Ensure dev tools are disabled in production
 if (!__DEV__) {
@@ -47,6 +48,7 @@ import AIAnalysisOverlay from './components/AIAnalysisOverlay';
 import { BookmarkProvider } from './providers/BookmarkProvider';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import TermsOfServiceModal from './components/TermsOfServiceModal';
+import { dashboardApi, sentimentApi } from './services/api';
 
 // Color Palette
 const colors = {
@@ -126,12 +128,24 @@ const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPrefe
     }
   };
 
-  const handleNotificationSettings = () => {
-    Alert.alert(
-      'Notification Settings',
-      'Push notifications are currently ' + (alertPreferences?.notifications ? 'enabled' : 'disabled') + '. You can change this in your device settings.',
-      [{ text: 'OK' }]
-    );
+
+  const handleNotificationSettings = async () => {
+    try {
+      const settings = await getNotificationSettings();
+      const enabled = Boolean(settings?.pushNotifications);
+      Alert.alert(
+        'Notification Settings',
+        `Push notifications are currently ${enabled ? 'enabled' : 'disabled'}. You can change this in your device settings.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error determining notification status:', error);
+      Alert.alert(
+        'Notification Settings',
+        'We could not confirm your notification status. Please check your device settings.',
+        [{ text: 'OK' }]
+      );
+    }
   };
   
   return (
@@ -233,6 +247,198 @@ const App = () => {
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showTermsOfService, setShowTermsOfService] = useState(false);
+  const [liveNews, setLiveNews] = useState([]);
+  const [allNews, setAllNews] = useState([]);
+  const [newsLimit, setNewsLimit] = useState(8);
+  const FEED_CACHE_KEY = '@integra_feed_cache_v1';
+  const [notifEnabled, setNotifEnabled] = useState(true);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [showNotifHelp, setShowNotifHelp] = useState(false);
+
+  const loadCachedFeed = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(FEED_CACHE_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      const items = Array.isArray(parsed?.items) ? parsed.items : [];
+      if (items.length > 0) {
+        setAllNews(items);
+        setLiveNews(items.slice(0, newsLimit));
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const saveFeedCache = async (items) => {
+    try {
+      await AsyncStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ items, savedAt: Date.now() }));
+    } catch {}
+  };
+
+  const formatTimeAgo = (timestamp) => {
+    if (!timestamp) return 'recently';
+    try {
+      const parseAlphaTime = (ts) => {
+        if (!ts) return null;
+        // Alpha Vantage sometimes uses YYYYMMDDTHHMMSS (optionally with Z)
+        const m = String(ts).match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/);
+        if (m) {
+          const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
+          const d = new Date(iso);
+          return isNaN(d.getTime()) ? null : d;
+        }
+        const d = new Date(ts);
+        return isNaN(d.getTime()) ? null : d;
+      };
+      const date = parseAlphaTime(timestamp);
+      if (!date) return 'recently';
+      const diffMs = Date.now() - date.getTime();
+      const mins = Math.max(0, Math.floor(diffMs / 60000));
+      if (mins < 1) return 'just now';
+      if (mins < 60) return `${mins} min${mins !== 1 ? 's' : ''} ago`;
+      if (mins < 1440) {
+        const hrs = Math.floor(mins / 60);
+        return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
+      }
+      const days = Math.floor(mins / 1440);
+      return `${days} day${days !== 1 ? 's' : ''} ago`;
+    } catch {
+      return 'recently';
+    }
+  };
+
+  const loadNews = async () => {
+    try {
+      const data = await dashboardApi.getTodayDashboard(['OIL', 'GOLD', 'WHEAT', 'NAT GAS']);
+      const articles = Array.isArray(data?.news) ? data.news : [];
+      // Map and polish, then hard-cap to 20
+      let mapped = articles.map((a, i) => {
+        // Polish title: truncate if too long, ensure proper format
+        let title = (a.title || '').trim();
+        if (title.length > 150) {
+          title = title.substring(0, 147) + '...';
+        }
+        // Clean up summary
+        let summary = (a.summary || '').trim();
+        if (summary.length > 200) {
+          summary = summary.substring(0, 197) + '...';
+        }
+        // Format sentiment properly
+        const sentiment = (a.ensemble_sentiment || a.sentiment || 'NEUTRAL').toUpperCase();
+        // Ensure sentiment score is a clean decimal
+        let score = parseFloat(a.sentiment_score) || 0.5;
+        score = Math.max(0, Math.min(1, score)); // Clamp between 0-1
+        const sentimentScore = score.toFixed(2);
+        
+        return {
+          id: String(i + 1),
+          title,
+          summary,
+          source: a.source,
+          sourceUrl: a.source_url || a.url || '',
+          timeAgo: formatTimeAgo(a.time_published),
+          sentiment,
+          sentimentScore,
+        };
+      });
+      if (mapped.length === 0) {
+        // Keep existing feed if provider is empty
+        const hadCache = await loadCachedFeed();
+        if (!hadCache) {
+          // Do nothing; UI will show current list (possibly empty) until provider has items
+        }
+        return;
+      }
+      const limited = mapped.slice(0, 20);
+      setAllNews(limited);
+      // Analyze the first batch (8) so card sentiment matches overlay
+      const initial = await analyzeBatch(limited, 0, Math.min(8, limited.length));
+      setLiveNews(initial);
+      // Merge analysis back into allNews
+      setAllNews(prev => {
+        const merged = [...prev];
+        for (let i = 0; i < initial.length; i++) merged[i] = initial[i];
+        return merged;
+      });
+      // Persist latest non-empty feed
+      await saveFeedCache(initial);
+    } catch (e) {
+      console.error('Live news fetch failed:', e);
+      // Load last good feed from cache
+      await loadCachedFeed();
+    }
+  };
+
+  // Analyze a slice of items [start,end) using backend and return updated items
+  const analyzeBatch = async (items, start, end) => {
+    const slice = items.slice(start, end);
+    const guessCommodity = (t) => {
+      const s = (t || '').toLowerCase();
+      if (/(brent|wti|crude|oil)/.test(s)) return 'OIL';
+      if (/(nat\s?gas|natural gas|lng)/.test(s)) return 'NAT GAS';
+      if (/(gold|bullion)/.test(s)) return 'GOLD';
+      if (/(wheat|corn|soybean|soybeans)/.test(s)) return 'WHEAT';
+      if (/(silver|copper|platinum)/.test(s)) return 'GOLD';
+      return undefined;
+    };
+
+    const analyzed = await Promise.all(slice.map(async (item) => {
+      try {
+        const text = `${item.title}. ${item.summary || ''}`.trim();
+        const commodity = guessCommodity(text);
+        const res = await sentimentApi.analyzeEnhanced(text, commodity);
+        let bull = Math.max(0, Math.min(1, Number(res?.bullish || 0)));
+        let bear = Math.max(0, Math.min(1, Number(res?.bearish || 0)));
+        let neu  = Math.max(0, Math.min(1, Number(res?.neutral || 0)));
+        // Normalize to sum to 1
+        const sum = bull + bear + neu;
+        if (sum > 0 && Math.abs(sum - 1) > 1e-6) {
+          bull = bull / sum; bear = bear / sum; neu = neu / sum;
+        }
+        const topProb = Math.max(bull, bear, neu);
+        let lbl = 'NEUTRAL';
+        if (bull === topProb && bull > bear) lbl = 'BULLISH';
+        else if (bear === topProb && bear > bull) lbl = 'BEARISH';
+
+        return {
+          ...item,
+          sentiment: lbl,
+          sentimentScore: topProb.toFixed(2),
+          analysis: {
+            bulls: Math.round(bull * 100),
+            bears: Math.round(bear * 100),
+            neuts: 100 - Math.round(bull * 100) - Math.round(bear * 100),
+            keywords: Array.isArray(res?.keywords) ? res.keywords : [],
+            impact: res?.impact || 'LOW',
+            confidence: Number(res?.confidence ?? 0.5),
+          },
+        };
+      } catch {
+        return item; // Keep original if analysis fails
+      }
+    }));
+    return analyzed;
+  };
+
+  useEffect(() => { (async () => { await loadCachedFeed(); await loadNews(); })(); }, []);
+  useEffect(() => { (async () => {
+    try {
+      const perm = await checkNotificationPermissions();
+      let enabled = perm;
+      try { const s = await getNotificationSettings(); if (s && s.pushNotifications === false) enabled = false; } catch {}
+      setNotifEnabled(Boolean(enabled));
+    } catch { setNotifEnabled(false); }
+  })(); }, []);
+  
+  // Update displayed news when limit changes
+  useEffect(() => {
+    if (allNews.length > 0) {
+      setLiveNews(allNews.slice(0, newsLimit));
+    }
+  }, [newsLimit]);
 
   // Check app state on mount
   useEffect(() => {
@@ -255,8 +461,8 @@ const App = () => {
   // Initialize notifications
   const initializeNotifications = async () => {
     try {
-      // Register for push notifications
-      await registerForPushNotificationsAsync();
+      // Register for push notifications (silent to avoid popup on startup)
+      await registerForPushNotificationsAsync({ silent: true });
       
       // Set up notification listeners
       setupNotificationListeners(
@@ -520,8 +726,26 @@ const App = () => {
   };
 
   const getFilteredNews = () => {
-    if (activeFilter === 'All') return sampleNewsData;
-    return sampleNewsData.filter(item => item.sentiment === activeFilter.toUpperCase());
+    const src = liveNews;
+    if (activeFilter === 'All') return src;
+    return src.filter(item => item.sentiment === activeFilter.toUpperCase());
+  };
+
+  const handleLoadMore = async () => {
+    const newLimit = Math.min(newsLimit + 8, allNews.length);
+    // Analyze the next batch before showing
+    const analyzed = await analyzeBatch(allNews, newsLimit, newLimit);
+    // Merge analyzed items back into allNews
+    setAllNews(prev => {
+      const merged = [...prev];
+      for (let i = newsLimit, j = 0; i < newLimit; i++, j++) merged[i] = analyzed[j];
+      return merged;
+    });
+    setNewsLimit(newLimit);
+    setLiveNews(prev => {
+      const next = [...prev, ...analyzed];
+      return next;
+    });
   };
 
   const getFilterChipColor = (filter) => {
@@ -674,16 +898,64 @@ const App = () => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Today</Text>
-          <TouchableOpacity onPress={() => {
-            Alert.alert(
-              'Notifications',
-              'Notification settings and alerts will be available in the next update.',
-              [{ text: 'OK' }]
-            );
+          <TouchableOpacity onPress={async () => {
+            const enabled = await ensurePushEnabled();
+            if (enabled) {
+              setActiveNav('Alerts');
+            } else {
+              openSystemSettings();
+            }
           }}>
             <MaterialIcons name="notifications-none" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
+
+        {!notifEnabled && !bannerDismissed && (
+          <View style={styles.banner}>
+            <MaterialIcons name="notifications-off" size={18} color={colors.accentNegative} />
+            <Text style={styles.bannerText}>Push notifications are disabled</Text>
+            <TouchableOpacity style={styles.bannerCta} onPress={async () => {
+              setShowNotifHelp(true);
+            }}>
+              <Text style={styles.bannerCtaText}>Enable Notifications</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setBannerDismissed(true)} style={styles.bannerClose}>
+              <MaterialIcons name="close" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Notification Help Modal (Today screen) */}
+        <Modal visible={showNotifHelp} animationType="slide" transparent onRequestClose={() => setShowNotifHelp(false)}>
+          <View style={styles.helpBackdrop}>
+            <View style={styles.helpCard}>
+              <View style={styles.helpHeader}>
+                <Text style={styles.helpTitle}>Enable Notifications</Text>
+                <TouchableOpacity onPress={() => setShowNotifHelp(false)}>
+                  <MaterialIcons name="close" size={22} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.helpText}>Quick steps to turn notifications back on:</Text>
+              <Text style={styles.helpStep}>1. Tap <Text style={styles.helpStepEm}>Open Settings</Text> below.</Text>
+              <Text style={styles.helpStep}>2. In Settings, go to <Text style={styles.helpStepEm}>Apps → Integra Markets</Text>.</Text>
+              <Text style={styles.helpStep}>3. Open <Text style={styles.helpStepEm}>Notifications</Text>, toggle <Text style={styles.helpStepEm}>Allow Notifications</Text> ON, then enable Alerts.</Text>
+              <View style={styles.helpButtons}>
+                <TouchableOpacity style={styles.helpButton} onPress={async () => {
+                  await openSystemSettings();
+                }}>
+                  <Text style={styles.helpButtonText}>Open Settings</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.helpButton, { backgroundColor: colors.bgSecondary, borderColor: colors.cardBorder }]} onPress={async () => {
+                  const perm = await checkNotificationPermissions();
+                  setNotifEnabled(Boolean(perm));
+                  setShowNotifHelp(false);
+                }}>
+                  <Text style={[styles.helpButtonText, { color: colors.textPrimary }]}>I've Enabled It</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
           {['All', 'Bullish', 'Neutral', 'Bearish'].map((filter) => (
@@ -714,14 +986,22 @@ const App = () => {
           ))}
           
           <View style={styles.endOfFeed}>
-            <View style={styles.integraIcon}>
-              <Text style={styles.integraIconText}>i</Text>
-            </View>
-            <Text style={styles.endOfFeedText}>You're all caught up!</Text>
-            <TouchableOpacity style={styles.refreshButton}>
-              <MaterialIcons name="refresh" size={16} color={colors.accentData} />
-              <Text style={styles.refreshText}>Refresh</Text>
-            </TouchableOpacity>
+            {allNews.length > liveNews.length ? (
+              <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
+                <Text style={styles.loadMoreText}>Load More</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <View style={styles.integraIcon}>
+                  <Text style={styles.integraIconText}>i</Text>
+                </View>
+                <Text style={styles.endOfFeedText}>You're all caught up!</Text>
+                <TouchableOpacity style={styles.refreshButton} onPress={loadNews}>
+                  <MaterialIcons name="refresh" size={16} color={colors.accentData} />
+                  <Text style={styles.refreshText}>Refresh</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </ScrollView>
 
@@ -736,7 +1016,8 @@ const App = () => {
             source: selectedArticle.source || 'Unknown',
             timeAgo: selectedArticle.timeAgo || selectedArticle.date || '2 hours ago',
             sentiment: selectedArticle.sentiment || 'NEUTRAL',
-            sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5
+            sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
+            analysis: selectedArticle.analysis,
           }}
           isVisible={showAIAnalysis}
           onClose={() => {
@@ -867,6 +1148,95 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
   },
+  banner: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    backgroundColor: '#2a1f1f',
+    borderColor: colors.accentNegative,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  bannerText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  bannerCta: {
+    backgroundColor: colors.accentNegative,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  bannerCtaText: {
+    color: colors.bgPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  bannerClose: {
+    marginLeft: 8,
+    padding: 6,
+  },
+  helpBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  helpCard: {
+    backgroundColor: colors.bgSecondary,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  helpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  helpTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  helpText: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    marginBottom: 10,
+  },
+  helpStep: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  helpStepEm: {
+    color: colors.accentPositive,
+    fontWeight: '700',
+  },
+  helpButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  helpButton: {
+    backgroundColor: colors.accentPositive,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.accentPositive,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  helpButtonText: {
+    color: colors.bgPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   backButton: {
     padding: 5,
   },
@@ -934,15 +1304,28 @@ const styles = StyleSheet.create({
   refreshButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
     backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 10,
   },
   refreshText: {
     color: colors.accentData,
     fontSize: 14,
-    marginLeft: 6,
+    marginLeft: 4,
+  },
+  loadMoreButton: {
+    backgroundColor: colors.accentPositive,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginTop: 10,
+  },
+  loadMoreText: {
+    color: colors.bgPrimary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   bottomNav: {
     position: 'absolute',

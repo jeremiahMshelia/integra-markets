@@ -14,6 +14,7 @@ import {
     Image,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Logo from '../../components/mediakit/Logo';
 import * as ImagePicker from 'expo-image-picker';
 import HollowCircularIcon from './HollowCircularIcon';
 // import * as ImageManipulator from 'expo-image-manipulator'; // Temporarily disabled
@@ -69,9 +70,7 @@ const marketFocusOptions = [
 const WelcomeCard = ({ onNext }) => (
     <View style={styles.welcomeCard}>
         <View style={styles.welcomeHeader}>
-            <View style={styles.logoPlaceholder}>
-                <MaterialIcons name="analytics" size={60} color={colors.accentPositive} />
-            </View>
+            <Logo variant="full" size="large" style={styles.logoImage} />
             <Text style={styles.welcomeTitle}>Welcome to Integra Markets</Text>
             <Text style={styles.welcomeSubtitle}>
                 The AI-powered platform for commodity trading insights and prediction markets

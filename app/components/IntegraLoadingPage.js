@@ -7,7 +7,7 @@ import {
     Dimensions,
     StatusBar,
 } from 'react-native';
-import IntegraIcon from './IntegraIcon';
+import Logo from '../../components/mediakit/Logo';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -92,12 +92,9 @@ const IntegraLoadingPage = ({ onLoadingComplete }) => {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#000000" />
             
-            {/* Large 'i' Icon with Square Container */}
-            <View style={styles.iconContainer}>
-                <View style={styles.iconSquare}>
-                    <View style={styles.iconDot} />
-                    <View style={styles.iconLine} />
-                </View>
+            {/* Logo */}
+            <View style={styles.logoContainer}>
+                <Logo variant="full" size="xlarge" style={styles.logo} />
             </View>
 
             {/* Shiny Text Below */}
@@ -129,30 +126,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
     },
-    iconContainer: {
+    logoContainer: {
         marginBottom: 40,
     },
-    iconSquare: {
-        width: 192,
-        height: 192,
-        borderWidth: 4,
-borderColor: colors.accentPositive,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    },
-    iconDot: {
-        width: 16,
-        height: 16,
-backgroundColor: colors.accentPositive,
-    borderRadius: 4,
-    marginBottom: 24,
-    },
-    iconLine: {
-        width: 16,
-        height: 96,
-backgroundColor: colors.accentPositive,
-    borderRadius: 4,
+    logo: {
+        width: 200,
+        height: 200,
     },
     textContainer: {
         alignItems: 'center',

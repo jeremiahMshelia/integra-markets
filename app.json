@@ -11,9 +11,9 @@
     "category": "finance",
     "privacy": "https://integramarkets.com/privacy",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/logoNew.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#121212"
     },
     "assetBundlePatterns": [
       "**/*"

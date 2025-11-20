@@ -8,9 +8,19 @@ import {
   TouchableOpacity,
   ScrollView,
   Switch,
+  Modal,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  ensurePushEnabled,
+  openSystemSettings,
+  registerForPushNotificationsAsync,
+  getNotificationSettings,
+  saveNotificationSettings,
+  checkNotificationPermissions,
+  getStoredPushToken,
+} from '../services/notificationService';
 import HollowCircularIcon from './HollowCircularIcon';
 
 // Color Palette
@@ -26,6 +36,102 @@ const colors = {
   accentData: '#30A5FF',
   divider: '#333333',
   cardBorder: '#2A2A2A',
+};
+
+const deriveAlertsFromPreferences = (preferences = {}, previousAlerts = []) => {
+  const {
+    commodities = [],
+    regions = [],
+    currencies = [],
+    keywords = [],
+    websiteURLs = [],
+    alertFrequency = 'Real-time',
+    alertThreshold = 'Medium',
+  } = preferences;
+
+  const previousMap = new Map(previousAlerts.map((alert) => [alert.id, alert]));
+
+  const frequencyLabel = alertFrequency === 'Real-time'
+    ? 'real-time'
+    : alertFrequency.toLowerCase();
+  const thresholdLabel = alertThreshold.toLowerCase();
+
+  const buildAlert = (id, title, body, type) => {
+    const existing = previousMap.get(id);
+    return {
+      id,
+      title,
+      message: body,
+      type,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      read: existing?.read ?? false,
+      severity: thresholdLabel === 'high' ? 'high' : thresholdLabel === 'low' ? 'low' : 'medium',
+    };
+  };
+
+  const alerts = [];
+
+  commodities.forEach((commodity) => {
+    const id = `commodity-${commodity}`;
+    alerts.push(
+      buildAlert(
+        id,
+        `${commodity} commodity updates`,
+        `Monitoring ${commodity} news and price action with ${thresholdLabel} sensitivity (${frequencyLabel}).`,
+        'commodity',
+      ),
+    );
+  });
+
+  regions.forEach((region) => {
+    const id = `region-${region}`;
+    alerts.push(
+      buildAlert(
+        id,
+        `${region} regional coverage`,
+        `Highlighting market shifts across ${region} as part of your watchlist.`,
+        'region',
+      ),
+    );
+  });
+
+  currencies.forEach((currency) => {
+    const id = `currency-${currency}`;
+    alerts.push(
+      buildAlert(
+        id,
+        `${currency} currency alerts`,
+        `Keeping tabs on ${currency} developments in line with your preferences.`,
+        'currency',
+      ),
+    );
+  });
+
+  keywords.forEach((keyword) => {
+    const id = `keyword-${keyword}`;
+    alerts.push(
+      buildAlert(
+        id,
+        `Keyword: ${keyword}`,
+        `Surfacing stories tagged with “${keyword}”.`,
+        'keyword',
+      ),
+    );
+  });
+
+  websiteURLs.forEach((url) => {
+    const id = `source-${url}`;
+    alerts.push(
+      buildAlert(
+        id,
+        `Source: ${url}`,
+        `Pulling curated updates from ${url}.`,
+        'source',
+      ),
+    );
+  });
+
+  return alerts;
 };
 
 const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
@@ -45,40 +151,20 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
   const [emailAlerts, setEmailAlerts] = useState(false);
   const [priceAlerts, setPriceAlerts] = useState(true);
   const [newsAlerts, setNewsAlerts] = useState(true);
-
-  // Sample alerts data
-  const [alerts] = useState([
-    {
-      id: '1',
-      title: 'Gold Price Alert',
-      message: 'Gold has increased by 2.5% in the last hour',
-      time: '2 min ago',
-      type: 'price',
-      severity: 'high',
-      read: false,
-    },
-    {
-      id: '2',
-      title: 'Oil Market Update',
-      message: 'Crude oil futures showing volatility due to geopolitical tensions',
-      time: '15 min ago',
-      type: 'news',
-      severity: 'medium',
-      read: true,
-    },
-    {
-      id: '3',
-      title: 'Copper Supply Chain',
-      message: 'Major copper mine disruption reported in Chile',
-      time: '1 hour ago',
-      type: 'news',
-      severity: 'high',
-      read: false,
-    },
-  ]);
+  const [alerts, setAlerts] = useState([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyItems, setHistoryItems] = useState([]);
 
   useEffect(() => {
     loadAlertPreferences();
+    // Initialize push toggle from real notification settings
+    (async () => {
+      try {
+        const hasPerm = await checkNotificationPermissions();
+        const s = await getNotificationSettings();
+        setPushAlerts(Boolean(s?.pushNotifications && hasPerm));
+      } catch {}
+    })();
   }, []);
 
   const loadAlertPreferences = async () => {
@@ -87,6 +173,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
       if (savedPreferences) {
         const preferences = JSON.parse(savedPreferences);
         setAlertPreferences(preferences);
+        setAlerts((prev) => deriveAlertsFromPreferences(preferences, prev));
       }
     } catch (error) {
       console.error('Error loading alert preferences:', error);
@@ -122,13 +209,47 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
   };
 
   const handleAlertTap = (alertId) => {
-    console.log('Alert tapped:', alertId);
+    setAlerts((prev) =>
+      prev.map((alert) =>
+        alert.id === alertId ? { ...alert, read: true } : alert
+      )
+    );
   };
 
-  const handleSettingChange = (setting, value) => {
+  const formatRelativeTime = (isoString) => {
+    if (!isoString) return '';
+    const now = Date.now();
+    const time = new Date(isoString).getTime();
+    const diffMs = now - time;
+
+    const minutes = Math.round(diffMs / (1000 * 60));
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    const days = Math.round(hours / 24);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  };
+
+  const handleSettingChange = async (setting, value) => {
     switch (setting) {
       case 'push':
-        setPushAlerts(value);
+        if (value) {
+          const enabled = await ensurePushEnabled();
+          if (enabled) {
+            setPushAlerts(true);
+            const s = await getNotificationSettings();
+            await saveNotificationSettings({ ...s, pushNotifications: true });
+            const token = await getStoredPushToken();
+            if (!token) await registerForPushNotificationsAsync({ silent: true });
+          } else {
+            openSystemSettings();
+          }
+        } else {
+          setPushAlerts(false);
+          const s = await getNotificationSettings();
+          await saveNotificationSettings({ ...s, pushNotifications: false });
+        }
         break;
       case 'email':
         setEmailAlerts(value);
@@ -171,7 +292,11 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
         <Text style={styles.headerTitle}>Alerts</Text>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Alert Preferences Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Alert Preferences</Text>
@@ -273,50 +398,100 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
         {/* Recent Alerts */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Alerts</Text>
-          {alerts.map((alert) => (
-            <TouchableOpacity
-              key={alert.id}
-              style={[styles.alertItem, !alert.read && styles.unreadAlert]}
-              onPress={() => handleAlertTap(alert.id)}
+          {alerts.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateTitle}>No alerts yet</Text>
+              <Text style={styles.emptyStateSubtitle}>Adjust your alert preferences to start tracking markets.</Text>
+            </View>
+          ) : (
+            alerts.map((alert) => (
+              <TouchableOpacity
+                key={alert.id}
+                style={[styles.alertItem, !alert.read && styles.unreadAlert]}
+                onPress={() => handleAlertTap(alert.id)}
+              >
+                <View style={styles.alertIcon}>
+                  <HollowCircularIcon
+                    name={getTypeIcon(alert.type)}
+                    size={20}
+                    color={getSeverityColor(alert.severity)}
+                    padding={4}
+                  />
+                </View>
+                <View style={styles.alertContent}>
+                  <Text style={styles.alertTitle}>{alert.title}</Text>
+                  <Text style={styles.alertMessage}>{alert.message}</Text>
+                  <Text style={styles.alertTime}>{formatRelativeTime(alert.createdAt)}</Text>
+                </View>
+                {!alert.read && <View style={styles.unreadDot} />}
+              </TouchableOpacity>
+            ))
+          )}
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => {
+              const ordered = [...alerts].sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              );
+              setHistoryItems(ordered);
+              setShowHistoryModal(true);
+            }}
+            disabled={alerts.length === 0}
+          >
+            <MaterialIcons
+              name="history"
+              size={20}
+              color={alerts.length === 0 ? colors.textSecondary : colors.accentData}
+            />
+            <Text
+              style={[
+                styles.historyButtonText,
+                alerts.length === 0 && { color: colors.textSecondary },
+              ]}
             >
-              <View style={styles.alertIcon}>
-                <HollowCircularIcon
-                  name={getTypeIcon(alert.type)}
-                  size={20}
-                  color={getSeverityColor(alert.severity)}
-                  padding={4}
-                />
-              </View>
-              <View style={styles.alertContent}>
-                <Text style={styles.alertTitle}>{alert.title}</Text>
-                <Text style={styles.alertMessage}>{alert.message}</Text>
-                <Text style={styles.alertTime}>{alert.time}</Text>
-              </View>
-              {!alert.read && <View style={styles.unreadDot} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <HollowCircularIcon name="add" size={20} color={colors.accentData} padding={4} />
-            <Text style={styles.actionText}>Add New Alert</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <HollowCircularIcon name="settings" size={20} color={colors.accentData} padding={4} />
-            <Text style={styles.actionText}>Manage Alerts</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <HollowCircularIcon name="history" size={20} color={colors.accentData} padding={4} />
-            <Text style={styles.actionText}>View Alert History</Text>
+              View Alert History
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <Modal
+        visible={showHistoryModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowHistoryModal(false)}
+      >
+        <View style={[styles.modalBackdrop, styles.centeredBackdrop]}>
+          <View style={styles.historyModalCard}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Alert History</Text>
+                <Text style={styles.modalSubtitle}>Chronological list of alerts saved on this device</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowHistoryModal(false)}>
+                <MaterialIcons name="close" size={22} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            {historyItems.length === 0 ? (
+              <View style={styles.historyEmptyState}>
+                <Text style={styles.modalItemTitle}>No alerts configured</Text>
+                <Text style={styles.modalItemSub}>Update your alert preferences to populate history.</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.historyList}>
+                {historyItems.map((alert) => (
+                  <View key={alert.id} style={styles.modalItem}>
+                    <Text style={styles.modalItemTitle}>{alert.title}</Text>
+                    <Text style={styles.modalItemSub}>{alert.message}</Text>
+                    <Text style={styles.modalItemTimestamp}>
+                      {new Date(alert.createdAt).toLocaleString()}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -343,6 +518,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   section: {
     marginVertical: 20,
@@ -434,18 +612,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   alertTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: colors.textPrimary,
     marginBottom: 4,
   },
   alertMessage: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   alertTime: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textSecondary,
   },
   unreadDot: {
@@ -454,19 +632,96 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.accentPositive,
   },
-  actionButton: {
+  historyButton: {
+    marginTop: 16,
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
     backgroundColor: colors.bgSecondary,
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
   },
-  actionText: {
-    fontSize: 16,
+  historyButtonText: {
+    fontSize: 15,
     color: colors.accentData,
-    marginLeft: 10,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(10, 10, 10, 0.75)',
+  },
+  centeredBackdrop: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalList: {
+    marginTop: 8,
+  },
+  historyModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 20,
+    paddingHorizontal: 22,
+    paddingTop: 20,
+    paddingBottom: 26,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  historyList: {
+    maxHeight: 420,
+    marginTop: 8,
+  },
+  historyEmptyState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    gap: 6,
+  },
+  modalItem: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  modalItemTitle: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalItemSub: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  modalItemTimestamp: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
   },
 });
 

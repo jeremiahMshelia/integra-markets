@@ -20,6 +20,8 @@ import {
   cancelAllNotifications,
   scheduleLocalNotification,
   checkNotificationPermissions,
+  ensurePushEnabled,
+  openSystemSettings,
 } from '../services/notificationService';
 
 // Use the same color palette as the main app
@@ -89,6 +91,34 @@ const NotificationSettings = ({ onBack }) => {
     }
   };
 
+  const togglePushNotifications = async (value) => {
+    if (value) {
+      const enabled = await ensurePushEnabled();
+      setHasPermission(enabled);
+      if (enabled) {
+        await handleSettingChange('pushNotifications', true);
+        const token = await getStoredPushToken();
+        if (!token) {
+          await registerForPushNotificationsAsync({ silent: true });
+          await loadPushToken();
+        }
+      } else {
+        // Offer Settings if still disabled
+        Alert.alert(
+          'Enable Notifications',
+          'Please allow notifications in system settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => openSystemSettings() },
+          ]
+        );
+        await handleSettingChange('pushNotifications', false);
+      }
+    } else {
+      await handleSettingChange('pushNotifications', false);
+    }
+  };
+
   const handleSettingChange = async (key, value) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
@@ -96,28 +126,27 @@ const NotificationSettings = ({ onBack }) => {
   };
 
   const handleRegisterNotifications = async () => {
-    Alert.alert(
-      'Enable Push Notifications',
-      'This will request permission to send you market alerts and breaking news notifications.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Enable',
-          onPress: async () => {
-            const token = await registerForPushNotificationsAsync();
-            if (token) {
-              setPushToken(token);
-              setHasPermission(true);
-              await handleSettingChange('pushNotifications', true);
-            } else {
-              // Check permission even if token is null
-              const permissionGranted = await checkNotificationPermissions();
-              setHasPermission(permissionGranted);
-            }
-          },
-        },
-      ]
-    );
+    const enabled = await ensurePushEnabled();
+    if (enabled) {
+      const token = await getStoredPushToken();
+      if (!token) {
+        const t2 = await registerForPushNotificationsAsync({ silent: true });
+        if (t2) setPushToken(t2);
+      } else {
+        setPushToken(token);
+      }
+      setHasPermission(true);
+      await handleSettingChange('pushNotifications', true);
+    } else {
+      Alert.alert(
+        'Notifications Disabled',
+        'Allow notifications in system settings to receive alerts.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => openSystemSettings() },
+        ]
+      );
+    }
   };
 
   const handleTestNotification = async () => {
@@ -243,7 +272,7 @@ const NotificationSettings = ({ onBack }) => {
               </View>
               <Switch
                 value={settings.pushNotifications || false}
-                onValueChange={(value) => handleSettingChange('pushNotifications', value)}
+                onValueChange={togglePushNotifications}
                 trackColor={{ false: colors.divider, true: colors.accentPositive }}
                 thumbColor={colors.textPrimary}
               />
