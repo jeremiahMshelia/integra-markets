@@ -41,10 +41,9 @@ COPY --from=builder /root/nltk_data /root/nltk_data
 ENV PATH=/root/.local/bin:$PATH
 ENV NLTK_DATA=/root/nltk_data
 
-# Copy application code
-COPY app/ ./app/
+# Copy application code so that `main.py`, `api`, `core`, etc. are siblings
+COPY app/ ./
 COPY services/ ./services/
-COPY main.py .
 
 # Create directories for model caching
 RUN mkdir -p /app/models/finbert /app/models/nltk_data /app/cache
@@ -64,5 +63,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application (module is `main:app`, same as local)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
