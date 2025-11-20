@@ -6,13 +6,13 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from app.services.ai_alert_service import (
+from services.ai_alert_service import (
     process_news_with_ai,
     record_feedback,
     record_market_data,
     get_user_insights
 )
-from app.core.auth import get_current_user
+from core.auth import get_current_user
 
 router = APIRouter(prefix="/api/ai-alerts", tags=["ai-alerts"])
 
@@ -235,7 +235,7 @@ async def get_model_statistics(
     Get statistics about the Q-learning model performance.
     """
     try:
-        from app.services.alert_rl_model import alert_agent
+        from services.core.alert_rl_model import alert_agent
         
         return {
             "epsilon": alert_agent.epsilon,

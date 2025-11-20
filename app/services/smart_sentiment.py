@@ -19,7 +19,7 @@ except ImportError:
     logging.warning("VADER not available")
 
 # Import our preprocessing
-from app.services.news_preprocessing import preprocess_news, create_pipeline_ready_output
+from services.news_preprocessing import preprocess_news, create_pipeline_ready_output
 
 logger = logging.getLogger(__name__)
 

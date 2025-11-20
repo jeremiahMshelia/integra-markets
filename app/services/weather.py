@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from geopy.geocoders import Nominatim
 
-from app.core.config import settings
-from app.models.weather import WeatherData, Location, WeatherImpact
-from app.models.commodities import Commodity, CommodityRegion
+from core.config import settings
+from models.weather import WeatherData, Location, WeatherImpact
+from models.commodities import Commodity, CommodityRegion
 
 # Configure logging
 logger = logging.getLogger(__name__)

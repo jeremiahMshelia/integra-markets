@@ -7,7 +7,7 @@ import logging
 import requests
 from typing import Dict, Any, Optional
 from functools import lru_cache
-from app.core.config import settings
+from core.config import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

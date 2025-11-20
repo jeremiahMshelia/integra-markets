@@ -5,7 +5,7 @@ Includes subscription tiers, LLM usage tracking, and push notifications
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, JSON, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.core.database import Base
+from core.database import Base
 
 class User(Base):
     __tablename__ = "users"

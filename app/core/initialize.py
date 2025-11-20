@@ -5,7 +5,7 @@ Run this during app startup to ensure all required data is available.
 import os
 import logging
 import nltk
-from app.core.config import settings
+from core.config import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

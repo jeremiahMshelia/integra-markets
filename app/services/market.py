@@ -6,8 +6,8 @@ from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.models.commodities import Commodity, PriceData
+from core.config import settings
+from models.commodities import Commodity, PriceData
 
 # Configure logging
 logger = logging.getLogger(__name__)

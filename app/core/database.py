@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, MetaData, Column, Integer, String, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from sqlalchemy.pool import StaticPool
-from app.core.config import settings
+from core.config import settings
 
 # Load environment variables
 load_dotenv()

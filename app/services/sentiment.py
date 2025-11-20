@@ -10,7 +10,7 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 # Import our smart sentiment analyzer (preprocessing + VADER + ML)
 try:
-    from app.services.smart_sentiment import analyze_financial_text as smart_analyze
+    from services.smart_sentiment import analyze_financial_text as smart_analyze
     SMART_SENTIMENT_AVAILABLE = True
 except ImportError:
     SMART_SENTIMENT_AVAILABLE = False

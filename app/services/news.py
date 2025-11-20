@@ -12,9 +12,9 @@ import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
-from app.services.enhanced_caching import cache_manager, cached
-from app.services.news_preprocessing import preprocess_news, create_pipeline_ready_output
-from app.services.sentiment import analyze_sentiment
+from services.enhanced_caching import cache_manager, cached
+from services.news_preprocessing import preprocess_news, create_pipeline_ready_output
+from services.sentiment import analyze_sentiment
 
 logger = logging.getLogger(__name__)
 

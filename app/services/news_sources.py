@@ -6,9 +6,9 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from app.models.news import NewsSource, UserSourceSubmission
-from app.models.users import User
-from app.core.config import settings
+from models.news import NewsSource, UserSourceSubmission
+from models.users import User
+from core.config import settings
 
 # Configure logging
 logger = logging.getLogger(__name__)

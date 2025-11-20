@@ -5,11 +5,11 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db_session
-from app.models.news import NewsSource, UserSourceSubmission
-from app.services.news_sources import news_source_service
-from app.services.auth import get_current_user
-from app.schemas.news import (
+from core.database import get_db_session
+from models.news import NewsSource, UserSourceSubmission
+from services.news_sources import news_source_service
+from services.auth import get_current_user
+from schemas.news import (
     NewsSourceCreate,
     NewsSourceResponse,
     NewsSourceSubmitRequest,

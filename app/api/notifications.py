@@ -10,11 +10,11 @@ import httpx
 import logging
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
-from app.core.config import settings
-from app.services.auth import get_current_user
-from app.models.users import User
-from app.services.ai_alert_service import AIAlertService
+from core.database import get_db
+from core.config import settings
+from services.auth import get_current_user
+from models.users import User
+from services.ai_alert_service import AIAlertService
 
 # Configure logging
 logger = logging.getLogger(__name__)

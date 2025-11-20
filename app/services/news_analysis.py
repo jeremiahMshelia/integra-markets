@@ -4,10 +4,10 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from app.services.llm import LLMService
-from app.models.news import NewsArticle, NewsAnalysis
-from app.models.commodities import Commodity
-from app.models.users import User
+from services.llm import LLMService
+from models.news import NewsArticle, NewsAnalysis
+from models.commodities import Commodity
+from models.users import User
 
 # Configure logging
 logger = logging.getLogger(__name__)

@@ -9,7 +9,7 @@ import gc
 from typing import Dict, Any, Optional
 from functools import lru_cache
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from app.core.config import settings
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
