@@ -4,7 +4,7 @@
     "slug": "integra",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logoNew.png",
     "userInterfaceStyle": "light",
     "description": "Professional financial markets analysis and news aggregation platform with AI-powered sentiment analysis for commodities trading.",
     "keywords": ["finance", "markets", "trading", "commodities", "news", "analysis", "AI", "sentiment"],
