@@ -7,6 +7,8 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel
 import logging
 
+from core.config import settings
+
 # Try to import sentiment analysis libraries
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -55,14 +57,21 @@ class EnhancedSentimentAnalyzer:
                 self.vader_analyzer = SentimentIntensityAnalyzer()
                 logging.info("VADER sentiment analyzer initialized")
             
-            # Initialize FinBERT
-            if FINBERT_AVAILABLE:
+            # Initialize FinBERT only when heavy LLM features are enabled and
+            # we're not in offline/low-memory mode.
+            if (
+                FINBERT_AVAILABLE
+                and settings.ENABLE_LLM_FEATURES
+                and not settings.OFFLINE_MODE
+            ):
                 self.finbert_model = BertForSequenceClassification.from_pretrained(
                     "yiyanghkust/finbert-tone", 
                     num_labels=3
                 )
                 self.finbert_tokenizer = BertTokenizer.from_pretrained("yiyanghkust/finbert-tone")
                 logging.info("FinBERT model initialized")
+            else:
+                logging.info("FinBERT initialization skipped (LLM features disabled or OFFLINE_MODE=true)")
                 
             self.initialized = True
             
