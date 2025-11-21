@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     OPENWEATHERMAP_API_KEY: Optional[str] = Field(None, env="OPENWEATHERMAP_API_KEY")
     ALPHA_VANTAGE_API_KEY: Optional[str] = Field(None, env="ALPHA_VANTAGE_API_KEY")
     HUGGING_FACE_TOKEN: Optional[str] = Field(None, env="HUGGING_FACE_TOKEN")
+    GROQ_API_KEY: Optional[str] = Field(None, env="GROQ_API_KEY")
     
     # Supabase
     SUPABASE_URL: Optional[str] = Field(None, env="SUPABASE_URL")
@@ -48,8 +49,10 @@ class Settings(BaseSettings):
     OFFLINE_MODE: bool = Field(False, env="OFFLINE_MODE")
     
     # API Configuration
+    API_V1_STR: str = Field("/api", env="API_V1_STR")
     HOST: str = Field("0.0.0.0", env="HOST")
     PORT: int = Field(8000, env="PORT")
+    EXPO_PUBLIC_API_URL: Optional[str] = Field(None, env="EXPO_PUBLIC_API_URL")
     
     # CORS
     CORS_ORIGINS: List[str] = Field(["*"], env="CORS_ORIGINS")
@@ -65,10 +68,11 @@ class Settings(BaseSettings):
     ZOHO_MAIL_APP_PASSWORD: Optional[str] = Field(None, env="ZOHO_MAIL_APP_PASSWORD")
     
     # Use SettingsConfigDict instead of the old Config class
+    # Try loading from both the app-level .env and the project root ../.env
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
-        case_sensitive=True
+        case_sensitive=True,
     )
 
 @lru_cache()

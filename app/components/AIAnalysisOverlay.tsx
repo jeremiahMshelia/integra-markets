@@ -351,6 +351,15 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isVisible, newsData?.title, newsData?.summary]);
 
+    useEffect(() => {
+        if (!isVisible) {
+            setUserVote(null);
+            return;
+        }
+        // When a new article is opened in the overlay, reset any previous vote
+        setUserVote(null);
+    }, [isVisible, newsData?.title]);
+
     if (!newsData) return null;
 
     const copyToClipboard = (text: string, sectionName: string) => {

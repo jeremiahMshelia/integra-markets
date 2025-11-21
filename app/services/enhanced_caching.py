@@ -5,6 +5,8 @@ Provides Redis-backed persistent caching and fallback to in-memory caching
 import json
 import pickle
 import logging
+import asyncio
+from functools import wraps
 from typing import Dict, Any, Optional, Union
 from datetime import datetime, timedelta
 import hashlib
@@ -264,31 +266,61 @@ def cached(namespace: str, ttl_seconds: int = 3600, key_func: Optional[callable]
         ttl_seconds: Time to live in seconds
         key_func: Function to generate cache key from args/kwargs
     """
+
+    def _make_cache_key(func, args, kwargs):
+        if key_func:
+            return key_func(*args, **kwargs)
+        # Default key generation
+        key_parts = [func.__name__]
+        key_parts.extend([str(arg) for arg in args])
+        key_parts.extend([f"{k}={v}" for k, v in sorted(kwargs.items())])
+        return "|".join(key_parts)
+
     def decorator(func):
-        def wrapper(*args, **kwargs):
-            # Generate cache key
-            if key_func:
-                cache_key = key_func(*args, **kwargs)
-            else:
-                # Default key generation
-                key_parts = [func.__name__]
-                key_parts.extend([str(arg) for arg in args])
-                key_parts.extend([f"{k}={v}" for k, v in sorted(kwargs.items())])
-                cache_key = "|".join(key_parts)
-            
-            # Try to get from cache
+        # Async functions
+        if asyncio.iscoroutinefunction(func):
+
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                cache_key = _make_cache_key(func, args, kwargs)
+
+                cached_result = cache_manager.get(namespace, cache_key)
+                if cached_result is not None:
+                    logger.debug(f"Cache hit for {func.__name__}: {cache_key}")
+                    return cached_result
+
+                result = await func(*args, **kwargs)
+                try:
+                    cache_manager.set(namespace, cache_key, result, ttl_seconds)
+                    logger.debug(f"Cached result for {func.__name__}: {cache_key}")
+                except Exception as e:
+                    logger.warning(f"Cache set error for {func.__name__}: {e}")
+
+                return result
+
+            return async_wrapper
+
+        # Sync functions
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            cache_key = _make_cache_key(func, args, kwargs)
+
             cached_result = cache_manager.get(namespace, cache_key)
             if cached_result is not None:
                 logger.debug(f"Cache hit for {func.__name__}: {cache_key}")
                 return cached_result
-            
-            # Execute function and cache result
+
             result = func(*args, **kwargs)
-            cache_manager.set(namespace, cache_key, result, ttl_seconds)
-            logger.debug(f"Cached result for {func.__name__}: {cache_key}")
-            
+            try:
+                cache_manager.set(namespace, cache_key, result, ttl_seconds)
+                logger.debug(f"Cached result for {func.__name__}: {cache_key}")
+            except Exception as e:
+                logger.warning(f"Cache set error for {func.__name__}: {e}")
+
             return result
-        return wrapper
+
+        return sync_wrapper
+
     return decorator
 
 # Specific cache namespaces for different data types

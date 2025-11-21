@@ -4,7 +4,7 @@ Provides a Supabase client connection and database utilities.
 """
 import os
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Generator
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from sqlalchemy import create_engine, MetaData, Column, Integer, String, Boolean, DateTime, Text, Float, ForeignKey
@@ -272,16 +272,18 @@ def get_db_client() -> Optional[Client]:
     """
     return db.get_client()
 
-# Helper function to get a database session
-def get_db_session() -> Session:
-    """
-    Get a SQLAlchemy database session.
-    
-    Returns:
-        Session: A SQLAlchemy session
-    """
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
-        return db
+        yield db
+    finally:
+        db.close()
+
+
+# Helper function to get a database session
+def get_db_session() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
     finally:
         db.close()

@@ -11,6 +11,8 @@ import datetime
 from services.enhanced_sentiment import analyze_market_sentiment, sentiment_analyzer
 from services.news_preprocessing import preprocess_news, create_pipeline_ready_output
 from services.weather import get_weather_alerts
+from services.news import get_latest_commodity_news
+from services.smart_sentiment import analyze_financial_text
 
 # Create API router
 api_router = APIRouter()
@@ -32,6 +34,11 @@ class ComprehensiveAnalysisRequest(BaseModel):
     commodity: Optional[str] = None
     include_preprocessing: bool = True
     include_finbert: bool = True
+
+
+class LatestNewsRequest(BaseModel):
+    commodities: Optional[List[str]] = None
+    hours: int = 6
 
 # --- Enhanced Sentiment Analysis Endpoints ---
 @api_router.post("/analyze-sentiment", response_model=Dict[str, Any])
@@ -55,6 +62,35 @@ async def analyze_sentiment_endpoint(request: SentimentAnalysisRequest):
             "timestamp": datetime.datetime.utcnow().isoformat()
         }
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing sentiment: {str(e)}")
+
+@api_router.post("/sentiment", response_model=Dict[str, Any])
+async def analyze_sentiment_legacy(request: SentimentAnalysisRequest):
+    """Legacy endpoint used by the mobile client for enhanced sentiment analysis.
+
+    Returns bullish/bearish/neutral probabilities and metadata at the top level
+    so the mobile client can render sentiment scores directly.
+    """
+    try:
+        if not request.text or request.text.strip() == "":
+            raise HTTPException(status_code=400, detail="Text cannot be empty")
+
+        # Use the smart sentiment pipeline which already returns
+        # bullish/bearish/neutral + confidence and keywords
+        analysis = analyze_financial_text(request.text)
+
+        return {
+            "bullish": analysis.get("bullish", 0.33),
+            "bearish": analysis.get("bearish", 0.33),
+            "neutral": analysis.get("neutral", 0.34),
+            "sentiment": analysis.get("sentiment", "NEUTRAL"),
+            "confidence": analysis.get("confidence", 0.5),
+            "keywords": analysis.get("keywords", []),
+            "impact": str(analysis.get("market_impact", "neutral")).upper(),
+            "severity": analysis.get("severity", "low"),
+            "raw": analysis,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analyzing sentiment: {str(e)}")
 
@@ -206,6 +242,33 @@ async def preprocess_news_pipeline_endpoint(request: NewsPreprocessRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating pipeline output: {str(e)}")
 
+# --- News Feed Endpoints ---
+@api_router.post("/news/latest", response_model=Dict[str, Any])
+async def get_latest_news(request: LatestNewsRequest):
+    """Return latest commodity news articles (optionally filtered by commodities)."""
+    try:
+        result = await get_latest_commodity_news(
+            commodities=request.commodities,
+            limit=50,
+            hours=request.hours,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching latest news: {str(e)}")
+
+
+@api_router.get("/news/analysis", response_model=Dict[str, Any])
+async def get_news_analysis_endpoint(hours: int = 6):
+    """Return analyzed news feed for the given time window.
+
+    For now this reuses the latest news feed so the mobile app has data to display.
+    """
+    try:
+        result = await get_latest_commodity_news(limit=50, hours=hours)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching news analysis: {str(e)}")
+
 # --- Sentiment Analysis Endpoints ---
 @api_router.get("/sentiment/market", response_model=Dict[str, Any])
 async def get_market_sentiment():
@@ -213,7 +276,7 @@ async def get_market_sentiment():
     Returns overall market sentiment analysis for commodities
     """
     try:
-        sentiment_data = analyze_market_sentiment()
+        sentiment_data = await analyze_market_sentiment()
         return sentiment_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analyzing market sentiment: {str(e)}")
@@ -303,27 +366,43 @@ async def demo_top_movers():
         {"symbol": "SILVER", "sentiment": 0.3, "trend": "up"}
     ]
 
+@api_router.get("/sentiment/movers")
+async def get_sentiment_movers():
+    try:
+        return await demo_top_movers()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sentiment movers: {str(e)}")
+
 @api_router.get("/demo/news_analysis")
 async def demo_news_analysis():
     """
     Demo endpoint that returns sample news analysis data
     """
+    now = datetime.datetime.utcnow()
     return [
         {
             "id": 1,
-            "sentiment": "BEARISH",
+            "title": "Oil prices drop as recession fears grow amid weak economic data",
             "headline": "Oil prices drop as recession fears grow amid weak economic data",
+            "summary": "Oil markets sold off as weaker-than-expected macro data reinforced concerns about a potential global slowdown, putting pressure on demand expectations.",
             "source": "Reuters",
+            "time_published": now.isoformat(),
             "timeAgo": "47m ago",
+            "sentiment": "BEARISH",
+            "sentiment_score": 0.50,
             "commodity": "OIL",
             "isPremium": False
         },
         {
             "id": 2,
-            "sentiment": "BULLISH",
+            "title": "OPEC+ considers additional output cuts to stabilize markets",
             "headline": "OPEC+ considers additional output cuts to stabilize markets",
+            "summary": "Reports suggest OPEC+ members are weighing deeper production cuts to support prices, signaling a more proactive stance on supply management.",
             "source": "Bloomberg",
+            "time_published": now.isoformat(),
             "timeAgo": "2h ago",
+            "sentiment": "BULLISH",
+            "sentiment_score": 0.72,
             "commodity": "OIL",
             "isPremium": True
         }

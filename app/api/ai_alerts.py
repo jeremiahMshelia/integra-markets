@@ -12,7 +12,7 @@ from services.ai_alert_service import (
     record_market_data,
     get_user_insights
 )
-from core.auth import get_current_user
+from services.auth import get_current_user
 
 router = APIRouter(prefix="/api/ai-alerts", tags=["ai-alerts"])
 
@@ -235,7 +235,7 @@ async def get_model_statistics(
     Get statistics about the Q-learning model performance.
     """
     try:
-        from services.core.alert_rl_model import alert_agent
+        from services.alert_rl_model import alert_agent
         
         return {
             "epsilon": alert_agent.epsilon,

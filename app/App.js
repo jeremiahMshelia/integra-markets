@@ -250,7 +250,7 @@ const App = () => {
   const [liveNews, setLiveNews] = useState([]);
   const [allNews, setAllNews] = useState([]);
   const [newsLimit, setNewsLimit] = useState(8);
-  const FEED_CACHE_KEY = '@integra_feed_cache_v1';
+  const FEED_CACHE_KEY = '@integra_feed_cache_v2';
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showNotifHelp, setShowNotifHelp] = useState(false);
@@ -314,60 +314,125 @@ const App = () => {
     try {
       const data = await dashboardApi.getTodayDashboard(['OIL', 'GOLD', 'WHEAT', 'NAT GAS']);
       const articles = Array.isArray(data?.news) ? data.news : [];
-      // Map and polish, then hard-cap to 20
+
+      // Map backend articles into the shape NewsCard expects, then hard-cap to 20
       let mapped = articles.map((a, i) => {
-        // Polish title: truncate if too long, ensure proper format
-        let title = (a.title || '').trim();
+        // Title / headline
+        let title = (a.title || a.headline || '').trim();
         if (title.length > 150) {
           title = title.substring(0, 147) + '...';
         }
-        // Clean up summary
-        let summary = (a.summary || '').trim();
-        if (summary.length > 200) {
-          summary = summary.substring(0, 197) + '...';
+
+        // Summary / description
+        let summary = (a.summary || a.description || a.content || '').trim();
+        if (!summary && title) {
+          summary = title;
         }
-        // Format sentiment properly
-        const sentiment = (a.ensemble_sentiment || a.sentiment || 'NEUTRAL').toUpperCase();
-        // Ensure sentiment score is a clean decimal
-        let score = parseFloat(a.sentiment_score) || 0.5;
-        score = Math.max(0, Math.min(1, score)); // Clamp between 0-1
+        if (summary.length > 260) {
+          summary = summary.substring(0, 257) + '...';
+        }
+
+        // Source name and direct article URL
+        const sourceUrl = a.url || a.source_url || '';
+        let sourceName = (a.source || a.source_name || '').trim();
+        if (!sourceName && sourceUrl) {
+          try {
+            const u = new URL(sourceUrl);
+            sourceName = (u.hostname || '').replace(/^www\./i, '');
+          } catch {}
+        }
+        if (/^https?:\/\//i.test(sourceName)) {
+          try {
+            const u = new URL(sourceName);
+            sourceName = (u.hostname || '').replace(/^www\./i, '');
+          } catch {}
+        }
+        sourceName = sourceName
+          .replace(/[-|\u2013].*$/, '')
+          .replace(/:.*/, '')
+          .trim();
+        if (sourceName.length > 18) {
+          sourceName = sourceName.substring(0, 17) + '…';
+        }
+        if (!sourceName) {
+          sourceName = 'Unknown';
+        }
+
+        // Initial sentiment label from backend (will be refined by analyzeBatch)
+        const rawSentiment = String(a.sentiment || a.ensemble_sentiment || 'NEUTRAL').toUpperCase();
+        let sentiment = rawSentiment;
+        if (!['BULLISH', 'BEARISH', 'NEUTRAL'].includes(sentiment)) {
+          sentiment = rawSentiment === 'POSITIVE'
+            ? 'BULLISH'
+            : rawSentiment === 'NEGATIVE'
+              ? 'BEARISH'
+              : 'NEUTRAL';
+        }
+
+        // Initial score from backend confidence if available
+        let score = typeof a.sentiment_score === 'number'
+          ? a.sentiment_score
+          : typeof a.confidence === 'number'
+            ? a.confidence
+            : 0.5;
+        score = Math.max(0, Math.min(1, score));
         const sentimentScore = score.toFixed(2);
-        
+
+        // Optional server-side analysis details, if present
+        const serverAnalysis = a.sentiment_analysis;
+        let analysis;
+        if (serverAnalysis) {
+          const bulls = Math.round(Number(serverAnalysis.bullish ?? 0) * 100);
+          const bears = Math.round(Number(serverAnalysis.bearish ?? 0) * 100);
+          const neuts = Math.max(0, 100 - bulls - bears);
+          analysis = {
+            bulls,
+            bears,
+            neuts,
+            keywords: serverAnalysis.keywords || [],
+            impact: (serverAnalysis.market_impact || 'MEDIUM').toString().toUpperCase(),
+            confidence: Number(serverAnalysis.confidence ?? score),
+          };
+        }
+
         return {
           id: String(i + 1),
           title,
           summary,
-          source: a.source,
-          sourceUrl: a.source_url || a.url || '',
-          timeAgo: formatTimeAgo(a.time_published),
+          source: sourceName,
+          sourceUrl,
+          timeAgo: formatTimeAgo(a.published || a.time_published),
           sentiment,
           sentimentScore,
+          analysis,
         };
       });
+
       if (mapped.length === 0) {
-        // Keep existing feed if provider is empty
-        const hadCache = await loadCachedFeed();
-        if (!hadCache) {
-          // Do nothing; UI will show current list (possibly empty) until provider has items
-        }
+        setAllNews([]);
+        setLiveNews([]);
+        await saveFeedCache([]);
         return;
       }
+
       const limited = mapped.slice(0, 20);
       setAllNews(limited);
+
       // Analyze the first batch (8) so card sentiment matches overlay
       const initial = await analyzeBatch(limited, 0, Math.min(8, limited.length));
       setLiveNews(initial);
+
       // Merge analysis back into allNews
       setAllNews(prev => {
         const merged = [...prev];
         for (let i = 0; i < initial.length; i++) merged[i] = initial[i];
         return merged;
       });
+
       // Persist latest non-empty feed
       await saveFeedCache(initial);
     } catch (e) {
       console.error('Live news fetch failed:', e);
-      // Load last good feed from cache
       await loadCachedFeed();
     }
   };
@@ -390,6 +455,9 @@ const App = () => {
         const text = `${item.title}. ${item.summary || ''}`.trim();
         const commodity = guessCommodity(text);
         const res = await sentimentApi.analyzeEnhanced(text, commodity);
+        try {
+          console.log('[sentiment] result for', text.slice(0, 80), '\n', JSON.stringify(res));
+        } catch {}
         let bull = Math.max(0, Math.min(1, Number(res?.bullish || 0)));
         let bear = Math.max(0, Math.min(1, Number(res?.bearish || 0)));
         let neu  = Math.max(0, Math.min(1, Number(res?.neutral || 0)));

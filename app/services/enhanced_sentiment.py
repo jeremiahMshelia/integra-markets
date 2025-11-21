@@ -227,8 +227,12 @@ class EnhancedSentimentAnalyzer:
 # Global instance
 sentiment_analyzer = EnhancedSentimentAnalyzer()
 
-async def analyze_market_sentiment(text: str, commodity: str = None, enhanced: bool = False) -> Dict:
+async def analyze_market_sentiment(text: Optional[str] = None, commodity: str = None, enhanced: bool = False) -> Dict:
     """Main function for sentiment analysis"""
+
+    if not text or not text.strip():
+        text = "Overall commodity market sentiment based on recent news and price movements."
+
     request = SentimentRequest(
         text=text,
         commodity=commodity,

@@ -31,30 +31,16 @@ const [marketData, setMarketData] = useState(null);
     try {
       const dashboardData = await dashboardApi.getTodayDashboard(trackedCommodities);
 
-      if (dashboardData.news && dashboardData.news.length > 0) {
-        const processedNews = dashboardData.news.map((article, index) => ({
-          id: index + 1,
-          headline: article.title,
-          summary: article.summary,
-          source: article.source,
-          sourceUrl: article.source_url || article.url || getSourceUrl(article.source),
-          timeAgo: formatTimeAgo(article.time_published),
-          sentiment: article.ensemble_sentiment || article.sentiment,
-          sentimentScore: article.sentiment_score ? article.sentiment_score.toFixed(2) : "0.50",
-          category: getCategoryFromArticle(article),
-          originalArticle: article
-        }));
-
-        setNewsData(processedNews);
-      } else {
-        setNewsData([]);
-      }
-
+      // Use local sample news data for the Today dashboard cards so
+      // headlines, summaries, sentiment scores, links, and AI overlay
+      // continue to work exactly as before backend news integration.
+      setNewsData(sampleNewsData);
       setMarketData(dashboardData);
       setIsLoading(false);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      setNewsData([]);
+      // On error, still show sample data so the UI remains useful
+      setNewsData(sampleNewsData);
       setIsLoading(false);
     }
   };

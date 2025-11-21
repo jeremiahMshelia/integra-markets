@@ -9,7 +9,12 @@ import asyncio
 import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
-import pandas as pd
+
+try:
+    import pandas as pd  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    pd = None  # type: ignore
+
 from core.config import settings
 from services.enhanced_caching import cache_manager, get_cached_market_data, cache_market_data
 
@@ -268,6 +273,11 @@ class AlphaVantageClient:
         Returns:
             Dict mapping symbols to price data
         """
+        # Require pandas for trend analytics
+        if pd is None:
+            logger.warning("pandas not installed; Alpha Vantage market trend analytics are disabled")
+            return {symbol: {"error": "pandas not installed"} for symbol in symbols}
+
         results = {}
         
         # Process commodities in batches to respect rate limits
@@ -317,6 +327,14 @@ class AlphaVantageClient:
         try:
             # Extract feed
             feed = data.get("feed", [])
+
+            if not feed:
+                logger.warning(
+                    "Alpha Vantage NEWS_SENTIMENT returned empty feed. Keys: %s", list(data.keys())
+                )
+                note = data.get("Note") or data.get("Information")
+                if note:
+                    logger.warning("Alpha Vantage NEWS_SENTIMENT note/info: %s", note)
             
             # Process articles
             articles = []

@@ -41,7 +41,7 @@ export const dashboardApi = {
       ]);
 
       // Single news request with fallback to analysis
-      const hours = 6;
+      const hours = 24;
       let newsData = { articles: [] };
       try {
         newsData = await request('/news/latest', {

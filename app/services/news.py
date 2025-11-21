@@ -8,13 +8,16 @@ import asyncio
 import hashlib
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
+import time
+from email.utils import parsedate_to_datetime
 import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
 from services.enhanced_caching import cache_manager, cached
 from services.news_preprocessing import preprocess_news, create_pipeline_ready_output
-from services.sentiment import analyze_sentiment
+from services.sentiment import analyze_text as analyze_sentiment
+from services.alpha_vantage import get_news as alpha_get_news
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +29,11 @@ class NewsService:
     
     def __init__(self):
         """Initialize the news service with enhanced caching"""
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.client = httpx.AsyncClient(
+            timeout=30.0,
+            follow_redirects=True,
+            headers={"User-Agent": "IntegraMarketsNewsBot/1.0"},
+        )
         
         # Enhanced cache TTL for production (aggressive caching for 100-1000 users)
         self.cache_ttl = {
@@ -57,6 +64,36 @@ class NewsService:
         }
         
         logger.info("NewsService initialized with enhanced caching for production")
+    
+    def _get_sample_articles(self) -> List[Dict[str, Any]]:
+        now = datetime.utcnow()
+        ts = now.isoformat()
+        return [
+            {
+                "title": "US Natural Gas Storage Exceeds Expectations",
+                "url": "https://www.bloomberg.com",
+                "published": ts,
+                "summary": "Weekly natural gas storage report shows higher than expected inventory build, indicating potential oversupply conditions in key markets.",
+                "source": "Bloomberg",
+                "commodity": "NAT GAS",
+            },
+            {
+                "title": "Gold Prices Rally on Fed Policy Uncertainty",
+                "url": "https://www.marketwatch.com",
+                "published": ts,
+                "summary": "Precious metals gain momentum as investors seek safe haven assets amid monetary policy shifts.",
+                "source": "MarketWatch",
+                "commodity": "GOLD",
+            },
+            {
+                "title": "Oil Demand Forecasts Remain Steady",
+                "url": "https://www.iea.org",
+                "published": ts,
+                "summary": "International Energy Agency maintains stable outlook for global oil consumption through Q4.",
+                "source": "IEA",
+                "commodity": "OIL",
+            },
+        ]
     
     async def close(self):
         """Close HTTP client"""
@@ -89,11 +126,40 @@ class NewsService:
             # Extract articles
             articles = []
             for entry in feed.entries[:20]:  # Limit to 20 most recent
+                # Choose best available summary/description and strip HTML
+                summary = entry.get("summary", "") or entry.get("description", "")
+                if not summary:
+                    content_list = entry.get("content") or []
+                    if content_list and isinstance(content_list, list):
+                        try:
+                            summary = content_list[0].get("value", "")
+                        except Exception:
+                            summary = ""
+                if summary:
+                    try:
+                        summary = BeautifulSoup(summary, "html.parser").get_text(" ", strip=True)
+                    except Exception:
+                        pass
+
+                # Normalize published time to ISO string when possible
+                published = entry.get("published", "") or entry.get("updated", "")
+                try:
+                    parsed_struct = entry.get("published_parsed") or entry.get("updated_parsed")
+                    if parsed_struct:
+                        dt = datetime.fromtimestamp(time.mktime(parsed_struct))
+                        published = dt.isoformat()
+                    elif isinstance(published, str) and published:
+                        dt = parsedate_to_datetime(published)
+                        published = dt.isoformat()
+                except Exception:
+                    # Fall back to original string if parsing fails
+                    pass
+
                 articles.append({
                     "title": entry.get("title", ""),
                     "url": entry.get("link", ""),
-                    "published": entry.get("published", ""),
-                    "summary": entry.get("summary", ""),
+                    "published": published,
+                    "summary": summary,
                     "source": feed.feed.get("title", "Unknown")
                 })
             
@@ -150,7 +216,8 @@ class NewsService:
     async def get_latest_news(self, 
                             commodities: Optional[List[str]] = None,
                             limit: int = 50,
-                            include_sentiment: bool = True) -> Dict[str, Any]:
+                            include_sentiment: bool = True,
+                            hours: Optional[int] = None) -> Dict[str, Any]:
         """
         Get latest commodity news with enhanced caching.
         
@@ -162,7 +229,7 @@ class NewsService:
         Returns:
             Dict containing news articles with metadata
         """
-        cache_key = self._generate_cache_key("latest_news", str(commodities), limit, include_sentiment)
+        cache_key = self._generate_cache_key("latest_news", str(commodities), limit, include_sentiment, hours)
         
         # Check cache first
         cached_result = cache_manager.get("news_latest", cache_key)
@@ -172,41 +239,160 @@ class NewsService:
         
         logger.info(f"Fetching latest news for commodities: {commodities}")
         
-        all_articles = []
-        
-        # Fetch from all RSS sources concurrently
-        tasks = []
-        for source_name, rss_url in self.rss_sources.items():
-            task = self._fetch_rss_feed(rss_url)
-            tasks.append((source_name, task))
-        
-        # Execute all RSS fetches concurrently
-        for source_name, task in tasks:
-            try:
-                feed_data = await task
-                if feed_data.get("articles"):
-                    for article in feed_data["articles"]:
-                        article["source_name"] = source_name
-                        all_articles.append(article)
-            except Exception as e:
-                logger.error(f"Error processing feed {source_name}: {str(e)}")
+        all_articles: List[Dict[str, Any]] = []
+
+        # --- Primary source: Alpha Vantage NEWS_SENTIMENT (global feed) ---
+        try:
+            # Call without topics or tickers to use the broad global feed,
+            # then filter by commodity keywords below.
+            av_response = await alpha_get_news(limit=limit)
+            if isinstance(av_response, dict) and isinstance(av_response.get("articles"), list):
+                for a in av_response["articles"]:
+                    all_articles.append({
+                        "title": a.get("title", ""),
+                        "url": a.get("url", ""),
+                        # Alpha Vantage uses time_published like 20241119T150000Z
+                        "published": a.get("time_published", ""),
+                        "time_published": a.get("time_published", ""),
+                        "summary": a.get("summary", ""),
+                        "source": a.get("source", "Alpha Vantage"),
+                        "source_name": "alpha_vantage",
+                    })
+                logger.info("Alpha Vantage provided %d raw articles before filtering", len(all_articles))
+        except Exception as e:
+            logger.error(f"Error fetching Alpha Vantage news: {str(e)}")
+
+        # --- Secondary source: legacy RSS feeds (only if AV returned nothing) ---
+        if not all_articles:
+            # Fetch from all RSS sources concurrently
+            tasks = []
+            for source_name, rss_url in self.rss_sources.items():
+                task = self._fetch_rss_feed(rss_url)
+                tasks.append((source_name, task))
+            
+            # Execute all RSS fetches concurrently
+            for source_name, task in tasks:
+                try:
+                    feed_data = await task
+                    if feed_data.get("articles"):
+                        for article in feed_data["articles"]:
+                            article["source_name"] = source_name
+                            all_articles.append(article)
+                except Exception as e:
+                    logger.error(f"Error processing feed {source_name}: {str(e)}")
         
         # Filter by commodity keywords if specified
         if commodities:
             filtered_articles = []
+
+            def _normalize_commodity(name: str) -> Optional[str]:
+                key = (name or "").lower().strip()
+                if key in self.commodity_keywords:
+                    return key
+                if key in ("oil", "brent", "wti", "crude", "energy"):
+                    return "oil"
+                if key in ("nat gas", "natural gas", "gas", "lng"):
+                    return "gas"
+                if key in ("gold", "silver", "copper", "metals", "metal"):
+                    return "metals"
+                if key in ("wheat", "corn", "soybeans", "soybean", "agriculture", "ag"):
+                    return "agriculture"
+                return None
+
+            normalized_map: Dict[str, Optional[str]] = {
+                commodity: _normalize_commodity(commodity) for commodity in commodities
+            }
+
             for article in all_articles:
                 article_text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
                 
                 for commodity in commodities:
-                    if commodity.lower() in self.commodity_keywords:
-                        keywords = self.commodity_keywords[commodity.lower()]
-                        if any(keyword.lower() in article_text for keyword in keywords):
-                            article["commodity"] = commodity
-                            filtered_articles.append(article)
-                            break
-            
-            all_articles = filtered_articles
-        
+                    category_key = normalized_map.get(commodity)
+                    if not category_key:
+                        continue
+                    keywords = self.commodity_keywords.get(category_key, [])
+                    if any(keyword.lower() in article_text for keyword in keywords):
+                        article["commodity"] = commodity
+                        filtered_articles.append(article)
+                        break
+
+            if filtered_articles:
+                # Put commodity-matched articles first but keep all others as well
+                unmatched = [a for a in all_articles if a not in filtered_articles]
+                all_articles = filtered_articles + unmatched
+
+        def _parse_pub_dt(published_val: Any) -> Optional[datetime]:
+            """Parse various published/time formats into a datetime.
+
+            Supports both RSS dates (RFC2822, ISO) and Alpha Vantage's
+            compact format like 20241119T150000Z.
+            """
+            if not isinstance(published_val, str) or not published_val:
+                return None
+            s = published_val.strip()
+
+            # Alpha Vantage format: YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSSZ
+            if len(s) >= 15 and s[:8].isdigit() and s[8] == "T" and s[9:15].isdigit():
+                try:
+                    year = int(s[0:4])
+                    month = int(s[4:6])
+                    day = int(s[6:8])
+                    hour = int(s[9:11])
+                    minute = int(s[11:13])
+                    second = int(s[13:15])
+                    return datetime(year, month, day, hour, minute, second)
+                except Exception:
+                    pass
+
+            try:
+                return datetime.fromisoformat(s.replace("Z", "+00:00"))
+            except Exception:
+                try:
+                    return parsedate_to_datetime(s)
+                except Exception:
+                    return None
+
+        # Filter by recency if hours window is provided
+        if hours is not None and hours > 0 and all_articles:
+            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            recent_articles: List[Dict[str, Any]] = []
+            for article in all_articles:
+                published = article.get("published") or article.get("time_published")
+                article_dt = _parse_pub_dt(published)
+                if article_dt and article_dt >= cutoff:
+                    recent_articles.append(article)
+
+            if recent_articles:
+                all_articles = recent_articles
+            else:
+                logger.warning(
+                    "No articles within requested %s-hour window; "
+                    "returning unfiltered articles instead",
+                    hours,
+                )
+
+        # Hard cap on article age in days to avoid very old headlines
+        # Use a 90-day window so we still get news even when sources
+        # don’t provide very recent items.
+        max_age_days = 90
+        if all_articles:
+            cutoff_days = datetime.utcnow() - timedelta(days=max_age_days)
+            recent_by_days: List[Dict[str, Any]] = []
+            for article in all_articles:
+                published = article.get("published") or article.get("time_published")
+                article_dt = _parse_pub_dt(published)
+                if article_dt and article_dt >= cutoff_days:
+                    recent_by_days.append(article)
+
+            if recent_by_days:
+                all_articles = recent_by_days
+            else:
+                logger.warning(
+                    "All articles older than %s days; returning empty list",
+                    max_age_days,
+                )
+                all_articles = []
+
         # Sort by published date (most recent first)
         all_articles.sort(key=lambda x: x.get("published", ""), reverse=True)
         
@@ -389,9 +575,18 @@ class NewsService:
 news_service = NewsService()
 
 # Convenience functions for external use
-async def get_latest_commodity_news(commodities: Optional[List[str]] = None, limit: int = 50) -> Dict[str, Any]:
+async def get_latest_commodity_news(
+    commodities: Optional[List[str]] = None,
+    limit: int = 50,
+    hours: Optional[int] = None,
+) -> Dict[str, Any]:
     """Get latest commodity news with enhanced caching"""
-    return await news_service.get_latest_news(commodities=commodities, limit=limit)
+    return await news_service.get_latest_news(
+        commodities=commodities,
+        limit=limit,
+        include_sentiment=True,
+        hours=hours,
+    )
 
 async def analyze_news_article(url: str) -> Dict[str, Any]:
     """Analyze a news article with comprehensive preprocessing"""
