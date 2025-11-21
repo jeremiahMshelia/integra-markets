@@ -58,10 +58,12 @@ class EnhancedSentimentAnalyzer:
                 logging.info("VADER sentiment analyzer initialized")
             
             # Initialize FinBERT only when heavy LLM features are enabled and
-            # we're not in offline/low-memory mode.
+            # we're not in offline/low-memory mode. Heavy FinBERT is
+            # opt-in via ENABLE_HEAVY_FINBERT to avoid OOM on small hosts.
             if (
                 FINBERT_AVAILABLE
                 and settings.ENABLE_LLM_FEATURES
+                and settings.ENABLE_HEAVY_FINBERT
                 and not settings.OFFLINE_MODE
             ):
                 self.finbert_model = BertForSequenceClassification.from_pretrained(

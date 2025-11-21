@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # Feature Flags
     ENABLE_LLM_FEATURES: bool = Field(True, env="ENABLE_LLM_FEATURES")
     FREE_TIER_DAILY_LLM_LIMIT: int = Field(2, env="FREE_TIER_DAILY_LLM_LIMIT")
+    ENABLE_HEAVY_FINBERT: bool = Field(False, env="ENABLE_HEAVY_FINBERT")
     
     # Model Configuration
     MODELS_DIR: str = Field("./models", env="MODELS_DIR")
