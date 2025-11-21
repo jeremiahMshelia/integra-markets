@@ -12,9 +12,9 @@ from collections import defaultdict
 import httpx
 
 # Import our existing services
-from app.services.news_preprocessing import preprocess_news
-from app.services.smart_sentiment import analyze_smart_sentiment
-from app.services.alert_rl_model import (
+from services.news_preprocessing import preprocess_news
+from services.smart_sentiment import analyze_smart_sentiment
+from services.alert_rl_model import (
     get_alert_recommendation,
     train_alert_model_online,
     alert_agent
