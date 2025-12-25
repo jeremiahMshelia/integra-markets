@@ -143,21 +143,26 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                         Alert.alert(
                             'Check Your Email',
                             'We sent you a confirmation link. Please check your email to verify your account.',
-                            [{ text: 'OK' }]
+                            [{ text: 'OK', onPress: () => setCurrentScreen('login') }]
                         );
                         setIsLoading(false);
                         return;
                     }
 
-                    const userData = {
-                        id: result.user?.id || Date.now().toString(),
-                        email: email.trim(),
-                        fullName: fullName.trim(),
-                        username: email.split('@')[0],
-                        authMethod: 'email',
-                        isNewUser: true,
-                    };
-                    onAuthComplete(userData);
+                    // Account created successfully - redirect to login
+                    Alert.alert(
+                        'Account Created! 🎉',
+                        'Your account has been created successfully. Please sign in to continue.',
+                        [{
+                            text: 'Sign In',
+                            onPress: () => {
+                                // Keep email, clear password fields
+                                setPassword('');
+                                setConfirmPassword('');
+                                setCurrentScreen('login');
+                            }
+                        }]
+                    );
                 } else {
                     Alert.alert('Sign Up Failed', result.error || 'Unable to create account. Please try again.');
                 }

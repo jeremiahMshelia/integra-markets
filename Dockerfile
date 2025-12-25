@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY app/requirements.txt .
+COPY backend/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --user -r requirements.txt
@@ -41,9 +41,8 @@ COPY --from=builder /root/nltk_data /root/nltk_data
 ENV PATH=/root/.local/bin:$PATH
 ENV NLTK_DATA=/root/nltk_data
 
-# Copy application code so that `main.py`, `api`, `core`, etc. are siblings
-# Use the backend in /app (which already contains its own services/ package).
-COPY app/ ./
+# Copy application code from backend folder
+COPY backend/ ./
 
 # Create directories for model caching
 RUN mkdir -p /app/models/finbert /app/models/nltk_data /app/cache
