@@ -36,7 +36,7 @@ const colors = {
 
 const ShinyText = ({ text, disabled = false, speed = 3, style = {} }) => {
     const animatedValue = new Animated.Value(0);
-    
+
     useEffect(() => {
         if (!disabled) {
             Animated.loop(
@@ -150,7 +150,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
 
     const handleSocialAuth = async (provider) => {
         setIsLoading(true);
-        
+
         try {
             let result;
             if (provider === 'google') {
@@ -164,9 +164,9 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     }
                 };
             }
-            
+
             setIsLoading(false);
-            
+
             if (result.success) {
                 const userData = {
                     id: result.user.id,
@@ -189,26 +189,26 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
 
     const handleGoogleAuth = async () => {
         setIsLoading(true);
-        
+
         try {
             // Check if onboarding has been completed before
             const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
             const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
             const existingUserData = await AsyncStorage.getItem('user_data');
-            
+
             console.log('Google Auth - Storage check:', {
                 onboardingCompleted,
                 alertsCompleted,
                 hasUserData: !!existingUserData
             });
-            
+
             const isReturningUser = onboardingCompleted === 'true';
-            
+
             // Attempt to use the authService for proper Google OAuth
             const result = await authService.signInWithGoogle();
-            
+
             setIsLoading(false);
-            
+
             if (result.success && result.user) {
                 const userData = {
                     id: result.user.id,
@@ -219,12 +219,12 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     isNewUser: !isReturningUser,
                     skipOnboarding: isReturningUser
                 };
-                
+
                 console.log('Google Auth Success - User data:', {
                     ...userData,
                     skipOnboarding: userData.skipOnboarding
                 });
-                
+
                 onAuthComplete(userData);
             } else {
                 // Fallback to a mock if OAuth fails but don't block the user
@@ -238,18 +238,18 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     isNewUser: !isReturningUser,
                     skipOnboarding: isReturningUser
                 };
-                
+
                 console.log('Google Auth Fallback - User data:', {
                     ...mockGoogleUser,
                     skipOnboarding: mockGoogleUser.skipOnboarding
                 });
-                
+
                 onAuthComplete(mockGoogleUser);
             }
         } catch (error) {
             setIsLoading(false);
             console.error('Google auth error:', error);
-            
+
             // Check onboarding status even on error
             let isReturningUser = false;
             try {
@@ -258,7 +258,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
             } catch (e) {
                 console.error('Error checking onboarding status:', e);
             }
-            
+
             // Even on error, allow user to proceed with mock account
             const mockGoogleUser = {
                 id: 'google_' + Date.now().toString(),
@@ -279,8 +279,8 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
             'You can sign up later to sync your preferences and alerts across devices.',
             [
                 { text: 'Go Back', style: 'cancel' },
-                { 
-                    text: 'Continue Without Account', 
+                {
+                    text: 'Continue Without Account',
                     onPress: () => {
                         const guestData = {
                             id: 'guest_' + Date.now().toString(),
@@ -300,26 +300,26 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
         return (
             <View style={styles.loadingContainer}>
                 <StatusBar barStyle="light-content" backgroundColor="#000000" />
-                
+
                 <View style={styles.loadingIconContainer}>
-                    <IntegraIcon 
-                        size={192} 
-                        animated={progress < 100} 
+                    <IntegraIcon
+                        size={192}
+                        animated={progress < 100}
                         variant="loading"
                     />
                 </View>
 
                 <View style={styles.loadingTextContainer}>
                     <View style={styles.brandTextRow}>
-                        <ShinyText 
-                            text="integra" 
-                            speed={3} 
+                        <ShinyText
+                            text="integra"
+                            speed={3}
                             style={styles.brandTextMain}
                             disabled={progress >= 100}
                         />
-                        <ShinyText 
-                            text="Markets" 
-                            speed={3} 
+                        <ShinyText
+                            text="Markets"
+                            speed={3}
                             style={styles.brandTextSub}
                             disabled={progress >= 100}
                         />
@@ -353,12 +353,12 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
         return (
             <View style={styles.authContainer}>
                 <StatusBar barStyle="light-content" backgroundColor="#000000" />
-                
+
                 {/* Animated Background */}
                 <View style={styles.animatedBackground}>
-                    <IntegraIcon 
-                        size={320} 
-                        animated={false} 
+                    <IntegraIcon
+                        size={320}
+                        animated={false}
                         variant="static"
                         style={styles.backgroundIcon}
                     />
@@ -379,7 +379,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                         </View>
 
                         <View style={styles.authOptions}>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={[styles.socialButton, styles.googleButton]}
                                 onPress={handleGoogleAuth}
                                 disabled={isLoading}
@@ -388,7 +388,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                 <Text style={styles.socialButtonText}>Continue with Google</Text>
                             </TouchableOpacity>
                         </View>
-                        
+
                         <View style={styles.emailOptions}>
                             <View style={styles.dividerContainer}>
                                 <View style={styles.divider} />
@@ -396,7 +396,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                 <View style={styles.divider} />
                             </View>
 
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.emailButton}
                                 onPress={() => setCurrentScreen('login')}
                                 disabled={isLoading}
@@ -405,7 +405,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                 <Text style={styles.emailButtonText}>Sign in with Email</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.signupButton}
                                 onPress={() => setCurrentScreen('signup')}
                                 disabled={isLoading}
@@ -414,15 +414,11 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.skipContainer}>
-                            <TouchableOpacity 
-                                style={styles.skipButton}
-                                onPress={handleSkip}
-                                disabled={isLoading}
-                            >
-                                <Text style={styles.skipButtonText}>Skip for now</Text>
-                                <MaterialIcons name="arrow-forward" size={16} color={colors.textSecondary} />
-                            </TouchableOpacity>
+                        {/* Terms notice instead of skip */}
+                        <View style={styles.termsContainer}>
+                            <Text style={styles.termsText}>
+                                By continuing, you agree to our Terms of Service and Privacy Policy
+                            </Text>
                         </View>
                     </View>
                 </ExpoBlurView>
@@ -440,16 +436,16 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
 
     if (currentScreen === 'login' || currentScreen === 'signup') {
         const isSignUp = currentScreen === 'signup';
-        
+
         return (
-            <KeyboardAvoidingView 
+            <KeyboardAvoidingView
                 style={styles.authContainer}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
                 <StatusBar barStyle="light-content" backgroundColor="#000000" />
-                
+
                 <ScrollView contentContainerStyle={styles.formScrollContainer}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.backButton}
                         onPress={() => setCurrentScreen('auth')}
                     >
@@ -461,8 +457,8 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                             {isSignUp ? 'Create Account' : 'Welcome Back'}
                         </Text>
                         <Text style={styles.formSubtitle}>
-                            {isSignUp 
-                                ? 'Join thousands of traders getting AI-powered market insights' 
+                            {isSignUp
+                                ? 'Join thousands of traders getting AI-powered market insights'
                                 : 'Sign in to access your personalized market dashboard'
                             }
                         </Text>
@@ -523,27 +519,27 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                             </View>
                         )}
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
                             onPress={() => handleEmailAuth(isSignUp)}
                             disabled={isLoading}
                         >
                             <Text style={styles.submitButtonText}>
-                                {isLoading 
-                                    ? (isSignUp ? 'Creating Account...' : 'Signing In...') 
+                                {isLoading
+                                    ? (isSignUp ? 'Creating Account...' : 'Signing In...')
                                     : (isSignUp ? 'Create Account' : 'Sign In')
                                 }
                             </Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.switchModeButton}
                             onPress={() => setCurrentScreen(isSignUp ? 'login' : 'signup')}
                             disabled={isLoading}
                         >
                             <Text style={styles.switchModeText}>
-                                {isSignUp 
-                                    ? 'Already have an account? Sign In' 
+                                {isSignUp
+                                    ? 'Already have an account? Sign In'
                                     : "Don't have an account? Sign Up"
                                 }
                             </Text>
@@ -725,6 +721,17 @@ const styles = StyleSheet.create({
     skipButtonText: {
         color: colors.textSecondary,
         fontSize: 16,
+    },
+    termsContainer: {
+        paddingHorizontal: 30,
+        paddingBottom: 40,
+        alignItems: 'center',
+    },
+    termsText: {
+        color: colors.textSecondary,
+        fontSize: 12,
+        textAlign: 'center',
+        lineHeight: 18,
     },
 
     // Form Styles

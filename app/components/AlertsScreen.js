@@ -9,6 +9,7 @@ import {
   ScrollView,
   Switch,
   Modal,
+  Linking,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,6 +22,7 @@ import {
   checkNotificationPermissions,
   getStoredPushToken,
 } from '../services/notificationService';
+import { dashboardApi } from '../services/api';
 import HollowCircularIcon from './HollowCircularIcon';
 
 // Color Palette
@@ -38,103 +40,88 @@ const colors = {
   cardBorder: '#2A2A2A',
 };
 
-const deriveAlertsFromPreferences = (preferences = {}, previousAlerts = []) => {
-  const {
-    commodities = [],
-    regions = [],
-    currencies = [],
-    keywords = [],
-    websiteURLs = [],
-    alertFrequency = 'Real-time',
-    alertThreshold = 'Medium',
-  } = preferences;
+// Match news against user preferences
+const matchArticleToPreferences = (article, preferences) => {
+  const { commodities = [], regions = [], currencies = [], keywords = [], websiteURLs = [] } = preferences;
+  const text = `${article.title || ''} ${article.summary || ''}`.toLowerCase();
+  const source = (article.source || '').toLowerCase();
+  const sourceUrl = (article.sourceUrl || '').toLowerCase();
 
-  const previousMap = new Map(previousAlerts.map((alert) => [alert.id, alert]));
+  const matchedTags = [];
+  let score = 0;
 
-  const frequencyLabel = alertFrequency === 'Real-time'
-    ? 'real-time'
-    : alertFrequency.toLowerCase();
-  const thresholdLabel = alertThreshold.toLowerCase();
-
-  const buildAlert = (id, title, body, type) => {
-    const existing = previousMap.get(id);
-    return {
-      id,
-      title,
-      message: body,
-      type,
-      createdAt: existing?.createdAt || new Date().toISOString(),
-      read: existing?.read ?? false,
-      severity: thresholdLabel === 'high' ? 'high' : thresholdLabel === 'low' ? 'low' : 'medium',
-    };
+  // Check commodities
+  const commodityMap = {
+    'Crude Oil': ['oil', 'crude', 'brent', 'wti', 'petroleum'],
+    'Natural Gas': ['gas', 'lng', 'natural gas'],
+    'Gold': ['gold', 'bullion'],
+    'Silver': ['silver'],
+    'Wheat': ['wheat', 'grain'],
+    'Corn': ['corn'],
+    'Copper': ['copper'],
   };
+  for (const c of commodities) {
+    const terms = commodityMap[c] || [c.toLowerCase()];
+    if (terms.some(t => text.includes(t))) {
+      matchedTags.push(c);
+      score += 10;
+    }
+  }
 
-  const alerts = [];
+  // Check regions
+  const regionMap = {
+    'North America': ['us', 'usa', 'america', 'canada', 'mexico', 'united states'],
+    'Middle East': ['middle east', 'saudi', 'iran', 'iraq', 'opec', 'uae', 'dubai'],
+    'Europe': ['europe', 'eu', 'uk', 'germany', 'france', 'italy'],
+    'Asia Pacific': ['asia', 'china', 'japan', 'india', 'pacific', 'australia'],
+    'Latin America': ['latin', 'brazil', 'argentina', 'venezuela'],
+    'Africa': ['africa', 'nigeria', 'libya', 'algeria'],
+  };
+  for (const r of regions) {
+    const terms = regionMap[r] || [r.toLowerCase()];
+    if (terms.some(t => text.includes(t))) {
+      matchedTags.push(r);
+      score += 5;
+    }
+  }
 
-  commodities.forEach((commodity) => {
-    const id = `commodity-${commodity}`;
-    alerts.push(
-      buildAlert(
-        id,
-        `${commodity} commodity updates`,
-        `Monitoring ${commodity} news and price action with ${thresholdLabel} sensitivity (${frequencyLabel}).`,
-        'commodity',
-      ),
-    );
-  });
+  // Check currencies
+  for (const cur of currencies) {
+    if (text.includes(cur.toLowerCase())) {
+      matchedTags.push(cur);
+      score += 3;
+    }
+  }
 
-  regions.forEach((region) => {
-    const id = `region-${region}`;
-    alerts.push(
-      buildAlert(
-        id,
-        `${region} regional coverage`,
-        `Highlighting market shifts across ${region} as part of your watchlist.`,
-        'region',
-      ),
-    );
-  });
+  // Check keywords
+  for (const kw of keywords) {
+    if (text.includes(kw.toLowerCase())) {
+      matchedTags.push(kw);
+      score += 8;
+    }
+  }
 
-  currencies.forEach((currency) => {
-    const id = `currency-${currency}`;
-    alerts.push(
-      buildAlert(
-        id,
-        `${currency} currency alerts`,
-        `Keeping tabs on ${currency} developments in line with your preferences.`,
-        'currency',
-      ),
-    );
-  });
+  // Check website sources
+  for (const url of websiteURLs) {
+    const domain = url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase();
+    if (sourceUrl.includes(domain) || source.includes(domain)) {
+      matchedTags.push(`Source: ${url}`);
+      score += 7;
+    }
+  }
 
-  keywords.forEach((keyword) => {
-    const id = `keyword-${keyword}`;
-    alerts.push(
-      buildAlert(
-        id,
-        `Keyword: ${keyword}`,
-        `Surfacing stories tagged with “${keyword}”.`,
-        'keyword',
-      ),
-    );
-  });
-
-  websiteURLs.forEach((url) => {
-    const id = `source-${url}`;
-    alerts.push(
-      buildAlert(
-        id,
-        `Source: ${url}`,
-        `Pulling curated updates from ${url}.`,
-        'source',
-      ),
-    );
-  });
-
-  return alerts;
+  return { matched: score > 0, score, matchedTags };
 };
 
-const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
+const getSentimentColor = (sentiment) => {
+  switch (sentiment?.toUpperCase()) {
+    case 'BULLISH': return colors.accentPositive;
+    case 'BEARISH': return colors.accentNegative;
+    default: return colors.accentNeutral;
+  }
+};
+
+const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
   const [alertPreferences, setAlertPreferences] = useState({
     commodities: [],
     regions: [],
@@ -154,31 +141,135 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
   const [alerts, setAlerts] = useState([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadAlertPreferences();
+    loadDataAndAlerts();
     // Initialize push toggle from real notification settings
     (async () => {
       try {
         const hasPerm = await checkNotificationPermissions();
         const s = await getNotificationSettings();
         setPushAlerts(Boolean(s?.pushNotifications && hasPerm));
-      } catch {}
+      } catch { }
     })();
   }, []);
 
-  const loadAlertPreferences = async () => {
+  const loadDataAndAlerts = async () => {
+    setLoading(true);
     try {
+      // Load preferences first
       const savedPreferences = await AsyncStorage.getItem('alert_preferences');
+      let preferences = alertPreferences;
       if (savedPreferences) {
-        const preferences = JSON.parse(savedPreferences);
+        preferences = JSON.parse(savedPreferences);
         setAlertPreferences(preferences);
-        setAlerts((prev) => deriveAlertsFromPreferences(preferences, prev));
       }
+
+      // Fetch real news from dashboard
+      const commodityMap = {
+        'Crude Oil': 'OIL',
+        'Natural Gas': 'NAT GAS',
+        'Gold': 'GOLD',
+        'Wheat': 'WHEAT',
+      };
+      const commodities = preferences.commodities?.map(c => commodityMap[c] || c.toUpperCase()) || [];
+      const queryComms = commodities.length > 0 ? [...new Set(commodities)] : ['OIL', 'GOLD', 'WHEAT', 'NAT GAS'];
+
+      console.log('[AlertsScreen] Fetching news for:', queryComms);
+      const data = await dashboardApi.getTodayDashboard(queryComms);
+      const articles = Array.isArray(data?.news) ? data.news : [];
+
+      // Convert articles to alerts and filter by preferences
+      const newsAlerts = articles
+        .map((article, idx) => {
+          const { matched, score, matchedTags } = matchArticleToPreferences(article, preferences);
+
+          // Format time - handle various date formats
+          const published = article.published || article.time_published || article.pubDate;
+          let timeAgo = 'recently';
+          if (published) {
+            try {
+              const pubDate = new Date(published);
+              if (!isNaN(pubDate.getTime())) {
+                const diff = Date.now() - pubDate.getTime();
+                const mins = Math.floor(diff / 60000);
+                if (mins < 0) {
+                  timeAgo = 'just now';
+                } else if (mins < 60) {
+                  timeAgo = `${mins} min ago`;
+                } else if (mins < 1440) {
+                  timeAgo = `${Math.floor(mins / 60)}h ago`;
+                } else {
+                  timeAgo = `${Math.floor(mins / 1440)}d ago`;
+                }
+              }
+            } catch (e) {
+              console.log('Date parse error:', published);
+            }
+          }
+
+          // Extract sentiment from various possible fields
+          let sentiment = 'NEUTRAL';
+          const rawSentiment = (
+            article.ensemble_sentiment ||
+            article.sentiment ||
+            article.overall_sentiment_label ||
+            article.sentiment_label ||
+            ''
+          ).toString().toUpperCase();
+
+          if (rawSentiment.includes('BULL') || rawSentiment.includes('POSITIVE')) {
+            sentiment = 'BULLISH';
+          } else if (rawSentiment.includes('BEAR') || rawSentiment.includes('NEGATIVE')) {
+            sentiment = 'BEARISH';
+          } else if (rawSentiment.includes('NEUTRAL')) {
+            sentiment = 'NEUTRAL';
+          }
+
+          // Also check sentiment score if available
+          const sentimentScore = parseFloat(article.sentiment_score || article.score || 0.5);
+          if (sentiment === 'NEUTRAL' && !isNaN(sentimentScore)) {
+            if (sentimentScore >= 0.6) sentiment = 'BULLISH';
+            else if (sentimentScore <= 0.4) sentiment = 'BEARISH';
+          }
+
+          return {
+            id: `news-${idx}-${Date.now()}`,
+            title: article.title || article.headline || 'News Update',
+            message: article.summary || article.description || '',
+            source: article.source || 'Unknown',
+            sourceUrl: article.source_url || article.sourceUrl,
+            type: 'news',
+            sentiment,
+            matchedTags,
+            score,
+            matched,
+            createdAt: published || new Date().toISOString(),
+            timeAgo,
+            read: false,
+            severity: score > 15 ? 'high' : score > 5 ? 'medium' : 'low',
+          };
+        })
+        // Only show matched articles if user has preferences, otherwise show all
+        .filter(a => {
+          const hasPrefs = (preferences.commodities?.length > 0 ||
+            preferences.regions?.length > 0 ||
+            preferences.currencies?.length > 0 ||
+            preferences.keywords?.length > 0 ||
+            preferences.websiteURLs?.length > 0);
+          return !hasPrefs || a.matched;
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 15);
+
+      console.log('[AlertsScreen] Found', newsAlerts.length, 'matching alerts');
+      setAlerts(newsAlerts);
     } catch (error) {
-      console.error('Error loading alert preferences:', error);
+      console.error('Error loading alerts:', error);
     } finally {
       setPreferencesLoaded(true);
+      setLoading(false);
     }
   };
 
@@ -208,12 +299,25 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
     }
   };
 
-  const handleAlertTap = (alertId) => {
+  const handleAlertTap = async (alert) => {
+    // Mark as read
     setAlerts((prev) =>
-      prev.map((alert) =>
-        alert.id === alertId ? { ...alert, read: true } : alert
+      prev.map((a) =>
+        a.id === alert.id ? { ...a, read: true } : a
       )
     );
+
+    // Open article if it has a URL
+    if (alert.sourceUrl) {
+      try {
+        await Linking.openURL(alert.sourceUrl);
+      } catch (err) {
+        console.log('Could not open URL:', alert.sourceUrl);
+      }
+    } else if (onArticlePress) {
+      // If we have an onArticlePress handler, use it
+      onArticlePress(alert);
+    }
   };
 
   const formatRelativeTime = (isoString) => {
@@ -286,7 +390,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Alerts</Text>
@@ -326,14 +430,14 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
               alertPreferences.websiteURLs,
               'No website sources added'
             )}
-            
+
             <View style={styles.preferenceItem}>
               <Text style={styles.preferenceLabel}>Alert Frequency:</Text>
               <Text style={styles.preferenceValue}>
                 {preferencesLoaded ? alertPreferences.alertFrequency : 'Loading...'}
               </Text>
             </View>
-            
+
             <View style={styles.preferenceItem}>
               <Text style={styles.preferenceLabel}>Alert Threshold:</Text>
               <Text style={styles.preferenceValue}>
@@ -341,7 +445,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
               </Text>
             </View>
           </View>
-          
+
           <TouchableOpacity
             style={styles.editPreferencesButton}
             onPress={onNavigateToAlertPreferences}
@@ -353,7 +457,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
         {/* Notification Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notification Settings</Text>
-          
+
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Push Notifications</Text>
             <Switch
@@ -363,7 +467,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
               thumbColor={pushAlerts ? colors.textPrimary : colors.textSecondary}
             />
           </View>
-          
+
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Email Alerts</Text>
             <Switch
@@ -373,7 +477,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
               thumbColor={emailAlerts ? colors.textPrimary : colors.textSecondary}
             />
           </View>
-          
+
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Price Alerts</Text>
             <Switch
@@ -383,7 +487,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
               thumbColor={priceAlerts ? colors.textPrimary : colors.textSecondary}
             />
           </View>
-          
+
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>News Alerts</Text>
             <Switch
@@ -395,35 +499,59 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
           </View>
         </View>
 
-        {/* Recent Alerts */}
+        {/* Recent Alerts - Real News */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Alerts</Text>
-          {alerts.length === 0 ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+            <Text style={styles.sectionTitle}>Recent Alerts</Text>
+            <TouchableOpacity onPress={loadDataAndAlerts} style={{ padding: 8 }}>
+              <MaterialIcons name="refresh" size={20} color={colors.accentData} />
+            </TouchableOpacity>
+          </View>
+
+          {loading ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateTitle}>No alerts yet</Text>
-              <Text style={styles.emptyStateSubtitle}>Adjust your alert preferences to start tracking markets.</Text>
+              <Text style={styles.emptyStateTitle}>Loading news...</Text>
+            </View>
+          ) : alerts.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateTitle}>No matching alerts</Text>
+              <Text style={styles.emptyStateSubtitle}>
+                {preferencesLoaded && (alertPreferences.commodities?.length > 0 || alertPreferences.keywords?.length > 0)
+                  ? 'No news matches your current preferences. Try broadening your filters.'
+                  : 'Set up your alert preferences to see personalized news.'}
+              </Text>
             </View>
           ) : (
             alerts.map((alert) => (
               <TouchableOpacity
                 key={alert.id}
                 style={[styles.alertItem, !alert.read && styles.unreadAlert]}
-                onPress={() => handleAlertTap(alert.id)}
+                onPress={() => handleAlertTap(alert)}
               >
-                <View style={styles.alertIcon}>
-                  <HollowCircularIcon
-                    name={getTypeIcon(alert.type)}
+                <View style={[styles.alertIcon, { backgroundColor: getSentimentColor(alert.sentiment) + '20' }]}>
+                  <MaterialIcons
+                    name={alert.sentiment === 'BULLISH' ? 'trending-up' : alert.sentiment === 'BEARISH' ? 'trending-down' : 'article'}
                     size={20}
-                    color={getSeverityColor(alert.severity)}
-                    padding={4}
+                    color={getSentimentColor(alert.sentiment)}
                   />
                 </View>
                 <View style={styles.alertContent}>
-                  <Text style={styles.alertTitle}>{alert.title}</Text>
-                  <Text style={styles.alertMessage}>{alert.message}</Text>
-                  <Text style={styles.alertTime}>{formatRelativeTime(alert.createdAt)}</Text>
+                  <Text style={styles.alertTitle} numberOfLines={2}>{alert.title}</Text>
+                  <Text style={styles.alertMessage} numberOfLines={2}>{alert.message}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <Text style={styles.alertSource}>{alert.source}</Text>
+                    <Text style={styles.alertTime}>{alert.timeAgo}</Text>
+                  </View>
+                  {alert.matchedTags?.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                      {alert.matchedTags.slice(0, 3).map((tag, i) => (
+                        <View key={i} style={styles.matchedTag}>
+                          <Text style={styles.matchedTagText}>{tag}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
-                {!alert.read && <View style={styles.unreadDot} />}
               </TouchableOpacity>
             ))
           )}
@@ -722,6 +850,50 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     marginTop: 4,
+  },
+  // New alert styles
+  alertSource: {
+    fontSize: 12,
+    color: colors.accentData,
+    fontWeight: '500',
+  },
+  matchedTag: {
+    backgroundColor: colors.accentPositive + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  matchedTagText: {
+    fontSize: 11,
+    color: colors.accentPositive,
+    fontWeight: '500',
+  },
+  sentimentBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  sentimentBadgeText: {
+    fontSize: 14,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyStateTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  emptyStateSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });
 

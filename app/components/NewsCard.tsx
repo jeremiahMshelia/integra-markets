@@ -58,7 +58,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
           url = 'https://' + url;
         }
-        
+
         const supported = await Linking.canOpenURL(url);
         if (supported) {
           await Linking.openURL(url);
@@ -89,7 +89,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
     const shareMessage = `${item.title}\n\n${item.summary || item.content || ''}\n\nSource: ${item.source || 'Unknown'}`;
     const shareUrl = item.sourceUrl && item.sourceUrl !== '#' ? item.sourceUrl : '';
     const fullShareText = shareUrl ? `${shareMessage}\n\nRead more: ${shareUrl}` : shareMessage;
-    
+
     if (Platform.OS === 'ios') {
       // iOS: Show ActionSheet with specific options
       const options = [
@@ -99,7 +99,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         'Copy Link',
         'More Options'
       ];
-      
+
       ActionSheetIOS.showActionSheetWithOptions(
         {
           options,
@@ -134,12 +134,12 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       await handleNativeShare(fullShareText, shareUrl);
     }
   };
-  
+
   const handleEmailShare = async (message: string, url: string) => {
     const subject = encodeURIComponent(`Market News: ${item.title}`);
     const body = encodeURIComponent(`${message}${url ? `\n\nRead more: ${url}` : ''}`);
     const mailtoUrl = `mailto:?subject=${subject}&body=${body}`;
-    
+
     try {
       const canOpen = await Linking.canOpenURL(mailtoUrl);
       if (canOpen) {
@@ -152,16 +152,16 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       Alert.alert('Error', 'Unable to open email app.');
     }
   };
-  
+
   const handleTwitterShare = async (title: string, url: string) => {
     const tweetText = encodeURIComponent(`${title}${url ? ` ${url}` : ''}`);
     const twitterUrl = `https://twitter.com/intent/tweet?text=${tweetText}`;
-    
+
     try {
       // Try Twitter app first, then fall back to web
       const twitterAppUrl = `twitter://post?message=${tweetText}`;
       const canOpenApp = await Linking.canOpenURL(twitterAppUrl);
-      
+
       if (canOpenApp) {
         await Linking.openURL(twitterAppUrl);
       } else {
@@ -172,7 +172,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       Alert.alert('Error', 'Unable to share on Twitter.');
     }
   };
-  
+
   const handleCopyLink = async (content: string) => {
     try {
       if (item.sourceUrl && item.sourceUrl !== '#') {
@@ -189,21 +189,21 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       Alert.alert('Error', 'Unable to copy to clipboard.');
     }
   };
-  
+
   const handleNativeShare = async (message: string, url: string) => {
     try {
       const shareOptions: any = {
         message,
         title: item.title,
       };
-      
+
       // On iOS, provide URL separately for better app integration
       if (Platform.OS === 'ios' && url) {
         shareOptions.url = url;
       }
-      
+
       const result = await Share.share(shareOptions);
-      
+
       if (result.action === Share.sharedAction) {
         console.log('Content shared successfully');
       }
@@ -246,10 +246,10 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         )}
         <View style={styles.actionButtons}>
           <TouchableOpacity onPress={handleBookmarkToggle} style={styles.bookmarkButton}>
-            <Feather 
-              name={isCurrentlyBookmarked ? "bookmark" : "bookmark"} 
-              size={18} 
-              color={isCurrentlyBookmarked ? "#FFD700" : "#666666"} 
+            <Feather
+              name={isCurrentlyBookmarked ? "bookmark" : "bookmark"}
+              size={18}
+              color={isCurrentlyBookmarked ? "#FFD700" : "#666666"}
               fill={isCurrentlyBookmarked ? "#FFD700" : "none"}
             />
           </TouchableOpacity>
@@ -263,7 +263,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       <Text style={styles.title}>{item.title}</Text>
 
       {/* Description */}
-      <Text style={styles.description} numberOfLines={3}>
+      <Text style={styles.description}>
         {item.summary || item.content || 'More details would go here...'}
       </Text>
 
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: '#2A2A2E',
     shadowColor: 'rgba(0, 0, 0, 0.2)',
     shadowRadius: 4,
   },

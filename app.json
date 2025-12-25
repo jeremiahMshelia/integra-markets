@@ -4,15 +4,22 @@
     "slug": "integra",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/logoNew.png",
+    "icon": "./assets/NewLogoInt.png.png",
     "userInterfaceStyle": "light",
     "description": "Professional financial markets analysis and news aggregation platform with AI-powered sentiment analysis for commodities trading.",
-    "keywords": ["finance", "markets", "trading", "commodities", "news", "analysis", "AI", "sentiment"],
+    "keywords": [
+      "finance",
+      "markets",
+      "trading",
+      "commodities",
+      "news",
+      "analysis",
+      "AI",
+      "sentiment"
+    ],
     "category": "finance",
     "privacy": "https://integramarkets.com/privacy",
     "splash": {
-      "image": "./assets/logoNew.png",
-      "resizeMode": "contain",
       "backgroundColor": "#121212"
     },
     "assetBundlePatterns": [
@@ -20,52 +27,23 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "45",
+      "buildNumber": "49",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
-      "config": {
-        "usesNonExemptEncryption": false
-      },
       "appStoreUrl": "https://apps.apple.com/app/integra-markets/id123456789",
       "category": "finance",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "This app uses the camera to capture financial documents and receipts.",
-        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select financial documents and receipts.",
-        "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication.",
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": false,
-          "NSAllowsLocalNetworking": false,
-          "NSExceptionDomains": {}
-        },
-        "NSUserNotificationsUsageDescription": "This app sends notifications for market alerts and breaking news.",
-        "NSKeychainAccessGroups": [
-          "$(AppIdentifierPrefix)com.centori.integramarkets"
-        ],
-        "UIBackgroundModes": [
-          "fetch",
-          "remote-notification"
-        ],
-        "UIRequiresFullScreen": false,
-        "LSRequiresIPhoneOS": true,
-        "UIStatusBarStyle": "UIStatusBarStyleDefault",
-        "UNUserNotificationCenter": {
-          "UNAuthorizationOptionAlert": true,
-          "UNAuthorizationOptionBadge": true,
-          "UNAuthorizationOptionSound": true,
-          "UNAuthorizationOptionCriticalAlert": false,
-          "UNAuthorizationOptionProvidesAppNotificationSettings": true
-        }
-      },
       "runtimeVersion": "1.0.0",
-      "jsEngine": "hermes"
+      "jsEngine": "hermes",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.centori.integramarkets",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/NewLogoInt.png.png",
         "backgroundColor": "#000000"
       },
       "permissions": [
@@ -77,7 +55,7 @@
       "runtimeVersion": "1.0.0"
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/NewLogoInt.png.png",
       "bundler": "metro",
       "output": "single",
       "baseUrl": "/integra-markets"
@@ -86,7 +64,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
+          "icon": "./assets/NewLogoInt.png.png",
           "color": "#4ECCA3",
           "defaultChannel": "default"
         }
@@ -104,11 +82,14 @@
       "apiUrl": "$EXPO_PUBLIC_API_URL",
       "groqApiKey": "$EXPO_PUBLIC_GROQ_API_KEY",
       "huggingFaceToken": "$EXPO_PUBLIC_HUGGING_FACE_TOKEN",
+      "googleIosClientId": "$GOOGLE_IOS_CLIENT_ID",
+      "googleAndroidClientId": "$GOOGLE_ANDROID_CLIENT_ID",
+      "googleWebClientId": "$GOOGLE_WEB_CLIENT_ID",
       "eas": {
-        "projectId": "5163460b-7d45-4c4c-b10d-c5effb08a3c3"
+        "projectId": "d015a7d9-68a1-47a8-8ed4-217d8a0732af"
       }
     },
     "newArchEnabled": false,
-    "owner": "anilkhamsa"
+    "owner": "pipscobar"
   }
 }

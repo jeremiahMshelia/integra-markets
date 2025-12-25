@@ -1,13 +1,14 @@
 import React, { useState } from "react";
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   Alert,
   SafeAreaView,
-  StatusBar 
+  StatusBar,
+  Image
 } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
 import { useBookmarks } from '../providers/BookmarkProvider';
@@ -57,13 +58,13 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
   const [showAllBookmarks, setShowAllBookmarks] = useState(false);
-  
+
   const { bookmarks, removeBookmark } = useBookmarks();
 
   const handleDeleteKey = (keyId, keyName) => {
     Alert.alert(
       'Delete API Key',
-      `Are you sure you want to delete "${keyName}"?`,
+      `Are you sure you want to delete "${keyName}" ? `,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -99,11 +100,11 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   };
 
   const defaultAPIKeys = apiKeys || [];
-  
+
   const handleDeleteBookmark = (bookmarkId, bookmarkTitle) => {
     Alert.alert(
       'Delete Bookmark',
-      `Are you sure you want to delete "${bookmarkTitle}"?`,
+      `Are you sure you want to delete "${bookmarkTitle}" ? `,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -122,7 +123,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
       ]
     );
   };
-  
+
   const handleViewAllBookmarks = () => {
     setShowAllBookmarks(true);
   };
@@ -138,7 +139,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bgPrimary} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -160,15 +161,27 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
 
           <View style={styles.profileCard}>
             <View style={styles.profileHeader}>
-              <View style={styles.profileAvatar}>
-                <Text style={styles.profileAvatarText}>
-                  {defaultUserProfile.username?.charAt(0)?.toUpperCase() || 'U'}
-                </Text>
-              </View>
+              {defaultUserProfile.profilePhoto ? (
+                <Image
+                  source={{ uri: defaultUserProfile.profilePhoto }}
+                  style={styles.profileAvatar}
+                />
+              ) : (
+                <View style={styles.profileAvatar}>
+                  <Text style={styles.profileAvatarText}>
+                    {defaultUserProfile.username?.charAt(0)?.toUpperCase() || 'U'}
+                  </Text>
+                </View>
+              )}
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>
                   {defaultUserProfile.username || 'User'}
                 </Text>
+                {defaultUserProfile.email && (
+                  <Text style={styles.profileEmail}>
+                    {defaultUserProfile.email}
+                  </Text>
+                )}
                 <Text style={styles.profileRole}>
                   {getRoleLabel(defaultUserProfile.role)}
                 </Text>
@@ -179,11 +192,11 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
                 )}
               </View>
             </View>
-            
+
             {defaultUserProfile.bio && (
               <Text style={styles.profileBio}>{defaultUserProfile.bio}</Text>
             )}
-            
+
             <View style={styles.profileStats}>
               <View style={styles.profileStat}>
                 <Text style={styles.profileStatValue}>
@@ -331,14 +344,14 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
                     {bookmark.sentiment && (
                       <Text style={[styles.bookmarkSentiment, {
                         color: bookmark.sentiment === 'BULLISH' ? colors.accentPositive :
-                               bookmark.sentiment === 'BEARISH' ? colors.accentNegative :
-                               colors.accentNeutral
+                          bookmark.sentiment === 'BEARISH' ? colors.accentNegative :
+                            colors.accentNeutral
                       }]}>
                         {bookmark.sentiment}
                       </Text>
                     )}
                   </View>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.deleteBookmarkButton}
                     onPress={() => handleDeleteBookmark(bookmark.id, bookmark.title)}
                   >
@@ -388,8 +401,8 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
               <Text style={styles.settingText}>About</Text>
               <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.settingItem, { borderBottomWidth: 0 }]} 
+            <TouchableOpacity
+              style={[styles.settingItem, { borderBottomWidth: 0 }]}
               onPress={onLogout}
             >
               <View style={styles.logoutContainer}>
@@ -513,6 +526,11 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 20,
     fontWeight: "600",
+    marginBottom: 4,
+  },
+  profileEmail: {
+    color: colors.textSecondary,
+    fontSize: 14,
     marginBottom: 4,
   },
   profileRole: {

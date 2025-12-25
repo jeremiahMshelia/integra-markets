@@ -23,6 +23,9 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://integra-markets.onrender.com"
       }
     },
     "production": {
@@ -38,7 +41,8 @@
       },
       "env": {
         "NODE_ENV": "production",
-        "EXPO_PUBLIC_ENV": "production"
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://integra-markets.onrender.com"
       }
     }
   },

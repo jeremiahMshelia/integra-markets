@@ -41,7 +41,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
   const [customKeyword, setCustomKeyword] = useState('');
   const [keywords, setKeywords] = useState([]);
 
-  const tabs = ['Commodities', 'Regions', 'Currencies', 'Websites', 'Keywords', 'Sources'];
+  const tabs = ['Commodities', 'Regions', 'Currencies', 'Websites', 'Keywords'];
   const frequencies = ['Real-time', 'Daily', 'Weekly'];
   const thresholds = ['Low', 'Medium', 'High'];
 
@@ -59,7 +59,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD',
     'AUD', 'CNY', 'RUB', 'INR', 'BRL', 'SAR'
   ];
-  
+
   const suggestedWebsites = DEFAULT_WEBSITE_SOURCES;
 
   // Commodities functions
@@ -166,7 +166,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     };
 
     const totalItems = selectedCommodities.length + selectedRegions.length + selectedCurrencies.length + keywords.length + websiteURLs.length;
-    
+
     Alert.alert(
       'Preferences Saved',
       `Your alert preferences have been configured:\n• ${selectedCommodities.length} commodities\n• ${selectedRegions.length} regions\n• ${selectedCurrencies.length} currencies\n• ${keywords.length} keywords\n• ${websiteURLs.length} website sources\n\nTotal: ${totalItems} tracking items`,
@@ -385,7 +385,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
       ) : (
         <Text style={styles.emptyCommoditiesText}>No websites added yet.</Text>
       )}
-      
+
       {/* Website URL Input */}
       <View style={styles.customInputContainer}>
         <TextInput
@@ -402,7 +402,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
           <MaterialIcons name="add" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
-      
+
       {/* Suggested Websites */}
       <Text style={styles.sectionTitle}>Suggested Sources:</Text>
       <View style={styles.suggestedOptionsContainer}>
@@ -473,7 +473,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     <View style={styles.tabContent}>
       <Text style={styles.sectionTitle}>News Sources</Text>
       <Text style={styles.emptyCommoditiesText}>Configure your preferred news sources and RSS feeds here.</Text>
-      
+
       <Text style={styles.thresholdDescription}>
         This section will allow you to configure various news sources, RSS feeds, and other information sources for your alerts.
       </Text>
@@ -524,16 +524,14 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
         {activeTab === 'Commodities'
           ? renderCommoditiesTab()
           : activeTab === 'Regions'
-          ? renderRegionsTab()
-          : activeTab === 'Currencies'
-          ? renderCurrenciesTab()
-          : activeTab === 'Keywords'
-          ? renderKeywordsTab()
-          : activeTab === 'Websites'
-          ? renderWebsitesTab() 
-          : activeTab === 'Sources'
-          ? renderSourcesTab()
-          : null}
+            ? renderRegionsTab()
+            : activeTab === 'Currencies'
+              ? renderCurrenciesTab()
+              : activeTab === 'Keywords'
+                ? renderKeywordsTab()
+                : activeTab === 'Websites'
+                  ? renderWebsitesTab()
+                  : null}
 
         {/* Alert Frequency */}
         <Text style={styles.sectionTitle}>Alert Frequency</Text>
@@ -684,7 +682,7 @@ const styles = StyleSheet.create({
   commodityTag: {
     flexDirection: 'row',
     alignItems: 'center',
-backgroundColor: colors.accentData,
+    backgroundColor: colors.accentData,
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 8,
@@ -734,7 +732,7 @@ backgroundColor: colors.accentData,
     marginBottom: 10,
   },
   selectedSuggestedOption: {
-backgroundColor: colors.accentData,
+    backgroundColor: colors.accentData,
   },
   suggestedOptionText: {
     color: colors.accentPositive,

@@ -22,7 +22,7 @@ import { registerForPushNotificationsAsync, setupNotificationListeners, ensurePu
 if (!__DEV__) {
   console.disableYellowBox = true;
   console.reportErrorsAsExceptions = false;
-  
+
   // Disable React Native Inspector in production
   if (global && global.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
     global.__REACT_DEVTOOLS_GLOBAL_HOOK__.isDisabled = true;
@@ -111,12 +111,12 @@ const sampleNewsData = [
 // Profile Screen Component
 const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPreferences, onDeleteAccount, onLogout, onShowPrivacyPolicy, onShowTermsOfService }) => {
   const [alertPreferences, setAlertPreferences] = useState(null);
-  
+
   // Load alert preferences
   useEffect(() => {
     loadAlertPreferences();
   }, []);
-  
+
   const loadAlertPreferences = async () => {
     try {
       const prefs = await AsyncStorage.getItem('alert_preferences');
@@ -147,7 +147,7 @@ const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPrefe
       );
     }
   };
-  
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -181,38 +181,38 @@ const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPrefe
               <Text style={styles.settingsText}>Notification Settings</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={styles.settingsItem} onPress={onShowAlertPreferences}>
               <MaterialIcons name="tune" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Alert Preferences</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={styles.settingsItem} onPress={onShowPrivacyPolicy}>
               <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Privacy Policy</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={styles.settingsItem} onPress={onShowTermsOfService}>
               <MaterialIcons name="article" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Terms of Service</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={styles.settingsItem} onPress={onResetData}>
               <MaterialIcons name="refresh" size={20} color={colors.accentNegative} />
               <Text style={[styles.settingsText, { color: colors.accentNegative }]}>Reset App Data</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.accentNegative} />
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.settingsItem} onPress={onLogout}>
+
+            <TouchableOpacity style={[styles.settingsItem, { borderBottomWidth: 0 }]} onPress={onLogout}>
               <MaterialIcons name="exit-to-app" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Log out</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.dangerZone}>
             <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
             <TouchableOpacity style={styles.deleteAccountButton} onPress={onDeleteAccount}>
@@ -254,6 +254,22 @@ const App = () => {
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showNotifHelp, setShowNotifHelp] = useState(false);
+  const [alertPreferences, setAlertPreferences] = useState(null);
+
+  // Load alert preferences
+  const loadAlertPreferences = async () => {
+    try {
+      const prefs = await AsyncStorage.getItem('alert_preferences');
+      if (prefs) {
+        const parsed = JSON.parse(prefs);
+        setAlertPreferences(parsed);
+        return parsed;
+      }
+    } catch (error) {
+      console.error('Error loading alert preferences:', error);
+    }
+    return null;
+  };
 
   const loadCachedFeed = async () => {
     try {
@@ -275,7 +291,7 @@ const App = () => {
   const saveFeedCache = async (items) => {
     try {
       await AsyncStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ items, savedAt: Date.now() }));
-    } catch {}
+    } catch { }
   };
 
   const formatTimeAgo = (timestamp) => {
@@ -312,7 +328,35 @@ const App = () => {
 
   const loadNews = async () => {
     try {
-      const data = await dashboardApi.getTodayDashboard(['OIL', 'GOLD', 'WHEAT', 'NAT GAS']);
+      // Load user's alert preferences to filter news by their chosen commodities
+      let prefs = alertPreferences;
+      if (!prefs) {
+        prefs = await loadAlertPreferences();
+      }
+
+      // Get commodities from preferences, or use defaults
+      const defaultCommodities = ['OIL', 'GOLD', 'WHEAT', 'NAT GAS'];
+      let commodities = defaultCommodities;
+
+      if (prefs?.commodities && Array.isArray(prefs.commodities) && prefs.commodities.length > 0) {
+        // Map user preference names to API-compatible names
+        const commodityMap = {
+          'Crude Oil': 'OIL',
+          'Oil': 'OIL',
+          'Natural Gas': 'NAT GAS',
+          'Gold': 'GOLD',
+          'Silver': 'GOLD',  // Silver uses gold endpoint
+          'Wheat': 'WHEAT',
+          'Corn': 'WHEAT',
+          'Soybeans': 'WHEAT',
+          'Copper': 'GOLD',
+        };
+        commodities = prefs.commodities.map(c => commodityMap[c] || c.toUpperCase()).filter((v, i, a) => a.indexOf(v) === i);
+        if (commodities.length === 0) commodities = defaultCommodities;
+      }
+
+      console.log('[News] Loading news for commodities:', commodities);
+      const data = await dashboardApi.getTodayDashboard(commodities);
       const articles = Array.isArray(data?.news) ? data.news : [];
 
       // Map backend articles into the shape NewsCard expects, then hard-cap to 20
@@ -339,13 +383,13 @@ const App = () => {
           try {
             const u = new URL(sourceUrl);
             sourceName = (u.hostname || '').replace(/^www\./i, '');
-          } catch {}
+          } catch { }
         }
         if (/^https?:\/\//i.test(sourceName)) {
           try {
             const u = new URL(sourceName);
             sourceName = (u.hostname || '').replace(/^www\./i, '');
-          } catch {}
+          } catch { }
         }
         sourceName = sourceName
           .replace(/[-|\u2013].*$/, '')
@@ -415,7 +459,24 @@ const App = () => {
         return;
       }
 
-      const limited = mapped.slice(0, 20);
+      // Apply keyword filtering/prioritization if user has custom keywords
+      let prioritized = mapped;
+      if (prefs?.keywords && Array.isArray(prefs.keywords) && prefs.keywords.length > 0) {
+        const userKeywords = prefs.keywords.map(k => k.toLowerCase());
+        // Score articles by keyword matches
+        prioritized = mapped.map(article => {
+          const text = `${article.title} ${article.summary}`.toLowerCase();
+          const matchScore = userKeywords.reduce((score, kw) => {
+            return score + (text.includes(kw) ? 1 : 0);
+          }, 0);
+          return { ...article, matchScore };
+        });
+        // Sort by match score (highest first), then by original order
+        prioritized.sort((a, b) => b.matchScore - a.matchScore);
+        console.log('[News] Applied keyword prioritization, top matches:', prioritized.slice(0, 3).map(a => ({ title: a.title.slice(0, 40), matches: a.matchScore })));
+      }
+
+      const limited = prioritized.slice(0, 20);
       setAllNews(limited);
 
       // Analyze the first batch (8) so card sentiment matches overlay
@@ -457,10 +518,10 @@ const App = () => {
         const res = await sentimentApi.analyzeEnhanced(text, commodity);
         try {
           console.log('[sentiment] result for', text.slice(0, 80), '\n', JSON.stringify(res));
-        } catch {}
+        } catch { }
         let bull = Math.max(0, Math.min(1, Number(res?.bullish || 0)));
         let bear = Math.max(0, Math.min(1, Number(res?.bearish || 0)));
-        let neu  = Math.max(0, Math.min(1, Number(res?.neutral || 0)));
+        let neu = Math.max(0, Math.min(1, Number(res?.neutral || 0)));
         // Normalize to sum to 1
         const sum = bull + bear + neu;
         if (sum > 0 && Math.abs(sum - 1) > 1e-6) {
@@ -492,15 +553,17 @@ const App = () => {
   };
 
   useEffect(() => { (async () => { await loadCachedFeed(); await loadNews(); })(); }, []);
-  useEffect(() => { (async () => {
-    try {
-      const perm = await checkNotificationPermissions();
-      let enabled = perm;
-      try { const s = await getNotificationSettings(); if (s && s.pushNotifications === false) enabled = false; } catch {}
-      setNotifEnabled(Boolean(enabled));
-    } catch { setNotifEnabled(false); }
-  })(); }, []);
-  
+  useEffect(() => {
+    (async () => {
+      try {
+        const perm = await checkNotificationPermissions();
+        let enabled = perm;
+        try { const s = await getNotificationSettings(); if (s && s.pushNotifications === false) enabled = false; } catch { }
+        setNotifEnabled(Boolean(enabled));
+      } catch { setNotifEnabled(false); }
+    })();
+  }, []);
+
   // Update displayed news when limit changes
   useEffect(() => {
     if (allNews.length > 0) {
@@ -511,7 +574,7 @@ const App = () => {
   // Check app state on mount
   useEffect(() => {
     console.log('App mounted, checking state...');
-    
+
     // Wrap in try-catch to prevent initialization crashes
     try {
       checkAppState();
@@ -520,7 +583,7 @@ const App = () => {
       console.error('Error during app initialization:', error);
       // Continue anyway - don't let initialization errors crash the app
     }
-    
+
     // Database setup removed - these were causing crashes as imports were commented out
     // setupDatabase.createTables();
     // testConnection();
@@ -531,7 +594,7 @@ const App = () => {
     try {
       // Register for push notifications (silent to avoid popup on startup)
       await registerForPushNotificationsAsync({ silent: true });
-      
+
       // Set up notification listeners
       setupNotificationListeners(
         (notification) => {
@@ -550,7 +613,7 @@ const App = () => {
   const checkAppState = async () => {
     try {
       console.log('checkAppState called');
-      
+
       // Ensure Platform is available
       if (!Platform || !Platform.OS) {
         console.warn('Platform not available, defaulting to mobile');
@@ -558,7 +621,7 @@ const App = () => {
       } else {
         // Check if we're running on web using Platform API
         const isWeb = Platform.OS === 'web';
-        
+
         if (isWeb) {
           // We're on web, skip all onboarding
           console.log('Web platform detected, setting demo user');
@@ -566,14 +629,14 @@ const App = () => {
           return;
         }
       }
-      
+
       console.log('Platform:', Platform.OS); // Will show 'ios', 'android', or 'web'
-      
+
       // Wrap AsyncStorage calls in try-catch to handle potential errors
       let onboardingCompleted = null;
       let alertsCompleted = null;
       let storedUserData = null;
-      
+
       try {
         onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
         alertsCompleted = await AsyncStorage.getItem('alerts_completed');
@@ -582,17 +645,17 @@ const App = () => {
         console.warn('AsyncStorage access failed:', storageError);
         // Continue with null values - don't crash
       }
-      
+
       console.log('Storage values:', {
         onboardingCompleted,
         alertsCompleted,
         storedUserData: storedUserData ? 'exists' : 'null'
       });
-      
+
       if (storedUserData) {
         setUserData(JSON.parse(storedUserData));
       }
-      
+
       if (onboardingCompleted !== 'true') {
         console.log('Showing auth screen');
         setShowAuth(true);
@@ -615,17 +678,17 @@ const App = () => {
 
   const handleAuthComplete = async (authData) => {
     console.log('handleAuthComplete called with:', authData);
-    
+
     setUserData(authData);
     setShowAuth(false);
-    
+
     // Check if we should skip onboarding (returning user signing in with Google)
     if (authData.skipOnboarding) {
       console.log('User has skipOnboarding=true, checking alerts...');
       // User has already completed onboarding, go straight to main app
       const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
       console.log('Alerts completed status:', alertsCompleted);
-      
+
       if (alertsCompleted !== 'true') {
         console.log('Showing alert preferences');
         setShowAlertPreferences(true);
@@ -674,7 +737,11 @@ const App = () => {
     try {
       await AsyncStorage.setItem('alerts_completed', 'true');
       await AsyncStorage.setItem('alert_preferences', JSON.stringify(preferences));
+      setAlertPreferences(preferences); // Update local state
       setShowAlertPreferences(false);
+      // Reload news with new preferences
+      console.log('[News] Alert preferences updated, reloading news...');
+      loadNews();
     } catch (error) {
       console.error('Error saving alert preferences:', error);
     }
@@ -717,7 +784,7 @@ const App = () => {
       ]
     );
   };
-  
+
   const handleDeleteAccount = async () => {
     Alert.alert(
       'Delete Account',
@@ -753,7 +820,7 @@ const App = () => {
       ]
     );
   };
-  
+
   const handleLogout = async () => {
     Alert.alert(
       'Log out',
@@ -782,7 +849,7 @@ const App = () => {
       ]
     );
   };
-  
+
   const handleShowAlertPreferences = () => {
     setActiveNav('Today');
     setShowAlertPreferences(true);
@@ -818,7 +885,7 @@ const App = () => {
 
   const getFilterChipColor = (filter) => {
     if (activeFilter !== filter) return colors.bgSecondary;
-    
+
     switch (filter) {
       case 'Bullish': return '#4ade80';
       case 'Bearish': return '#ff6b6b';
@@ -829,7 +896,7 @@ const App = () => {
 
   const getFilterBorderColor = (filter) => {
     if (activeFilter !== filter) return colors.cardBorder;
-    
+
     switch (filter) {
       case 'Bullish': return '#4ade80';
       case 'Bearish': return '#ff6b6b';
@@ -854,7 +921,7 @@ const App = () => {
           Today
         </Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity
         style={styles.navItem}
         onPress={() => setActiveNav('Alerts')}
@@ -868,7 +935,7 @@ const App = () => {
           Alerts
         </Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity
         style={styles.navItem}
         onPress={() => setActiveNav('Profile')}
@@ -1038,7 +1105,7 @@ const App = () => {
               ]}
               onPress={() => setActiveFilter(filter)}
             >
-{filter === 'Bullish' && <MaterialIcons name="trending-up" size={14} color={activeFilter === filter ? colors.bgPrimary : colors.textSecondary} />}
+              {filter === 'Bullish' && <MaterialIcons name="trending-up" size={14} color={activeFilter === filter ? colors.bgPrimary : colors.textSecondary} />}
               {filter === 'Bearish' && <MaterialIcons name="trending-down" size={14} color={activeFilter === filter ? colors.bgPrimary : colors.textSecondary} />}
               {filter === 'Neutral' && <MaterialIcons name="trending-flat" size={14} color={activeFilter === filter ? colors.bgPrimary : colors.textSecondary} />}
               <Text style={[styles.filterText, activeFilter === filter && styles.activeFilterText]}>
@@ -1052,7 +1119,7 @@ const App = () => {
           {getFilteredNews().map((item) => (
             <NewsCard key={item.id} item={item} onAIClick={handleArticlePress} />
           ))}
-          
+
           <View style={styles.endOfFeed}>
             {allNews.length > liveNews.length ? (
               <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
@@ -1134,7 +1201,7 @@ const WebContainer = ({ children }) => {
     // Not on web, return children as-is
     return children;
   }
-  
+
   return (
     <View style={webStyles.webWrapper}>
       <View style={webStyles.webContainer}>
