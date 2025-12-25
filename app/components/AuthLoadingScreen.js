@@ -133,19 +133,58 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
 
         setIsLoading(true);
 
-        // Simulate authentication process
-        setTimeout(() => {
+        try {
+            if (isSignUp) {
+                // Sign up with Supabase
+                const result = await authService.signUpWithEmail(email.trim(), password, fullName.trim());
+
+                if (result.success) {
+                    if (result.requiresConfirmation) {
+                        Alert.alert(
+                            'Check Your Email',
+                            'We sent you a confirmation link. Please check your email to verify your account.',
+                            [{ text: 'OK' }]
+                        );
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    const userData = {
+                        id: result.user?.id || Date.now().toString(),
+                        email: email.trim(),
+                        fullName: fullName.trim(),
+                        username: email.split('@')[0],
+                        authMethod: 'email',
+                        isNewUser: true,
+                    };
+                    onAuthComplete(userData);
+                } else {
+                    Alert.alert('Sign Up Failed', result.error || 'Unable to create account. Please try again.');
+                }
+            } else {
+                // Sign in with Supabase
+                const result = await authService.signInWithEmail(email.trim(), password);
+
+                if (result.success) {
+                    const userData = {
+                        id: result.user?.id || Date.now().toString(),
+                        email: result.user?.email || email.trim(),
+                        fullName: result.user?.fullName || email.split('@')[0],
+                        username: email.split('@')[0],
+                        authMethod: 'email',
+                        isNewUser: false,
+                    };
+                    onAuthComplete(userData);
+                } else {
+                    Alert.alert('Sign In Failed', result.error || 'Invalid email or password.');
+                }
+            }
+        } catch (error) {
+            console.error('Auth error:', error);
+            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+        } finally {
             setIsLoading(false);
-            const userData = {
-                id: Date.now().toString(),
-                email: email.trim(),
-                fullName: isSignUp ? fullName.trim() : email.split('@')[0],
-                username: email.split('@')[0],
-                authMethod: 'email',
-                isNewUser: isSignUp,
-            };
-            onAuthComplete(userData);
-        }, 2000);
+        }
     };
 
     const handleSocialAuth = async (provider) => {

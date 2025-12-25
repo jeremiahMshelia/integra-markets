@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { DEFAULT_WEBSITE_SOURCES, getSuggestedWebsiteURLs } from '../config/default_sources';
+import { supabaseService } from '../services/supabaseService';
 
 // Color palette
 const colors = {
@@ -152,31 +153,38 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     }
   };
 
-  const handleSavePreferences = () => {
+  const handleSavePreferences = async () => {
     const preferences = {
       commodities: selectedCommodities,
       regions: selectedRegions,
       currencies: selectedCurrencies,
       keywords: keywords,
-      websiteURLs: websiteURLs,
+      websiteUrls: websiteURLs,
       alertFrequency,
       alertThreshold,
-      pushNotifications,
-      emailAlerts,
+      pushEnabled: pushNotifications,
+      emailEnabled: emailAlerts,
     };
 
-    const totalItems = selectedCommodities.length + selectedRegions.length + selectedCurrencies.length + keywords.length + websiteURLs.length;
+    // Save to Supabase
+    const result = await supabaseService.saveAlertPreferences(preferences);
 
-    Alert.alert(
-      'Preferences Saved',
-      `Your alert preferences have been configured:\n• ${selectedCommodities.length} commodities\n• ${selectedRegions.length} regions\n• ${selectedCurrencies.length} currencies\n• ${keywords.length} keywords\n• ${websiteURLs.length} website sources\n\nTotal: ${totalItems} tracking items`,
-      [
-        {
-          text: 'Continue',
-          onPress: () => onComplete(preferences)
-        }
-      ]
-    );
+    if (result.success) {
+      const totalItems = selectedCommodities.length + selectedRegions.length + selectedCurrencies.length + keywords.length + websiteURLs.length;
+
+      Alert.alert(
+        'Preferences Saved',
+        `Your alert preferences have been saved${result.local ? ' locally' : ' to your account'}:\\n• ${selectedCommodities.length} commodities\\n• ${selectedRegions.length} regions\\n• ${selectedCurrencies.length} currencies\\n• ${keywords.length} keywords\\n• ${websiteURLs.length} website sources\\n\\nTotal: ${totalItems} tracking items`,
+        [
+          {
+            text: 'Continue',
+            onPress: () => onComplete(preferences)
+          }
+        ]
+      );
+    } else {
+      Alert.alert('Error', result.error || 'Failed to save preferences. Please try again.');
+    }
   };
 
   const handleSkipPreferences = () => {

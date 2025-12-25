@@ -9,7 +9,7 @@ try {
     WebBrowser = require('expo-web-browser');
 } catch (e) {
     console.warn('expo-web-browser not available');
-    WebBrowser = { maybeCompleteAuthSession: () => {}, openAuthSessionAsync: () => Promise.resolve({ type: 'cancel' }) };
+    WebBrowser = { maybeCompleteAuthSession: () => { }, openAuthSessionAsync: () => Promise.resolve({ type: 'cancel' }) };
 }
 
 try {
@@ -81,7 +81,7 @@ class AuthService {
         try {
             // Configure Google Sign-In if available
             await this.configureGoogleSignIn();
-            
+
             // Check for stored auth token
             const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
             const storedUser = await AsyncStorage.getItem(USER_DATA_KEY);
@@ -89,7 +89,7 @@ class AuthService {
             if (storedToken && storedUser) {
                 this.authToken = storedToken;
                 this.currentUser = JSON.parse(storedUser);
-                
+
                 // Validate token with backend
                 await this.validateToken();
             }
@@ -106,14 +106,14 @@ class AuthService {
      */
     async configureGoogleSignIn() {
         if (!GoogleSignin) return;
-        
+
         // Check if config has valid client IDs
         if (!isGoogleSignInConfigured()) {
             console.warn('Google Sign-In not configured: Missing client IDs in config/googleSignIn.js');
             this.googleSignInConfigured = false;
             return;
         }
-        
+
         try {
             await GoogleSignin.configure({
                 iosClientId: googleSignInConfig.iosClientId,
@@ -146,7 +146,7 @@ class AuthService {
 
                     // Sign in with Google
                     const userInfo = await GoogleSignin.signIn();
-                    
+
                     if (userInfo && userInfo.user) {
                         // Create user object from Google sign-in
                         const googleUser = {
@@ -180,7 +180,7 @@ class AuthService {
                         this.currentUser = googleUser;
                         await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(googleUser));
                         await AsyncStorage.setItem(AUTH_TOKEN_KEY, userInfo.idToken || 'google_token_' + Date.now());
-                        
+
                         return { success: true, user: googleUser };
                     }
                 } catch (nativeError) {
@@ -218,10 +218,10 @@ class AuthService {
                     if (result.type === 'success' && result.url) {
                         // Parse the auth response
                         const params = AuthSession.parseRedirectUrl(result.url);
-                        
+
                         // Get the session
                         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-                        
+
                         if (!sessionError && sessionData?.session) {
                             // Save auth data
                             await this.handleAuthSuccess(sessionData.session);
@@ -240,11 +240,11 @@ class AuthService {
                 fullName: 'Google User',
                 provider: 'google'
             };
-            
+
             this.currentUser = mockUser;
             await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(mockUser));
             await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'mock_google_token');
-            
+
             return { success: true, user: mockUser };
 
         } catch (error) {
@@ -303,10 +303,10 @@ class AuthService {
 
             // If email confirmation is required
             if (data?.user && !data.session) {
-                return { 
-                    success: true, 
+                return {
+                    success: true,
                     requiresConfirmation: true,
-                    message: 'Please check your email to confirm your account' 
+                    message: 'Please check your email to confirm your account'
                 };
             }
 
@@ -328,7 +328,7 @@ class AuthService {
 
             // Get user data from Supabase
             const { data: { user }, error } = await supabase.auth.getUser();
-            
+
             if (error) throw error;
 
             // Create user object
@@ -342,6 +342,14 @@ class AuthService {
 
             // Store user data
             await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(this.currentUser));
+
+            // Set user ID in supabaseService for database operations
+            try {
+                const { supabaseService } = require('./supabaseService');
+                supabaseService.setUserId(user.id);
+            } catch (e) {
+                console.log('supabaseService not available');
+            }
 
             // Register/update user in our backend
             await this.syncUserWithBackend();
@@ -364,7 +372,7 @@ class AuthService {
 
             // Check if user exists in our backend
             const response = await api.get('/auth/me');
-            
+
             if (response.status === 404) {
                 // Create user in our backend
                 await api.post('/auth/sync', {
@@ -401,7 +409,7 @@ class AuthService {
     async validateToken() {
         try {
             const { data: { session }, error } = await supabase.auth.getSession();
-            
+
             if (error || !session) {
                 await this.signOut();
                 return false;

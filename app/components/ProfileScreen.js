@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,10 +8,13 @@ import {
   Alert,
   SafeAreaView,
   StatusBar,
-  Image
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
 import { useBookmarks } from '../providers/BookmarkProvider';
+import { supabaseService } from '../services/supabaseService';
+import * as ImagePicker from 'expo-image-picker';
 
 // Use the same color palette as the main app
 const colors = {
@@ -58,8 +61,65 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
   const [showAllBookmarks, setShowAllBookmarks] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState(userProfile?.profilePhoto || null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const { bookmarks, removeBookmark } = useBookmarks();
+
+  // Load profile from Supabase on mount
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const profile = await supabaseService.getProfile();
+      if (profile?.avatar_url) {
+        setProfilePhoto(profile.avatar_url);
+      }
+    } catch (error) {
+      console.log('Error loading profile:', error);
+    }
+  };
+
+  const handleEditProfilePhoto = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to change your profile picture.');
+        return;
+      }
+
+      // Pick image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setIsUploadingPhoto(true);
+
+        const uploadResult = await supabaseService.uploadAvatar(result.assets[0].uri);
+
+        if (uploadResult.success) {
+          setProfilePhoto(uploadResult.url);
+          Alert.alert('Success', 'Profile photo updated!');
+        } else {
+          Alert.alert('Upload Failed', uploadResult.error || 'Could not upload photo. Please try again.');
+        }
+
+        setIsUploadingPhoto(false);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      setIsUploadingPhoto(false);
+      Alert.alert('Error', 'Could not update profile photo. Please try again.');
+    }
+  };
+
 
   const handleDeleteKey = (keyId, keyName) => {
     Alert.alert(
@@ -161,18 +221,34 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
 
           <View style={styles.profileCard}>
             <View style={styles.profileHeader}>
-              {defaultUserProfile.profilePhoto ? (
-                <Image
-                  source={{ uri: defaultUserProfile.profilePhoto }}
-                  style={styles.profileAvatar}
-                />
-              ) : (
-                <View style={styles.profileAvatar}>
-                  <Text style={styles.profileAvatarText}>
-                    {defaultUserProfile.username?.charAt(0)?.toUpperCase() || 'U'}
-                  </Text>
-                </View>
-              )}
+              <TouchableOpacity onPress={handleEditProfilePhoto} disabled={isUploadingPhoto}>
+                {isUploadingPhoto ? (
+                  <View style={[styles.profileAvatar, styles.profileAvatarLoading]}>
+                    <ActivityIndicator color={colors.accentPositive} />
+                  </View>
+                ) : profilePhoto || defaultUserProfile.profilePhoto ? (
+                  <View>
+                    <Image
+                      source={{ uri: profilePhoto || defaultUserProfile.profilePhoto }}
+                      style={styles.profileAvatar}
+                    />
+                    <View style={styles.editAvatarBadge}>
+                      <MaterialIcons name="edit" size={12} color="#FFF" />
+                    </View>
+                  </View>
+                ) : (
+                  <View>
+                    <View style={styles.profileAvatar}>
+                      <Text style={styles.profileAvatarText}>
+                        {defaultUserProfile.username?.charAt(0)?.toUpperCase() || 'U'}
+                      </Text>
+                    </View>
+                    <View style={styles.editAvatarBadge}>
+                      <MaterialIcons name="add-a-photo" size={12} color="#FFF" />
+                    </View>
+                  </View>
+                )}
+              </TouchableOpacity>
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>
                   {defaultUserProfile.username || 'User'}
@@ -513,6 +589,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 16,
+  },
+  profileAvatarLoading: {
+    backgroundColor: colors.bgSecondary,
+    borderWidth: 2,
+    borderColor: colors.accentPositive,
+  },
+  editAvatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 12,
+    backgroundColor: colors.accentPositive,
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.bgSecondary,
   },
   profileAvatarText: {
     color: colors.bgPrimary,
