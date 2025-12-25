@@ -738,6 +738,7 @@ def _fetch_live_news(commodities, hours=72):
 
 
 @app.get('/')
+@app.head('/')  # Support HEAD requests for UptimeRobot
 def read_root():
     return {
         "message": "Integra AI Backend is running!",
