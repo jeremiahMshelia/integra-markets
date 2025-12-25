@@ -737,25 +737,20 @@ def _fetch_live_news(commodities, hours=72):
         return {"articles": []}
 
 
-@app.get('/')
-@app.head('/')  # Support HEAD requests for UptimeRobot
+@app.api_route('/', methods=['GET', 'HEAD'])
 def read_root():
     return {
-        "message": "Integra AI Backend is running!",
-        "version": "1.0.1",  # Updated version
-        "endpoints": [
-            "/analyze-sentiment",
-            "/health",
-            "/api/sentiment/market",
-            "/api/sentiment/movers",
-            "/api/news/latest",
-            "/api/news/analysis",
-            "/api/weather/alerts",
-        ]
+        "status": "online",
+        "service": "Integra Markets API", 
+        "version": "0.1.0",
+        "features": {
+            "sentiment_analysis": True,
+            "market_data": True,
+            "finbert": True
+        }
     }
 
-@app.get('/health')
-@app.head('/health')  # Support HEAD requests for UptimeRobot/health checks
+@app.api_route('/health', methods=['GET', 'HEAD'])
 def health_check():
     return {"status": "healthy", "supabase_connected": bool(supabase_url and supabase_key)}
 
