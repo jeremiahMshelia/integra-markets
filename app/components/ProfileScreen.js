@@ -56,10 +56,9 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout }) {
+export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onEditAlertPreferences }) {
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
-  const [showAlertPreferences, setShowAlertPreferences] = useState(false);
   const [showAllBookmarks, setShowAllBookmarks] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(userProfile?.profilePhoto || null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -305,7 +304,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
             </View>
             <TouchableOpacity
               style={styles.editButton}
-              onPress={() => setShowAlertPreferences(true)}
+              onPress={onEditAlertPreferences}
             >
               <Text style={styles.editButtonText}>Edit</Text>
             </TouchableOpacity>

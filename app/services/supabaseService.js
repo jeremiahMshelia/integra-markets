@@ -301,7 +301,15 @@ class SupabaseService {
                 };
             }
 
-            return { bullish: 0, bearish: 0, neutral: 0, total: 0 };
+            return {
+                bullish: 0,
+                bearish: 0,
+                neutral: 0,
+                total: 0,
+                bullishPercent: 0,
+                bearishPercent: 0,
+                neutralPercent: 0
+            };
         } catch (error) {
             console.error('[SupabaseService] getPollResults error:', error);
             return null;

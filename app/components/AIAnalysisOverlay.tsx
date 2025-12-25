@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { sentimentApi } from '../services/api';
+import { supabaseService } from '../services/supabaseService';
 
 interface NewsData {
     title: string;
@@ -123,32 +124,110 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
         completeTour();
     };
 
+    // Poll State
+    const [pollData, setPollData] = useState({
+        bullish: 0,
+        bearish: 0,
+        neutral: 0,
+        total: 0,
+        bullishPercent: 0,
+        bearishPercent: 0,
+        neutralPercent: 0
+    });
+
+    // Fetch poll data when overlay opens or news changes
+    useEffect(() => {
+        if (isVisible && newsData) {
+            fetchPollData();
+        }
+    }, [isVisible, newsData]);
+
+    const fetchPollData = async () => {
+        if (!newsData?.title) return;
+
+        // Generate a consistent ID for the article (using title hash or similar if no ID provided)
+        // For now using title as ID since it's unique enough for this demo
+        const articleId = newsData.title.replace(/\s+/g, '-').toLowerCase().slice(0, 50);
+
+        try {
+            // Get current user's vote
+            const myVote = await supabaseService.getUserVote(articleId);
+            if (myVote) setUserVote(myVote);
+
+            // Get all votes
+            const results = await supabaseService.getPollResults(articleId);
+
+            if (results && results.total > 0) {
+                setPollData(results);
+            } else if (analysis) {
+                // If no real votes yet, fallback to AI sentiment as the "initial seed"
+                // But visualized as 0 total votes so users know they are first
+                setPollData({
+                    bullish: 0,
+                    bearish: 0,
+                    neutral: 0,
+                    total: 0,
+                    bullishPercent: analysis?.finBertSentiment?.bullish || 0,
+                    bearishPercent: analysis?.finBertSentiment?.bearish || 0,
+                    neutralPercent: analysis?.finBertSentiment?.neutral || 0
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching poll data:', error);
+        }
+    };
+
+    const handleVote = async (vote: 'BULLISH' | 'BEARISH' | 'NEUTRAL') => {
+        if (!newsData?.title) return;
+
+        // Optimistic update
+        setUserVote(vote);
+
+        const articleId = newsData.title.replace(/\s+/g, '-').toLowerCase().slice(0, 50);
+
+        // Submit vote
+        const result = await supabaseService.submitPollVote(articleId, newsData.title, vote);
+
+        if (result.success) {
+            // Refresh results
+            await fetchPollData();
+            Alert.alert('Vote Submitted', 'Thanks for sharing your sentiment!');
+        } else {
+            Alert.alert('Error', result.error || 'Failed to submit vote');
+            setUserVote(null); // Revert on failure
+        }
+    };
+
+    // Calculate display values - mix of AI sentiment (if no votes) or Real Votes
+    const displayBullish = pollData.total > 0 ? pollData.bullishPercent : (analysis?.finBertSentiment?.bullish || 0);
+    const displayBearish = pollData.total > 0 ? pollData.bearishPercent : (analysis?.finBertSentiment?.bearish || 0);
+    const displayNeutral = pollData.total > 0 ? pollData.neutralPercent : (analysis?.finBertSentiment?.neutral || 0);
+
+
     const isCurrentlyBookmarked = newsData ? isBookmarked(newsData.title) : false;
 
     const handleBookmarkToggle = async () => {
-        if (!newsData) return;
+        if (!newsData || !analysis) return;
 
         try {
             if (isCurrentlyBookmarked) {
-                // Find the bookmark by title and remove it
                 const bookmarkToRemove = bookmarks.find((b: any) => b.title === newsData.title);
                 if (bookmarkToRemove) {
                     await removeBookmark(bookmarkToRemove.id);
                     Alert.alert('Removed', 'Analysis removed from bookmarks');
                 }
             } else {
-                // Add new bookmark with AI analysis data
                 await addBookmark({
                     title: newsData.title,
-                    summary: analysisData.summary,
+                    summary: analysis.summary,
                     source: newsData.source,
-                    sentiment: analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.bearish
-                        ? (analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.neutral ? 'BULLISH' : 'NEUTRAL')
-                        : (analysisData.finBertSentiment.bearish > analysisData.finBertSentiment.neutral ? 'BEARISH' : 'NEUTRAL'),
+                    sentiment: analysis.finBertSentiment.bullish > analysis.finBertSentiment.bearish
+                        ? (analysis.finBertSentiment.bullish > analysis.finBertSentiment.neutral ? 'BULLISH' : 'NEUTRAL')
+                        : (analysis.finBertSentiment.bearish > analysis.finBertSentiment.neutral ? 'BEARISH' : 'NEUTRAL'),
                     sentimentScore: Math.max(
-                        analysisData.finBertSentiment.bullish,
-                        analysisData.finBertSentiment.bearish,
-                        analysisData.finBertSentiment.neutral
+                        analysis.finBertSentiment.bullish,
+                        analysis.finBertSentiment.bearish,
+                        analysis.finBertSentiment.neutral
                     ) / 100
                 });
                 Alert.alert('Saved', 'AI Analysis saved to bookmarks');
@@ -789,21 +868,21 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                     <View style={styles.pollOptions}>
                                         <TouchableOpacity
                                             style={[styles.pollOptionSmall, styles.pollBearishSmall]}
-                                            onPress={() => setUserVote('BEARISH')}
+                                            onPress={() => handleVote('BEARISH')}
                                         >
                                             <MaterialIcons name="trending-down" size={14} color="#F05454" />
                                             <Text style={[styles.pollOptionTextSmall, { color: '#F05454' }]}>Bearish</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[styles.pollOptionSmall, styles.pollNeutralSmall]}
-                                            onPress={() => setUserVote('NEUTRAL')}
+                                            onPress={() => handleVote('NEUTRAL')}
                                         >
                                             <MaterialIcons name="trending-flat" size={14} color="#EAB308" />
                                             <Text style={[styles.pollOptionTextSmall, { color: '#EAB308' }]}>Neutral</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[styles.pollOptionSmall, styles.pollBullishSmall]}
-                                            onPress={() => setUserVote('BULLISH')}
+                                            onPress={() => handleVote('BULLISH')}
                                         >
                                             <MaterialIcons name="trending-up" size={14} color="#4ECCA3" />
                                             <Text style={[styles.pollOptionTextSmall, { color: '#4ECCA3' }]}>Bullish</Text>
@@ -821,9 +900,9 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                                 <View style={styles.dialLine} />
                                                 <View style={[styles.dialDot, { backgroundColor: '#F05454' }]} />
                                                 <Text style={styles.dialPointer}>
-                                                    {analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.bearish
+                                                    {displayBullish > displayBearish
                                                         ? '← BULLISH'
-                                                        : analysisData.finBertSentiment.bearish > analysisData.finBertSentiment.bullish
+                                                        : displayBearish > displayBullish
                                                             ? 'BEARISH →'
                                                             : 'NEUTRAL'}
                                                 </Text>
@@ -832,9 +911,9 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
 
                                         {/* Results with emojis */}
                                         {[
-                                            { key: 'BULLISH' as const, label: 'Bullish', emoji: '🐂', value: analysisData.finBertSentiment.bullish, color: '#4ECCA3' },
-                                            { key: 'NEUTRAL' as const, label: 'Neutral', emoji: '😐', value: analysisData.finBertSentiment.neutral, color: '#EAB308' },
-                                            { key: 'BEARISH' as const, label: 'Bearish', emoji: '🐻', value: analysisData.finBertSentiment.bearish, color: '#F05454' },
+                                            { key: 'BULLISH' as const, label: 'Bullish', emoji: '🐂', value: Math.round(displayBullish), color: '#4ECCA3' },
+                                            { key: 'NEUTRAL' as const, label: 'Neutral', emoji: '😐', value: Math.round(displayNeutral), color: '#EAB308' },
+                                            { key: 'BEARISH' as const, label: 'Bearish', emoji: '🐻', value: Math.round(displayBearish), color: '#F05454' },
                                         ].map((option) => (
                                             <View key={option.key} style={[styles.pollResultRow, userVote === option.key && styles.pollResultSelected]}>
                                                 <View style={styles.pollResultLabelRow}>
@@ -851,18 +930,18 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                             </View>
                                         ))}
 
-                                        {/* Who is voting? Section - Based on onboarding roles */}
+                                        {/* Who is voting? Section - Based on real total */}
                                         <View style={styles.whoIsVotingSection}>
                                             <View style={styles.whoIsVotingHeader}>
                                                 <Text style={styles.whoIsVotingEmoji}>👥</Text>
                                                 <Text style={styles.whoIsVotingTitle}>Who is voting?</Text>
                                             </View>
                                             {[
-                                                { role: 'Physical crude traders', count: Math.floor(analysisData.totalVotes * 0.30) },
-                                                { role: 'Financial traders', count: Math.floor(analysisData.totalVotes * 0.38) },
-                                                { role: 'Analysts', count: Math.floor(analysisData.totalVotes * 0.15) },
-                                                { role: 'Hedge funds', count: Math.floor(analysisData.totalVotes * 0.10) },
-                                                { role: 'Risk managers', count: Math.floor(analysisData.totalVotes * 0.07) },
+                                                { role: 'Physical crude traders', count: Math.ceil(pollData.total * 0.30) },
+                                                { role: 'Financial traders', count: Math.ceil(pollData.total * 0.38) },
+                                                { role: 'Analysts', count: Math.ceil(pollData.total * 0.15) },
+                                                { role: 'Hedge funds', count: Math.ceil(pollData.total * 0.10) },
+                                                { role: 'Risk managers', count: Math.max(0, pollData.total - Math.ceil(pollData.total * 0.93)) },
                                             ].map((voter, idx) => (
                                                 <View key={idx} style={styles.voterRow}>
                                                     <Text style={styles.voterBullet}>•</Text>
@@ -879,9 +958,9 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                                 <Text style={styles.interpretationTitle}>Interpretation</Text>
                                             </View>
                                             <Text style={styles.interpretationText}>
-                                                {analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.bearish + 10
+                                                {displayBullish > displayBearish + 10
                                                     ? 'Sentiment strongly favors bullish positioning. Traders expect positive price action.'
-                                                    : analysisData.finBertSentiment.bearish > analysisData.finBertSentiment.bullish + 10
+                                                    : displayBearish > displayBullish + 10
                                                         ? 'Bearish sentiment dominates. Exercise caution on long positions.'
                                                         : 'Sentiment leans bullish but indecisive. Expect consolidation until major catalysts.'}
                                             </Text>
@@ -890,7 +969,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                         {/* Total Votes Display */}
                                         <View style={styles.totalVotesContainer}>
                                             <Text style={styles.totalVotesText}>
-                                                {analysisData.totalVotes} votes
+                                                {pollData.total} votes
                                             </Text>
                                         </View>
                                     </View>

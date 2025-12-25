@@ -75,6 +75,12 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Integra Markets needs access to your photos to update your profile picture."
+        }
       ]
     ],
     "extra": {

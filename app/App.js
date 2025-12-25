@@ -45,6 +45,7 @@ import AlertPreferencesForm from './components/AlertPreferencesForm';
 import AlertsScreen from './components/AlertsScreen';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
+import ProfileScreen from './components/ProfileScreen';
 import { BookmarkProvider } from './providers/BookmarkProvider';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import TermsOfServiceModal from './components/TermsOfServiceModal';
@@ -109,130 +110,7 @@ const sampleNewsData = [
 ];
 
 // Profile Screen Component
-const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPreferences, onDeleteAccount, onLogout, onShowPrivacyPolicy, onShowTermsOfService }) => {
-  const [alertPreferences, setAlertPreferences] = useState(null);
 
-  // Load alert preferences
-  useEffect(() => {
-    loadAlertPreferences();
-  }, []);
-
-  const loadAlertPreferences = async () => {
-    try {
-      const prefs = await AsyncStorage.getItem('alert_preferences');
-      if (prefs) {
-        setAlertPreferences(JSON.parse(prefs));
-      }
-    } catch (error) {
-      console.error('Error loading alert preferences:', error);
-    }
-  };
-
-
-  const handleNotificationSettings = async () => {
-    try {
-      const settings = await getNotificationSettings();
-      const enabled = Boolean(settings?.pushNotifications);
-      Alert.alert(
-        'Notification Settings',
-        `Push notifications are currently ${enabled ? 'enabled' : 'disabled'}. You can change this in your device settings.`,
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      console.error('Error determining notification status:', error);
-      Alert.alert(
-        'Notification Settings',
-        'We could not confirm your notification status. Please check your device settings.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onNavigateHome} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <ScrollView style={styles.content}>
-          <View style={styles.profileCard}>
-            <View style={styles.profileAvatar}>
-              <MaterialIcons name="person" size={40} color={colors.bgPrimary} />
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>
-                {userData?.name || 'Integra User'}
-              </Text>
-              <Text style={styles.profileEmail}>
-                {userData?.email || 'user@integramarkets.com'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.settingsSection}>
-            <TouchableOpacity style={styles.settingsItem} onPress={handleNotificationSettings}>
-              <MaterialIcons name="notifications" size={20} color={colors.textSecondary} />
-              <Text style={styles.settingsText}>Notification Settings</Text>
-              <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.settingsItem} onPress={onShowAlertPreferences}>
-              <MaterialIcons name="tune" size={20} color={colors.textSecondary} />
-              <Text style={styles.settingsText}>Alert Preferences</Text>
-              <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.settingsItem} onPress={onShowPrivacyPolicy}>
-              <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} />
-              <Text style={styles.settingsText}>Privacy Policy</Text>
-              <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.settingsItem} onPress={onShowTermsOfService}>
-              <MaterialIcons name="article" size={20} color={colors.textSecondary} />
-              <Text style={styles.settingsText}>Terms of Service</Text>
-              <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.settingsItem} onPress={onResetData}>
-              <MaterialIcons name="refresh" size={20} color={colors.accentNegative} />
-              <Text style={[styles.settingsText, { color: colors.accentNegative }]}>Reset App Data</Text>
-              <MaterialIcons name="chevron-right" size={20} color={colors.accentNegative} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.settingsItem, { borderBottomWidth: 0 }]} onPress={onLogout}>
-              <MaterialIcons name="exit-to-app" size={20} color={colors.textSecondary} />
-              <Text style={styles.settingsText}>Log out</Text>
-              <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.dangerZone}>
-            <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
-            <TouchableOpacity style={styles.deleteAccountButton} onPress={onDeleteAccount}>
-              <MaterialIcons name="delete-forever" size={20} color={colors.textPrimary} />
-              <Text style={styles.deleteAccountText}>Delete Account</Text>
-            </TouchableOpacity>
-            <Text style={styles.deleteAccountWarning}>
-              This will permanently delete your account and all associated data.
-            </Text>
-          </View>
-
-          <View style={styles.appInfo}>
-            <Text style={styles.appVersion}>Integra Markets v1.0.0</Text>
-            <Text style={styles.appSubtext}>AI-powered commodity trading insights</Text>
-          </View>
-        </ScrollView>
-      </View>
-    </SafeAreaView>
-  );
-};
 
 // Main App Component
 const App = () => {
@@ -733,6 +611,25 @@ const App = () => {
     }
   };
 
+  const handleNotificationSettings = async () => {
+    try {
+      const settings = await getNotificationSettings();
+      const enabled = Boolean(settings?.pushNotifications);
+      Alert.alert(
+        'Notification Settings',
+        `Push notifications are currently ${enabled ? 'enabled' : 'disabled'}. You can change this in your device settings.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error determining notification status:', error);
+      Alert.alert(
+        'Notification Settings',
+        'We could not confirm your notification status. Please check your device settings.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
   const handleAlertPreferencesComplete = async (preferences) => {
     try {
       await AsyncStorage.setItem('alerts_completed', 'true');
@@ -995,14 +892,15 @@ const App = () => {
     return (
       <>
         <ProfileScreen
-          onNavigateHome={() => setActiveNav('Today')}
-          userData={userData}
-          onResetData={resetAppData}
-          onShowAlertPreferences={handleShowAlertPreferences}
-          onDeleteAccount={handleDeleteAccount}
+          onBack={() => setActiveNav('Today')}
+          userProfile={userData}
           onLogout={handleLogout}
-          onShowPrivacyPolicy={() => setShowPrivacyPolicy(true)}
-          onShowTermsOfService={() => setShowTermsOfService(true)}
+          onEditAlertPreferences={() => setShowAlertPreferences(true)}
+          onNavigateToSettings={(screen) => {
+            if (screen === 'NotificationsSettings') handleNotificationSettings();
+            else if (screen === 'PrivacyPolicy') setShowPrivacyPolicy(true);
+            else if (screen === 'TermsOfService') setShowTermsOfService(true);
+          }}
         />
         <PrivacyPolicyModal
           visible={showPrivacyPolicy}
