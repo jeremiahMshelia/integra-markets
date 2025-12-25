@@ -754,6 +754,7 @@ def read_root():
     }
 
 @app.get('/health')
+@app.head('/health')  # Support HEAD requests for UptimeRobot/health checks
 def health_check():
     return {"status": "healthy", "supabase_connected": bool(supabase_url and supabase_key)}
 

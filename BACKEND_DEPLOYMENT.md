@@ -20,11 +20,11 @@
 4. **Add Environment Variables:**
    Click "Environment" and add these:
    ```
-   SUPABASE_URL=https://jcovjmuaysebdfbpbvdh.supabase.co
-   SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjb3ZqbXVheXNlYmRmYnBidmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTA3NTEsImV4cCI6MjA2ODA2Njc1MX0.vnIaHcLbQRBz1Q1HgFOT5-KZqghQDKBu-uCanVU2AGQ
-   HUGGING_FACE_TOKEN=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
-   ALPHA_VANTAGE_API_KEY=(your key if you have one)
-   OPENWEATHERMAP_API_KEY=(your key if you have one)
+   SUPABASE_URL=your_supabase_url_here
+   SUPABASE_KEY=your_supabase_anon_key_here
+   HUGGING_FACE_TOKEN=your_huggingface_token_here
+   GROQ_API_KEY=your_groq_api_key_here
+   ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
    ```
 
 5. **Deploy:**
@@ -50,10 +50,11 @@
    # Link to GitHub
    railway link
    
-   # Add environment variables
-   railway variables set SUPABASE_URL=https://jcovjmuaysebdfbpbvdh.supabase.co
-   railway variables set SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-   railway variables set HUGGING_FACE_TOKEN=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
+   # Add environment variables (use your actual keys from .env)
+   railway variables set SUPABASE_URL=<from .env>
+   railway variables set SUPABASE_KEY=<from .env>
+   railway variables set HUGGING_FACE_TOKEN=<from .env>
+   railway variables set GROQ_API_KEY=<from .env>
    
    # Deploy
    railway up
@@ -75,9 +76,11 @@
    ```bash
    fly auth signup
    fly launch
-   fly secrets set SUPABASE_URL="https://jcovjmuaysebdfbpbvdh.supabase.co"
-   fly secrets set SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-   fly secrets set HUGGING_FACE_TOKEN="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"
+   # Set your secrets from .env values
+   fly secrets set SUPABASE_URL="<from .env>"
+   fly secrets set SUPABASE_KEY="<from .env>"
+   fly secrets set HUGGING_FACE_TOKEN="<from .env>"
+   fly secrets set GROQ_API_KEY="<from .env>"
    fly deploy
    ```
 
@@ -87,8 +90,8 @@ For immediate testing while setting up a proper deployment:
 
 1. **Start your backend locally:**
    ```bash
-   cd /Users/lm/Desktop/integra/integra-markets
-   python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+   cd /path/to/integra-markets/backend
+   python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
    ```
 
 2. **In another terminal, expose it with ngrok:**
@@ -121,5 +124,5 @@ curl YOUR_BACKEND_URL/health
 
 Should return:
 ```json
-{"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}
+{"status": "healthy", "supabase_connected": true}
 ```
