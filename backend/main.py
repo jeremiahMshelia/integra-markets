@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, Body, Query
+from fastapi import FastAPI, HTTPException, Body, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -22,6 +23,16 @@ except Exception:
     pass
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
+
+# Middleware to handle HEAD requests (for UptimeRobot)
+class HeadMethodMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "HEAD":
+            # For HEAD requests, return empty body with 200 OK
+            return Response(status_code=200, headers={"Content-Type": "application/json"})
+        return await call_next(request)
+
+app.add_middleware(HeadMethodMiddleware)
 USE_GROQ = os.getenv("ENABLE_GROQ_SENTIMENT", "0").lower() in {"1", "true", "yes"}
 
 # Extra domain noise and finance lexicon
