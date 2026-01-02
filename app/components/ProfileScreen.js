@@ -56,9 +56,7 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onEditAlertPreferences }) {
-  const [selectedProvider, setSelectedProvider] = useState(null);
-  const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
+export default function ProfileScreen({ userProfile, onBack, onNavigateToSettings, onLogout }) {
   const [showAllBookmarks, setShowAllBookmarks] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(userProfile?.profilePhoto || null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -90,9 +88,9 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
         return;
       }
 
-      // Pick image
+      // Pick image - using new MediaType API
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -120,27 +118,6 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   };
 
 
-  const handleDeleteKey = (keyId, keyName) => {
-    Alert.alert(
-      'Delete API Key',
-      `Are you sure you want to delete "${keyName}" ? `,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            // Handle key deletion here
-            console.log('Delete key:', keyId);
-          }
-        }
-      ]
-    );
-  };
-
-  const handleProviderSelect = (provider) => {
-    setSelectedProvider(provider);
-  };
 
   // Default values for demo
   const defaultUserProfile = userProfile || {
@@ -151,14 +128,6 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
     marketFocus: ['Oil & Oil Products', 'Metals & Minerals'],
     experience: '10+'
   };
-
-  const defaultAlertPreferences = alertPreferences || {
-    commodities: ['Crude Oil', 'Gold', 'Natural Gas'],
-    frequency: 'daily',
-    notifications: true
-  };
-
-  const defaultAPIKeys = apiKeys || [];
 
   const handleDeleteBookmark = (bookmarkId, bookmarkTitle) => {
     Alert.alert(
@@ -295,100 +264,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           </View>
         </View>
 
-        {/* Alert Preferences Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <MaterialIcons name="notifications" color={colors.accentPositive} size={20} />
-              <Text style={styles.sectionTitle}>Alert Preferences</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={onEditAlertPreferences}
-            >
-              <Text style={styles.editButtonText}>Edit</Text>
-            </TouchableOpacity>
-          </View>
 
-          <View style={styles.alertsCard}>
-            <View style={styles.alertRow}>
-              <Text style={styles.alertLabel}>Commodities</Text>
-              <Text style={styles.alertValue}>
-                {defaultAlertPreferences.commodities.length} selected
-              </Text>
-            </View>
-            <View style={styles.alertRow}>
-              <Text style={styles.alertLabel}>Frequency</Text>
-              <Text style={styles.alertValue}>
-                {defaultAlertPreferences.frequency.charAt(0).toUpperCase() + defaultAlertPreferences.frequency.slice(1)}
-              </Text>
-            </View>
-            <View style={styles.alertRow}>
-              <Text style={styles.alertLabel}>Notifications</Text>
-              <Text style={styles.alertValue}>
-                {defaultAlertPreferences.notifications ? 'Enabled' : 'Disabled'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* API Keys Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <MaterialIcons name="vpn-key" color={colors.accentPositive} size={20} />
-              <Text style={styles.sectionTitle}>API Keys</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setShowAPIKeySetup(true)}
-            >
-              <MaterialIcons name="add" color={colors.accentPositive} size={20} />
-            </TouchableOpacity>
-          </View>
-
-          {defaultAPIKeys.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No API keys configured</Text>
-              <Text style={styles.emptyStateSubtext}>
-                Add an API key to start chatting with AI
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.keysList}>
-              {defaultAPIKeys.map((key) => (
-                <View key={key.id} style={styles.keyItem}>
-                  <TouchableOpacity
-                    style={[
-                      styles.keyContent,
-                      selectedProvider === key.provider && styles.selectedKey
-                    ]}
-                    onPress={() => handleProviderSelect(key.provider)}
-                  >
-                    <View style={styles.keyInfo}>
-                      <Text style={styles.keyName}>{key.name}</Text>
-                      <Text style={styles.keyProvider}>{getProviderLabel(key.provider)}</Text>
-                      <Text style={styles.keyDate}>
-                        Added {key.createdAt?.toLocaleDateString() || 'Recently'}
-                      </Text>
-                    </View>
-                    {selectedProvider === key.provider && (
-                      <View style={styles.selectedBadge}>
-                        <Text style={styles.selectedBadgeText}>Active</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteKey(key.id, key.name)}
-                  >
-                    <MaterialIcons name="delete" color={colors.accentNegative} size={18} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
 
         {/* Bookmarks Section */}
         <View style={styles.section}>

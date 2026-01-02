@@ -895,7 +895,6 @@ const App = () => {
           onBack={() => setActiveNav('Today')}
           userProfile={userData}
           onLogout={handleLogout}
-          onEditAlertPreferences={() => setShowAlertPreferences(true)}
           onNavigateToSettings={(screen) => {
             if (screen === 'NotificationsSettings') handleNotificationSettings();
             else if (screen === 'PrivacyPolicy') setShowPrivacyPolicy(true);

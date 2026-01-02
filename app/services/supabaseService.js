@@ -115,15 +115,33 @@ class SupabaseService {
                 return { success: false, error: 'Not authenticated' };
             }
 
-            // Convert URI to blob
+            // First, delete any existing avatars for this user
+            try {
+                const { data: existingFiles } = await supabase.storage
+                    .from('avatars')
+                    .list(userId);
+
+                if (existingFiles && existingFiles.length > 0) {
+                    const filesToDelete = existingFiles.map(file => `${userId}/${file.name}`);
+                    await supabase.storage
+                        .from('avatars')
+                        .remove(filesToDelete);
+                    console.log('[SupabaseService] Deleted old avatars:', filesToDelete.length);
+                }
+            } catch (deleteError) {
+                console.log('[SupabaseService] No existing avatars to delete or error:', deleteError);
+            }
+
+            // Read the file as base64 - this works reliably in React Native
             const response = await fetch(imageUri);
-            const blob = await response.blob();
+            const arrayBuffer = await response.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
 
             const fileName = `${userId}/avatar-${Date.now()}.jpg`;
 
             const { data, error } = await supabase.storage
                 .from('avatars')
-                .upload(fileName, blob, {
+                .upload(fileName, uint8Array, {
                     contentType: 'image/jpeg',
                     upsert: true,
                 });

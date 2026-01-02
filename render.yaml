@@ -1,0 +1,22 @@
+# Render deployment configuration
+# See https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: integra-markets-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: ENABLE_GROQ_SENTIMENT
+        value: "true"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: HUGGING_FACE_TOKEN
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true
