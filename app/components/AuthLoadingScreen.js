@@ -271,49 +271,23 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
 
                 onAuthComplete(userData);
             } else {
-                // Fallback to a mock if OAuth fails but don't block the user
-                console.log('Google OAuth not available, using simplified flow');
-                const mockGoogleUser = {
-                    id: 'google_' + Date.now().toString(),
-                    email: 'user@gmail.com',
-                    fullName: 'Google User',
-                    username: 'googleuser',
-                    authMethod: 'google',
-                    isNewUser: !isReturningUser,
-                    skipOnboarding: isReturningUser
-                };
-
-                console.log('Google Auth Fallback - User data:', {
-                    ...mockGoogleUser,
-                    skipOnboarding: mockGoogleUser.skipOnboarding
-                });
-
-                onAuthComplete(mockGoogleUser);
+                // Show error - don't fall back to mock
+                Alert.alert(
+                    'Sign In Failed',
+                    result.error || 'Google sign-in was cancelled or failed. Please try again.',
+                    [{ text: 'OK' }]
+                );
             }
         } catch (error) {
             setIsLoading(false);
             console.error('Google auth error:', error);
 
-            // Check onboarding status even on error
-            let isReturningUser = false;
-            try {
-                const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
-                isReturningUser = onboardingCompleted === 'true';
-            } catch (e) {
-                console.error('Error checking onboarding status:', e);
-            }
-
-            // Even on error, allow user to proceed with mock account
-            const mockGoogleUser = {
-                id: 'google_' + Date.now().toString(),
-                email: 'user@gmail.com',
-                fullName: 'Google User',
-                username: 'googleuser',
-                authMethod: 'google',
-                isNewUser: !isReturningUser,
-                skipOnboarding: isReturningUser
-            };
-            onAuthComplete(mockGoogleUser);
+            // Show error instead of falling back to mock
+            Alert.alert(
+                'Sign In Error',
+                'Unable to complete Google sign-in. Please try again or use email.',
+                [{ text: 'OK' }]
+            );
         }
     };
 

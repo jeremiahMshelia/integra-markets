@@ -256,9 +256,9 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
               </View>
               <View style={styles.profileStat}>
                 <Text style={styles.profileStatValue}>
-                  {defaultAlertPreferences.commodities.length}
+                  {bookmarks.length}
                 </Text>
-                <Text style={styles.profileStatLabel}>Alerts</Text>
+                <Text style={styles.profileStatLabel}>Bookmarks</Text>
               </View>
             </View>
           </View>

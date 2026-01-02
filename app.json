@@ -2,7 +2,7 @@
   "expo": {
     "name": "Integra Markets",
     "slug": "integra",
-    "scheme": "integra",
+    "scheme": "com.centori.integramarkets",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/NewLogoInt.png.png",

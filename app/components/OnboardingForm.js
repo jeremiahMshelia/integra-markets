@@ -76,7 +76,7 @@ const WelcomeCard = ({ onNext }) => (
                 The AI-powered platform for commodity trading insights and prediction markets
             </Text>
         </View>
-        
+
         <View style={styles.featuresList}>
             <View style={styles.featureItem}>
                 <MaterialIcons name="auto-awesome" size={24} color={colors.accentPositive} />
@@ -100,7 +100,7 @@ const RoleSelectionCard = ({ selectedRole, onSelect }) => (
     <View style={styles.formCard}>
         <Text style={styles.cardTitle}>What's your role? (Optional)</Text>
         <Text style={styles.cardSubtitle}>Help us customize your experience - you can skip this if you prefer</Text>
-        
+
         <View style={styles.optionsGrid}>
             {roleOptions.map((role) => (
                 <TouchableOpacity
@@ -111,9 +111,9 @@ const RoleSelectionCard = ({ selectedRole, onSelect }) => (
                     ]}
                     onPress={() => onSelect(role.value)}
                 >
-                    <HollowCircularIcon 
-                        name={role.icon} 
-                        size={24} 
+                    <HollowCircularIcon
+                        name={role.icon}
+                        size={24}
                         color={selectedRole === role.value ? colors.bgPrimary : colors.accentPositive}
                         padding={6}
                     />
@@ -145,7 +145,7 @@ const ExperienceSelectionCard = ({ selectedExperience, onSelect }) => (
     <View style={styles.formCard}>
         <Text style={styles.cardTitle}>Years of experience? (Optional)</Text>
         <Text style={styles.cardSubtitle}>This helps us tailor content complexity - you can skip this if you prefer</Text>
-        
+
         <View style={styles.optionsList}>
             {experienceOptions.map((exp) => (
                 <TouchableOpacity
@@ -180,11 +180,11 @@ const ExperienceSelectionCard = ({ selectedExperience, onSelect }) => (
 );
 
 // Market Focus Selection Component
-const MarketFocusCard = ({ selectedMarkets, onToggle, onSkip }) => (
+const MarketFocusCard = ({ selectedMarkets, onToggle }) => (
     <View style={styles.formCard}>
-        <Text style={styles.cardTitle}>Market focus areas (Optional)</Text>
-        <Text style={styles.cardSubtitle}>Select your primary interests (multiple allowed) - you can skip this if you prefer</Text>
-        
+        <Text style={styles.cardTitle}>Market focus areas</Text>
+        <Text style={styles.cardSubtitle}>Select your primary interests (multiple allowed)</Text>
+
         <View style={styles.marketGrid}>
             {marketFocusOptions.map((market) => (
                 <TouchableOpacity
@@ -195,11 +195,11 @@ const MarketFocusCard = ({ selectedMarkets, onToggle, onSkip }) => (
                     ]}
                     onPress={() => onToggle(market.value)}
                 >
-                    <HollowCircularIcon 
-                        name={market.icon} 
-                        size={32} 
+                    <HollowCircularIcon
+                        name={market.icon}
+                        size={32}
                         color={selectedMarkets.includes(market.value) ? colors.bgPrimary : market.color}
-                        padding={8} 
+                        padding={8}
                     />
                     <Text style={[
                         styles.marketOptionTitle,
@@ -215,10 +215,6 @@ const MarketFocusCard = ({ selectedMarkets, onToggle, onSkip }) => (
                 </TouchableOpacity>
             ))}
         </View>
-        
-        <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
-            <Text style={styles.skipButtonText}>Skip for now</Text>
-        </TouchableOpacity>
     </View>
 );
 
@@ -227,7 +223,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
     const pickImage = async () => {
         // Request permission
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        
+
         if (permissionResult.granted === false) {
             Alert.alert("Permission required", "You need to grant camera roll permission to upload a photo.");
             return;
@@ -256,14 +252,14 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
 
     const takePhoto = async () => {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-        
+
         if (permissionResult.granted === false) {
             Alert.alert("Permission required", "You need to grant camera permission to take a photo.");
             return;
         }
 
         const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
@@ -276,7 +272,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
 
     const pickFromLibrary = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
@@ -318,12 +314,28 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
 
     return (
         <View style={styles.formCard}>
-            <Text style={styles.cardTitle}>Additional details (Optional)</Text>
-            <Text style={styles.cardSubtitle}>Help us personalize your experience - all fields are optional</Text>
-            
-            {/* Profile Photo Section */}
+            <Text style={styles.cardTitle}>Complete Your Profile</Text>
+            <Text style={styles.cardSubtitle}>Set up your trading identity</Text>
+
+            {/* Username - Required */}
             <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Profile Photo (Optional)</Text>
+                <Text style={styles.inputLabel}>Username <Text style={styles.required}>*</Text></Text>
+                <TextInput
+                    style={[styles.textInput, !formData.username && styles.requiredInput]}
+                    value={formData.username}
+                    onChangeText={(text) => onUpdate('username', text)}
+                    placeholder="Choose a unique username"
+                    placeholderTextColor={colors.textSecondary}
+                    autoCapitalize="none"
+                />
+                {!formData.username && (
+                    <Text style={styles.requiredHint}>Required to identify you in the community</Text>
+                )}
+            </View>
+
+            {/* Profile Photo */}
+            <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Profile Photo</Text>
                 <View style={styles.photoSection}>
                     <View style={styles.photoContainer}>
                         {formData.profilePhoto ? (
@@ -352,7 +364,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Institution/Company (Optional)</Text>
+                <Text style={styles.inputLabel}>Company / Institution</Text>
                 <TextInput
                     style={styles.textInput}
                     value={formData.institution}
@@ -364,24 +376,12 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Username or Display Name (Optional)</Text>
-                <TextInput
-                    style={styles.textInput}
-                    value={formData.username}
-                    onChangeText={(text) => onUpdate('username', text)}
-                    placeholder="e.g., GodModeTrader301"
-                    placeholderTextColor={colors.textSecondary}
-                    autoCapitalize="none"
-                />
-            </View>
-
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Bio/Description (Optional)</Text>
+                <Text style={styles.inputLabel}>Bio</Text>
                 <TextInput
                     style={[styles.textInput, styles.textArea]}
                     value={formData.bio}
                     onChangeText={(text) => onUpdate('bio', text)}
-                    placeholder="e.g., Oil Trader at Hedge Fund with 10+ years experience"
+                    placeholder="Tell us about your trading background"
                     placeholderTextColor={colors.textSecondary}
                     multiline={true}
                     numberOfLines={3}
@@ -390,25 +390,12 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>LinkedIn Profile (Optional)</Text>
+                <Text style={styles.inputLabel}>LinkedIn</Text>
                 <TextInput
                     style={styles.textInput}
                     value={formData.linkedin}
                     onChangeText={(text) => onUpdate('linkedin', text)}
-                    placeholder="https://linkedin.com/in/yourprofile"
-                    placeholderTextColor={colors.textSecondary}
-                    autoCapitalize="none"
-                    keyboardType="url"
-                />
-            </View>
-
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>GitHub Profile (Optional)</Text>
-                <TextInput
-                    style={styles.textInput}
-                    value={formData.github}
-                    onChangeText={(text) => onUpdate('github', text)}
-                    placeholder="https://github.com/yourusername"
+                    placeholder="linkedin.com/in/yourprofile"
                     placeholderTextColor={colors.textSecondary}
                     autoCapitalize="none"
                     keyboardType="url"
@@ -422,11 +409,11 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
 const ProgressIndicator = ({ currentStep, totalSteps }) => (
     <View style={styles.progressContainer}>
         <View style={styles.progressBar}>
-            <View 
+            <View
                 style={[
-                    styles.progressFill, 
+                    styles.progressFill,
                     { width: `${(currentStep / totalSteps) * 100}%` }
-                ]} 
+                ]}
             />
         </View>
         <Text style={styles.progressText}>{currentStep} of {totalSteps}</Text>
@@ -486,15 +473,24 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
     const handleSubmit = () => {
         // Allow submission with minimal data
         const minimalRequired = formData.role && formData.experience;
-        
+
         if (!minimalRequired) {
             Alert.alert(
                 'Almost Done!',
                 'Please select your role and experience level to continue.',
                 [
-                    { text: 'Complete Later', onPress: () => onSkip && onSkip() },
                     { text: 'Continue Setup', style: 'cancel' }
                 ]
+            );
+            return;
+        }
+
+        // Check for required username
+        if (!formData.username || formData.username.trim() === '') {
+            Alert.alert(
+                'Username Required',
+                'Please enter a username to identify yourself in the community.',
+                [{ text: 'OK', style: 'cancel' }]
             );
             return;
         }
@@ -535,10 +531,10 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
     const canProceed = () => {
         switch (currentStep) {
             case 0: return true; // Welcome screen
-            case 1: return formData.role !== '' || true; // Optional
-            case 2: return formData.experience !== '' || true; // Optional
-            case 3: return true; // Allow proceeding without selection due to skip option
-            case 4: return true; // Username is also optional now
+            case 1: return formData.role !== ''; // Role required
+            case 2: return formData.experience !== ''; // Experience required
+            case 3: return formData.marketFocus.length > 0; // At least one market
+            case 4: return formData.username && formData.username.trim() !== ''; // Username required
             default: return true;
         }
     };
@@ -566,7 +562,6 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
                     <MarketFocusCard
                         selectedMarkets={formData.marketFocus}
                         onToggle={toggleMarketFocus}
-                        onSkip={handleSkipMarketFocus}
                     />
                 );
             case 4:
@@ -584,7 +579,7 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" backgroundColor={colors.bgPrimary} />
-            
+
             {/* Header with skip option */}
             <View style={styles.header}>
                 {currentStep > 0 ? (
@@ -594,11 +589,11 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
                 ) : (
                     <View style={styles.headerSpacer} />
                 )}
-                
+
                 {currentStep > 0 && (
                     <ProgressIndicator currentStep={currentStep} totalSteps={totalSteps} />
                 )}
-                
+
                 {showSkipOption && (
                     <TouchableOpacity style={styles.skipHeaderButton} onPress={handleSkipOnboarding}>
                         <Text style={styles.skipHeaderText}>Skip</Text>
@@ -606,8 +601,8 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
                 )}
             </View>
 
-            <ScrollView 
-                style={styles.container} 
+            <ScrollView
+                style={styles.container}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
@@ -638,10 +633,10 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
                                         canProceed() ? colors.bgPrimary : colors.textSecondary
                                     } />
                                 </TouchableOpacity>
-                                
+
                                 {showSkipOption && currentStep > 1 && (
-                                    <TouchableOpacity 
-                                        style={styles.skipStepButton} 
+                                    <TouchableOpacity
+                                        style={styles.skipStepButton}
                                         onPress={handleNext}
                                     >
                                         <Text style={styles.skipStepText}>Skip this step</Text>
@@ -715,18 +710,18 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         fontSize: 12,
     },
-    
+
     skipHeaderButton: {
         paddingVertical: 8,
         paddingHorizontal: 16,
     },
-    
+
     skipHeaderText: {
         color: colors.accentData,
         fontSize: 16,
         fontWeight: '500',
     },
-    
+
     // Welcome Card Styles
     welcomeCard: {
         backgroundColor: '#000000', // Jet black background as requested
@@ -786,7 +781,7 @@ const styles = StyleSheet.create({
         marginLeft: 12,
         fontWeight: '500',
     },
-    
+
     // Form Card Styles
     formCard: {
         backgroundColor: colors.bgSecondary,
@@ -805,7 +800,7 @@ const styles = StyleSheet.create({
         marginBottom: 24,
         lineHeight: 22,
     },
-    
+
     // Button Styles
     primaryButton: {
         backgroundColor: colors.accentPositive,
@@ -847,7 +842,7 @@ const styles = StyleSheet.create({
     disabledButtonText: {
         color: colors.textSecondary,
     },
-    
+
     // Option Cards Grid
     optionsGrid: {
         flexDirection: 'row',
@@ -900,7 +895,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    
+
     // List Options
     optionsList: {
         width: '100%',
@@ -939,7 +934,7 @@ const styles = StyleSheet.create({
     selectedListOptionDescription: {
         color: colors.textPrimary,
     },
-    
+
     // Market Focus Grid
     marketGrid: {
         flexDirection: 'row',
@@ -982,7 +977,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    
+
     // Form Inputs
     inputGroup: {
         marginBottom: 20,
@@ -1005,7 +1000,20 @@ const styles = StyleSheet.create({
     textArea: {
         height: 80,
     },
-    
+    required: {
+        color: colors.accentNegative,
+        fontWeight: '600',
+    },
+    requiredInput: {
+        borderColor: colors.accentPositive,
+        borderWidth: 1.5,
+    },
+    requiredHint: {
+        color: colors.accentPositive,
+        fontSize: 12,
+        marginTop: 4,
+    },
+
     // Profile Photo Styles
     photoSection: {
         flexDirection: 'row',
@@ -1068,7 +1076,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         marginLeft: 8,
     },
-    
+
     // Footer
     footer: {
         position: 'absolute',

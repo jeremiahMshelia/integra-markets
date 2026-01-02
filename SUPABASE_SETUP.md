@@ -353,6 +353,67 @@ ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
 
 ---
 
+## MIGRATION: Add New Profile Columns
+
+If you already have the profiles table, run this to add the new columns:
+
+```sql
+-- Add new columns to profiles table
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS bio TEXT,
+ADD COLUMN IF NOT EXISTS market_focus TEXT[],
+ADD COLUMN IF NOT EXISTS linkedin TEXT,
+ADD COLUMN IF NOT EXISTS github TEXT,
+ADD COLUMN IF NOT EXISTS username TEXT;
+```
+
+---
+
+## FIX: Storage RLS Policies for Avatar Uploads
+
+If you're getting "new row violates row-level security policy" error on avatar uploads, run this:
+
+```sql
+-- Drop existing storage policies if they exist
+DROP POLICY IF EXISTS "Avatar images are publicly accessible" ON storage.objects;
+DROP POLICY IF EXISTS "Users can upload own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own avatar" ON storage.objects;
+
+-- Create bucket if not exists
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('avatars', 'avatars', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Recreate storage policies
+CREATE POLICY "Avatar images are publicly accessible"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'avatars');
+
+CREATE POLICY "Users can upload own avatar"
+  ON storage.objects FOR INSERT
+  WITH CHECK (
+    bucket_id = 'avatars' 
+    AND auth.uid() IS NOT NULL
+  );
+
+CREATE POLICY "Users can update own avatar"
+  ON storage.objects FOR UPDATE
+  USING (
+    bucket_id = 'avatars' 
+    AND auth.uid() IS NOT NULL
+  );
+
+CREATE POLICY "Users can delete own avatar"
+  ON storage.objects FOR DELETE
+  USING (
+    bucket_id = 'avatars' 
+    AND auth.uid() IS NOT NULL
+  );
+```
+
+---
+
 ## What You'll Get
 
 After running the schema:

@@ -591,10 +591,28 @@ const App = () => {
       await AsyncStorage.setItem('onboarding_completed', 'true');
       await AsyncStorage.setItem('user_data', JSON.stringify({ ...userData, ...formData }));
       setUserData({ ...userData, ...formData });
+
+      // Save profile to Supabase
+      const { supabaseService } = require('./services/supabaseService');
+      await supabaseService.updateProfile({
+        full_name: formData.fullName || userData?.fullName,
+        company: formData.institution,
+        role: formData.role,
+        experience_level: formData.experience,
+        bio: formData.bio,
+        market_focus: formData.marketFocus,
+        linkedin: formData.linkedin,
+        github: formData.github,
+      });
+      console.log('[App] Profile saved to Supabase');
+
       setShowOnboarding(false);
       setShowAlertPreferences(true);
     } catch (error) {
       console.error('Error saving onboarding data:', error);
+      // Still proceed even if Supabase save fails
+      setShowOnboarding(false);
+      setShowAlertPreferences(true);
     }
   };
 
@@ -869,8 +887,7 @@ const App = () => {
     return (
       <OnboardingForm
         onComplete={handleOnboardingComplete}
-        onSkip={handleOnboardingSkip}
-        showSkipOption={true}
+        showSkipOption={false}
         userData={userData}
       />
     );
@@ -881,8 +898,7 @@ const App = () => {
     return (
       <AlertPreferencesForm
         onComplete={handleAlertPreferencesComplete}
-        onSkip={handleAlertPreferencesSkip}
-        showSkipOption={true}
+        showSkipOption={false}
       />
     );
   }
