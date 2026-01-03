@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     ZOHO_MAIL_REFRESH_TOKEN: Optional[str] = Field(None, env="ZOHO_MAIL_REFRESH_TOKEN")
     ZOHO_MAIL_APP_PASSWORD: Optional[str] = Field(None, env="ZOHO_MAIL_APP_PASSWORD")
     
+    # Email Service (Resend - easier for testing)
+    RESEND_API_KEY: Optional[str] = Field(None, env="RESEND_API_KEY")
+    
     # Use SettingsConfigDict instead of the old Config class
     # Try loading from both the app-level .env and the project root ../.env
     model_config = SettingsConfigDict(

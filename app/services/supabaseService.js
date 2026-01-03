@@ -232,6 +232,9 @@ class SupabaseService {
                     email_enabled: preferences.emailEnabled || false,
                     onboarding_completed: true,
                     updated_at: new Date().toISOString(),
+                }, {
+                    onConflict: 'user_id',
+                    ignoreDuplicates: false
                 })
                 .select()
                 .single();

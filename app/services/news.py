@@ -213,6 +213,88 @@ class NewsService:
             logger.error(f"Error fetching article content {url}: {str(e)}")
             return {"content": "", "error": str(e)}
     
+    @cached("news_image", ttl_seconds=86400)  # 24-hour cache for images
+    async def _extract_article_image(self, url: str) -> Optional[str]:
+        """
+        Extract og:image or other image from article URL.
+        
+        Args:
+            url: Article URL
+            
+        Returns:
+            Image URL or None if not found
+        """
+        try:
+            # Quick timeout for image extraction
+            response = await self.client.get(url, timeout=10.0)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Try og:image first (most reliable)
+            og_image = soup.find('meta', property='og:image')
+            if og_image and og_image.get('content'):
+                return og_image['content']
+            
+            # Try twitter:image
+            twitter_image = soup.find('meta', attrs={'name': 'twitter:image'})
+            if twitter_image and twitter_image.get('content'):
+                return twitter_image['content']
+            
+            # Try first large image in article
+            images = soup.find_all('img')
+            for img in images:
+                src = img.get('src', '')
+                # Filter out small icons, tracking pixels, etc.
+                if src and not any(x in src.lower() for x in ['icon', 'logo', 'avatar', 'pixel', '1x1', 'tracking']):
+                    # Check for width/height attributes indicating a real image
+                    width = img.get('width', '')
+                    height = img.get('height', '')
+                    try:
+                        if (width and int(width) >= 200) or (height and int(height) >= 150):
+                            return src
+                    except (ValueError, TypeError):
+                        pass
+                    # If no size info, still use if it looks like a content image
+                    if any(x in src.lower() for x in ['article', 'content', 'media', 'image', 'photo']):
+                        return src
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Could not extract image from {url}: {str(e)}")
+            return None
+    
+    async def _enrich_articles_with_images(self, articles: List[Dict[str, Any]], max_concurrent: int = 5) -> None:
+        """
+        Enrich articles with image URLs by extracting from source pages.
+        Modifies articles in place.
+        
+        Args:
+            articles: List of article dicts to enrich
+            max_concurrent: Maximum concurrent requests
+        """
+        # Only fetch images for first N articles to avoid too many requests
+        articles_to_enrich = articles[:12]  # Top 12 for visual display
+        
+        async def fetch_image(article: Dict[str, Any]) -> None:
+            url = article.get('url', '')
+            if url:
+                image_url = await self._extract_article_image(url)
+                if image_url:
+                    article['image_url'] = image_url
+        
+        # Process in batches to limit concurrency
+        import asyncio
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        async def fetch_with_semaphore(article):
+            async with semaphore:
+                await fetch_image(article)
+        
+        tasks = [fetch_with_semaphore(a) for a in articles_to_enrich]
+        await asyncio.gather(*tasks, return_exceptions=True)
+    
     async def get_latest_news(self, 
                             commodities: Optional[List[str]] = None,
                             limit: int = 50,
@@ -257,6 +339,9 @@ class NewsService:
                         "summary": a.get("summary", ""),
                         "source": a.get("source", "Alpha Vantage"),
                         "source_name": "alpha_vantage",
+                        # Include sentiment from Alpha Vantage
+                        "sentiment": a.get("sentiment", "NEUTRAL"),
+                        "sentiment_score": a.get("sentiment_score", 0.0),
                     })
                 logger.info("Alpha Vantage provided %d raw articles before filtering", len(all_articles))
         except Exception as e:
@@ -403,6 +488,10 @@ class NewsService:
         if include_sentiment:
             for article in all_articles:
                 try:
+                    # Skip if article already has sentiment from Alpha Vantage
+                    if article.get("sentiment") and article.get("sentiment") != "NEUTRAL" and article.get("sentiment_score", 0) != 0:
+                        continue
+                    
                     # Use cached sentiment analysis
                     sentiment_key = self._generate_cache_key("sentiment", article.get("url", ""), article.get("title", ""))
                     cached_sentiment = cache_manager.get("news_sentiment", sentiment_key)
@@ -429,10 +518,18 @@ class NewsService:
                         
                 except Exception as e:
                     logger.error(f"Error analyzing sentiment for article: {str(e)}")
-                    article.update({
-                        "sentiment": "neutral",
-                        "sentiment_score": 0.0
-                    })
+                    # Only set defaults if no sentiment exists
+                    if not article.get("sentiment"):
+                        article.update({
+                            "sentiment": "neutral",
+                            "sentiment_score": 0.0
+                        })
+        
+        # Enrich articles with images for desktop visual display
+        try:
+            await self._enrich_articles_with_images(all_articles)
+        except Exception as e:
+            logger.warning(f"Could not enrich articles with images: {str(e)}")
         
         result = {
             "articles": all_articles,

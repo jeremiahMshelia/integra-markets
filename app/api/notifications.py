@@ -15,6 +15,7 @@ from core.config import settings
 from services.auth import get_current_user
 from models.users import User
 from services.ai_alert_service import AIAlertService
+from services.email_service import send_email_alert
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -260,7 +261,7 @@ async def send_ai_alert_notification(
         title = f"🔔 {commodity} Alert: {alert_data.get('action', 'Update')}"
         body = alert_data.get('message', 'New market development')
         
-        # Add to background task
+        # Add push notifications to background task
         background_tasks.add_task(
             send_expo_push_notifications,
             relevant_users,
@@ -277,10 +278,25 @@ async def send_ai_alert_notification(
             "market-alerts"
         )
         
+        # Send email alerts to users who have email enabled
+        email_users = [u for u in relevant_users if u.email_alerts_enabled and u.email]
+        if email_users:
+            background_tasks.add_task(
+                send_email_alerts_batch,
+                email_users,
+                commodity,
+                alert_data.get('action', 'NEUTRAL'),
+                alert_data.get('headline', title),
+                body,
+                alert_data.get('source', 'Integra Markets'),
+                alert_data.get('confidence')
+            )
+        
         return {
             "status": "success",
-            "message": f"AI alert queued for {len(relevant_users)} users",
+            "message": f"AI alert queued for {len(relevant_users)} users ({len(email_users)} email)",
             "sent_count": len(relevant_users),
+            "email_count": len(email_users),
             "commodity": commodity
         }
     except Exception as e:
@@ -373,3 +389,30 @@ async def send_single_expo_notification(
             raise Exception(f"Expo push error: {response.text}")
         
         return response.json()
+
+
+async def send_email_alerts_batch(
+    users: List[User],
+    commodity: str,
+    sentiment: str,
+    headline: str,
+    body: str,
+    source: str,
+    confidence: float = None
+):
+    """Send email alerts to a batch of users"""
+    for user in users:
+        try:
+            await send_email_alert(
+                to_email=user.email,
+                user_name=user.full_name or user.username or "Trader",
+                commodity=commodity,
+                sentiment=sentiment,
+                headline=headline,
+                summary=body,
+                source=source,
+                confidence=confidence
+            )
+            logger.info(f"Email alert sent to {user.email}")
+        except Exception as e:
+            logger.error(f"Failed to send email to {user.email}: {str(e)}")

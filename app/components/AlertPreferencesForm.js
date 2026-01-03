@@ -26,10 +26,14 @@ const colors = {
 };
 
 const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) => {
-  const [activeTab, setActiveTab] = useState('Websites');
-  const [selectedCommodities, setSelectedCommodities] = useState(['Zinc', 'Wheat', 'Tin']);
-  const [selectedRegions, setSelectedRegions] = useState(['North America', 'Middle East']);
-  const [selectedCurrencies, setSelectedCurrencies] = useState(['USD', 'EUR']);
+  // Step-based wizard (1: Commodities, 2: Regions, 3: Currencies, 4: Websites, 5: Settings)
+  const [currentStep, setCurrentStep] = useState(1);
+  const totalSteps = 5;
+
+  // All selections start empty - user must choose
+  const [selectedCommodities, setSelectedCommodities] = useState([]);
+  const [selectedRegions, setSelectedRegions] = useState([]);
+  const [selectedCurrencies, setSelectedCurrencies] = useState([]);
   const [alertFrequency, setAlertFrequency] = useState('Daily');
   const [alertThreshold, setAlertThreshold] = useState('Medium');
   const [pushNotifications, setPushNotifications] = useState(true);
@@ -174,7 +178,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
 
       Alert.alert(
         'Preferences Saved',
-        `Your alert preferences have been saved${result.local ? ' locally' : ' to your account'}:\\n• ${selectedCommodities.length} commodities\\n• ${selectedRegions.length} regions\\n• ${selectedCurrencies.length} currencies\\n• ${keywords.length} keywords\\n• ${websiteURLs.length} website sources\\n\\nTotal: ${totalItems} tracking items`,
+        `Your alert preferences have been saved${result.local ? ' locally' : ' to your account'}:\n• ${selectedCommodities.length} commodities\n• ${selectedRegions.length} regions\n• ${selectedCurrencies.length} currencies\n• ${keywords.length} keywords\n• ${websiteURLs.length} website sources\n\nTotal: ${totalItems} tracking items`,
         [
           {
             text: 'Continue',
@@ -488,127 +492,160 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     </View>
   );
 
+  // Step navigation
+  const handleNextStep = () => {
+    if (currentStep < totalSteps) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handlePreviousStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const canProceed = () => {
+    switch (currentStep) {
+      case 1: return selectedCommodities.length > 0;
+      case 2: return selectedRegions.length > 0;
+      case 3: return selectedCurrencies.length > 0;
+      case 4: return true; // Websites are optional
+      case 5: return true;
+      default: return true;
+    }
+  };
+
+  const getStepTitle = () => {
+    switch (currentStep) {
+      case 1: return 'Select Commodities';
+      case 2: return 'Select Regions';
+      case 3: return 'Select Currencies';
+      case 4: return 'Website Sources';
+      case 5: return 'Notification Settings';
+      default: return 'Alert Preferences';
+    }
+  };
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 1:
+        return renderCommoditiesTab();
+      case 2:
+        return renderRegionsTab();
+      case 3:
+        return renderCurrenciesTab();
+      case 4:
+        return renderWebsitesTab();
+      case 5:
+        return (
+          <View style={styles.tabContent}>
+            {/* Alert Frequency */}
+            <Text style={styles.sectionTitle}>Alert Frequency</Text>
+            <View style={styles.frequencyContainer}>
+              {frequencies.map((freq) => (
+                <TouchableOpacity
+                  key={freq}
+                  style={[styles.frequencyButton, alertFrequency === freq && styles.activeFrequencyButton]}
+                  onPress={() => setAlertFrequency(freq)}
+                >
+                  <Text style={[styles.frequencyText, alertFrequency === freq && styles.activeFrequencyText]}>
+                    {freq}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Alert Threshold */}
+            <Text style={styles.sectionTitle}>Alert Threshold</Text>
+            <View style={styles.frequencyContainer}>
+              {thresholds.map((threshold) => (
+                <TouchableOpacity
+                  key={threshold}
+                  style={[styles.frequencyButton, alertThreshold === threshold && styles.activeFrequencyButton]}
+                  onPress={() => setAlertThreshold(threshold)}
+                >
+                  <Text style={[styles.frequencyText, alertThreshold === threshold && styles.activeFrequencyText]}>
+                    {threshold}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.thresholdDescription}>
+              Receive updates for significant market changes only
+            </Text>
+
+            {/* Notification Settings */}
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Push Notifications</Text>
+              <TouchableOpacity
+                style={[styles.toggle, pushNotifications && styles.toggleActive]}
+                onPress={() => setPushNotifications(!pushNotifications)}
+              >
+                <View style={[styles.toggleKnob, pushNotifications && styles.toggleKnobActive]} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Email Alerts</Text>
+              <TouchableOpacity
+                style={[styles.toggle, emailAlerts && styles.toggleActive]}
+                onPress={() => setEmailAlerts(!emailAlerts)}
+              >
+                <View style={[styles.toggleKnob, emailAlerts && styles.toggleKnobActive]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Enhanced Header with skip option */}
+      {/* Header with step indicator */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleSkipPreferences}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.accentData} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Alert Preferences</Text>
-        {showSkipOption && (
-          <TouchableOpacity onPress={handleSkipPreferences}>
-            <Text style={styles.skipHeaderText}>Skip</Text>
+        {currentStep > 1 ? (
+          <TouchableOpacity onPress={handlePreviousStep}>
+            <MaterialIcons name="arrow-back" size={24} color={colors.accentData} />
           </TouchableOpacity>
+        ) : (
+          <View style={{ width: 24 }} />
         )}
+        <Text style={styles.headerTitle}>{getStepTitle()}</Text>
+        <Text style={styles.stepIndicator}>{currentStep}/{totalSteps}</Text>
+      </View>
+
+      {/* Progress Bar */}
+      <View style={styles.progressBarContainer}>
+        <View style={[styles.progressBarFill, { width: `${(currentStep / totalSteps) * 100}%` }]} />
       </View>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Enhanced Description */}
-        <Text style={styles.description}>
-          Customize what news and analysis you want to receive. You can always change these settings later.
-        </Text>
+        {/* Step Content */}
+        {renderStepContent()}
 
-        {/* Tabs */}
-        <View style={styles.tabsContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {tabs.map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.tab, activeTab === tab && styles.activeTab]}
-                onPress={() => setActiveTab(tab)}
-              >
-                <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-                  {tab}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Tab Content */}
-        {activeTab === 'Commodities'
-          ? renderCommoditiesTab()
-          : activeTab === 'Regions'
-            ? renderRegionsTab()
-            : activeTab === 'Currencies'
-              ? renderCurrenciesTab()
-              : activeTab === 'Keywords'
-                ? renderKeywordsTab()
-                : activeTab === 'Websites'
-                  ? renderWebsitesTab()
-                  : null}
-
-        {/* Alert Frequency */}
-        <Text style={styles.sectionTitle}>Alert Frequency</Text>
-        <View style={styles.frequencyContainer}>
-          {frequencies.map((freq) => (
-            <TouchableOpacity
-              key={freq}
-              style={[styles.frequencyButton, alertFrequency === freq && styles.activeFrequencyButton]}
-              onPress={() => setAlertFrequency(freq)}
-            >
-              <Text style={[styles.frequencyText, alertFrequency === freq && styles.activeFrequencyText]}>
-                {freq}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Notification Settings */}
-        <Text style={styles.sectionTitle}>Notification Settings</Text>
-
-        <View style={styles.settingRow}>
-          <Text style={styles.settingLabel}>Push Notifications</Text>
-          <TouchableOpacity
-            style={[styles.toggle, pushNotifications && styles.toggleActive]}
-            onPress={() => setPushNotifications(!pushNotifications)}
-          >
-            <View style={[styles.toggleKnob, pushNotifications && styles.toggleKnobActive]} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.settingRow}>
-          <Text style={styles.settingLabel}>Email Alerts</Text>
-          <TouchableOpacity
-            style={[styles.toggle, emailAlerts && styles.toggleActive]}
-            onPress={() => setEmailAlerts(!emailAlerts)}
-          >
-            <View style={[styles.toggleKnob, emailAlerts && styles.toggleKnobActive]} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Alert Threshold */}
-        <Text style={styles.sectionTitle}>Alert Threshold</Text>
-        <View style={styles.frequencyContainer}>
-          {thresholds.map((threshold) => (
-            <TouchableOpacity
-              key={threshold}
-              style={[styles.frequencyButton, alertThreshold === threshold && styles.activeFrequencyButton]}
-              onPress={() => setAlertThreshold(threshold)}
-            >
-              <Text style={[styles.frequencyText, alertThreshold === threshold && styles.activeFrequencyText]}>
-                {threshold}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.thresholdDescription}>
-          Receive updates for significant market changes only
-        </Text>
-
-        {/* Enhanced Save Button with flexible completion */}
+        {/* Navigation Buttons */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.saveButton} onPress={handleSavePreferences}>
-            <Text style={styles.saveButtonText}>Save Preferences</Text>
-          </TouchableOpacity>
-
-          {showSkipOption && (
-            <TouchableOpacity style={styles.skipButton} onPress={handleSkipPreferences}>
-              <Text style={styles.skipButtonText}>Set Up Later</Text>
+          {currentStep < totalSteps ? (
+            <TouchableOpacity
+              style={[styles.saveButton, !canProceed() && styles.disabledButton]}
+              onPress={handleNextStep}
+              disabled={!canProceed()}
+            >
+              <Text style={styles.saveButtonText}>
+                {currentStep === 4 ? (websiteURLs.length > 0 ? 'Next' : 'Skip') :
+                  canProceed() ? 'Next' : `Select at least 1 ${currentStep === 1 ? 'commodity' : currentStep === 2 ? 'region' : 'currency'}`}
+              </Text>
+              {canProceed() && <MaterialIcons name="arrow-forward" size={20} color="#121212" style={{ marginLeft: 8 }} />}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.saveButton} onPress={handleSavePreferences}>
+              <Text style={styles.saveButtonText}>Save Preferences</Text>
+              <MaterialIcons name="check" size={20} color="#121212" style={{ marginLeft: 8 }} />
             </TouchableOpacity>
           )}
         </View>
@@ -640,6 +677,23 @@ const styles = StyleSheet.create({
     color: colors.accentData,
     fontSize: 16,
     fontWeight: '500',
+  },
+  stepIndicator: {
+    color: colors.accentPositive,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  progressBarContainer: {
+    height: 4,
+    backgroundColor: colors.divider,
+  },
+  progressBarFill: {
+    height: 4,
+    backgroundColor: colors.accentPositive,
+  },
+  disabledButton: {
+    backgroundColor: colors.divider,
+    opacity: 0.7,
   },
   scrollContainer: {
     flex: 1,
@@ -822,6 +876,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   saveButtonText: {
     color: colors.bgPrimary,

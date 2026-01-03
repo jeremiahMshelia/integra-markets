@@ -109,7 +109,7 @@ const RoleSelectionCard = ({ selectedRole, onSelect }) => (
                         styles.optionCard,
                         selectedRole === role.value && styles.selectedOptionCard
                     ]}
-                    onPress={() => onSelect(role.value)}
+                    onPress={() => onSelect(selectedRole === role.value ? '' : role.value)}
                 >
                     <HollowCircularIcon
                         name={role.icon}
@@ -154,7 +154,7 @@ const ExperienceSelectionCard = ({ selectedExperience, onSelect }) => (
                         styles.listOptionCard,
                         selectedExperience === exp.value && styles.selectedListOptionCard
                     ]}
-                    onPress={() => onSelect(exp.value)}
+                    onPress={() => onSelect(selectedExperience === exp.value ? '' : exp.value)}
                 >
                     <View style={styles.listOptionContent}>
                         <Text style={[
@@ -433,7 +433,7 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
         github: '',
         bio: '',
         profilePhoto: null,
-        username: userData?.username || userData?.email?.split('@')[0] || '',
+        username: '', // User must create their own username
         fullName: userData?.fullName || '',
         email: userData?.email || '',
     });
@@ -531,10 +531,19 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
     const canProceed = () => {
         switch (currentStep) {
             case 0: return true; // Welcome screen
-            case 1: return formData.role !== ''; // Role required
-            case 2: return formData.experience !== ''; // Experience required
-            case 3: return formData.marketFocus.length > 0; // At least one market
+            case 1: return true; // Role is optional (can skip)
+            case 2: return true; // Experience is optional (can skip)
+            case 3: return formData.marketFocus.length > 0; // At least one market required
             case 4: return formData.username && formData.username.trim() !== ''; // Username required
+            default: return true;
+        }
+    };
+
+    // Check if current step has a selection (for showing "Continue" vs "Skip")
+    const hasSelection = () => {
+        switch (currentStep) {
+            case 1: return formData.role !== '';
+            case 2: return formData.experience !== '';
             default: return true;
         }
     };
@@ -615,31 +624,36 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
                     <View style={styles.footerContent}>
                         {currentStep < totalSteps - 1 ? (
                             <>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.nextButton,
-                                        !canProceed() && styles.disabledButton
-                                    ]}
-                                    onPress={handleNext}
-                                    disabled={!canProceed()}
-                                >
-                                    <Text style={[
-                                        styles.nextButtonText,
-                                        !canProceed() && styles.disabledButtonText
-                                    ]}>
-                                        Continue
-                                    </Text>
-                                    <MaterialIcons name="arrow-forward" size={20} color={
-                                        canProceed() ? colors.bgPrimary : colors.textSecondary
-                                    } />
-                                </TouchableOpacity>
-
-                                {showSkipOption && currentStep > 1 && (
+                                {/* For optional steps (1,2): Show Skip if no selection */}
+                                {(currentStep === 1 || currentStep === 2) && !hasSelection() ? (
                                     <TouchableOpacity
-                                        style={styles.skipStepButton}
+                                        style={styles.skipMainButton}
                                         onPress={handleNext}
                                     >
-                                        <Text style={styles.skipStepText}>Skip this step</Text>
+                                        <Text style={styles.skipMainButtonText}>Skip</Text>
+                                        <MaterialIcons name="arrow-forward" size={20} color={colors.textPrimary} style={{ marginLeft: 8 }} />
+                                    </TouchableOpacity>
+                                ) : (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.nextButton,
+                                            !canProceed() && styles.disabledButton
+                                        ]}
+                                        onPress={handleNext}
+                                        disabled={!canProceed()}
+                                    >
+                                        <Text style={[
+                                            styles.nextButtonText,
+                                            !canProceed() && styles.disabledButtonText
+                                        ]}>
+                                            Continue
+                                        </Text>
+                                        <MaterialIcons
+                                            name="arrow-forward"
+                                            size={20}
+                                            color={canProceed() ? colors.bgPrimary : colors.textSecondary}
+                                            style={{ marginLeft: 8 }}
+                                        />
                                     </TouchableOpacity>
                                 )}
                             </>
@@ -651,7 +665,7 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
                                 <Text style={styles.nextButtonText}>
                                     Complete Setup
                                 </Text>
-                                <MaterialIcons name="check" size={20} color={colors.bgPrimary} />
+                                <MaterialIcons name="check" size={20} color={colors.bgPrimary} style={{ marginLeft: 8 }} />
                             </TouchableOpacity>
                         )}
                     </View>
@@ -841,6 +855,23 @@ const styles = StyleSheet.create({
     },
     disabledButtonText: {
         color: colors.textSecondary,
+    },
+    skipMainButton: {
+        backgroundColor: 'transparent',
+        borderRadius: 8,
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 1,
+        borderWidth: 1,
+        borderColor: colors.divider,
+    },
+    skipMainButtonText: {
+        color: colors.textPrimary,
+        fontSize: 16,
+        fontWeight: '600',
     },
 
     // Option Cards Grid

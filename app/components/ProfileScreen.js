@@ -56,10 +56,11 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, onBack, onNavigateToSettings, onLogout }) {
+export default function ProfileScreen({ userProfile, onBack, onNavigateToSettings, onLogout, onOpenArticle }) {
   const [showAllBookmarks, setShowAllBookmarks] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(userProfile?.profilePhoto || null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [photoKey, setPhotoKey] = useState(Date.now()); // For cache busting
 
   const { bookmarks, removeBookmark } = useBookmarks();
 
@@ -103,6 +104,7 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
 
         if (uploadResult.success) {
           setProfilePhoto(uploadResult.url);
+          setPhotoKey(Date.now()); // Force image refresh
           Alert.alert('Success', 'Profile photo updated!');
         } else {
           Alert.alert('Upload Failed', uploadResult.error || 'Could not upload photo. Please try again.');
@@ -197,7 +199,10 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
                 ) : profilePhoto || defaultUserProfile.profilePhoto ? (
                   <View>
                     <Image
-                      source={{ uri: profilePhoto || defaultUserProfile.profilePhoto }}
+                      source={{
+                        uri: `${profilePhoto || defaultUserProfile.profilePhoto}?t=${photoKey}`,
+                        cache: 'reload'
+                      }}
                       style={styles.profileAvatar}
                     />
                     <View style={styles.editAvatarBadge}>
@@ -286,8 +291,16 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
           ) : (
             <View style={styles.bookmarksList}>
               {(showAllBookmarks ? bookmarks : bookmarks.slice(0, 3)).map((bookmark) => (
-                <TouchableOpacity key={bookmark.id} style={styles.bookmarkItem}>
-                  <View style={styles.bookmarkContent}>
+                <View key={bookmark.id} style={styles.bookmarkItem}>
+                  <TouchableOpacity
+                    style={styles.bookmarkContent}
+                    onPress={() => {
+                      if (onOpenArticle) {
+                        onOpenArticle(bookmark);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
                     <Text style={styles.bookmarkTitle} numberOfLines={2}>
                       {bookmark.title}
                     </Text>
@@ -301,14 +314,15 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
                         {bookmark.sentiment}
                       </Text>
                     )}
-                  </View>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteBookmarkButton}
                     onPress={() => handleDeleteBookmark(bookmark.id, bookmark.title)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <MaterialIcons name="delete" color={colors.accentNegative} size={18} />
                   </TouchableOpacity>
-                </TouchableOpacity>
+                </View>
               ))}
               {!showAllBookmarks && bookmarks.length > 3 && (
                 <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAllBookmarks}>

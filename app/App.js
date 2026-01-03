@@ -49,6 +49,7 @@ import ProfileScreen from './components/ProfileScreen';
 import { BookmarkProvider } from './providers/BookmarkProvider';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import TermsOfServiceModal from './components/TermsOfServiceModal';
+import AboutModal from './components/AboutModal';
 import { dashboardApi, sentimentApi } from './services/api';
 
 // Color Palette
@@ -125,6 +126,7 @@ const App = () => {
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showTermsOfService, setShowTermsOfService] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [liveNews, setLiveNews] = useState([]);
   const [allNews, setAllNews] = useState([]);
   const [newsLimit, setNewsLimit] = useState(8);
@@ -915,6 +917,11 @@ const App = () => {
             if (screen === 'NotificationsSettings') handleNotificationSettings();
             else if (screen === 'PrivacyPolicy') setShowPrivacyPolicy(true);
             else if (screen === 'TermsOfService') setShowTermsOfService(true);
+            else if (screen === 'About') setShowAbout(true);
+          }}
+          onOpenArticle={(article) => {
+            setSelectedArticle(article);
+            setShowAIAnalysis(true);
           }}
         />
         <PrivacyPolicyModal
@@ -925,6 +932,20 @@ const App = () => {
           visible={showTermsOfService}
           onClose={() => setShowTermsOfService(false)}
         />
+        <AboutModal
+          visible={showAbout}
+          onClose={() => setShowAbout(false)}
+        />
+        {showAIAnalysis && selectedArticle && (
+          <AIAnalysisOverlay
+            visible={showAIAnalysis}
+            onClose={() => {
+              setShowAIAnalysis(false);
+              setSelectedArticle(null);
+            }}
+            article={selectedArticle}
+          />
+        )}
       </>
     );
   }

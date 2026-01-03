@@ -231,21 +231,12 @@ class AuthService {
                 }
             }
 
-            // Final fallback to mock for development
-            console.log('Using mock Google sign-in for development');
-            const mockUser = {
-                id: 'google_mock_' + Date.now(),
-                email: 'user@gmail.com',
-                full_name: 'Google User',
-                fullName: 'Google User',
-                provider: 'google'
+            // No mock fallback - Google sign-in not available
+            console.log('Google sign-in not available - OAuth not configured');
+            return {
+                success: false,
+                error: 'Google sign-in is not available. Please use email login or check your configuration.'
             };
-
-            this.currentUser = mockUser;
-            await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(mockUser));
-            await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'mock_google_token');
-
-            return { success: true, user: mockUser };
 
         } catch (error) {
             console.error('Google sign-in error:', error);

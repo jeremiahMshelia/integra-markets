@@ -1,15 +1,19 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  SafeAreaView, 
-  TouchableOpacity, 
-  ScrollView, 
-  StatusBar 
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  ScrollView,
+  StatusBar,
+  Linking,
+  Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import Logo from '../../components/mediakit/Logo';
+
+// Logo image
+const LOGO_IMAGE = require('../../assets/logoNew.png');
 
 const colors = {
   bgPrimary: '#121212',
@@ -23,10 +27,14 @@ const colors = {
 };
 
 const About = ({ onBack }) => {
+  const handleContact = () => {
+    Linking.openURL('mailto:support@integra-markets.com');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bgPrimary} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -35,68 +43,79 @@ const About = ({ onBack }) => {
         <Text style={styles.headerTitle}>About</Text>
         <View style={styles.headerSpacer} />
       </View>
-      
+
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.content}>
         <View style={styles.logoSection}>
-          <Logo variant="icon" size="large" />
+          <Image
+            source={LOGO_IMAGE}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.appName}>Integra Markets</Text>
           <Text style={styles.appVersion}>Version 1.0.0</Text>
         </View>
-        
-        <Text style={styles.sectionTitle}>About Integra Markets</Text>
+
+        <Text style={styles.sectionTitle}>What We Do</Text>
         <Text style={styles.sectionContent}>
-          Integra Markets is an AI-powered financial analysis platform designed for commodity 
-          trading professionals. Our application provides real-time market insights, sentiment 
-          analysis, and intelligent news aggregation to help traders make informed decisions.
+          Integra Markets is a commodity intelligence platform built for traders who need
+          to stay ahead of the market. We aggregate news from hundreds of sources, analyze
+          sentiment, and deliver the insights that matter—directly to your device.
         </Text>
-        
+        <Text style={styles.sectionContent}>
+          Whether you're tracking crude oil movements, monitoring agricultural exports,
+          or watching precious metals, our platform keeps you informed without the
+          information overload.
+        </Text>
+
         <Text style={styles.sectionTitle}>Key Features</Text>
+        <View style={styles.featureItem}>
+          <MaterialIcons name="flash-on" size={20} color={colors.accentPositive} />
+          <Text style={styles.featureText}>Real-time commodity news and price alerts</Text>
+        </View>
+        <View style={styles.featureItem}>
+          <MaterialIcons name="psychology" size={20} color={colors.accentData} />
+          <Text style={styles.featureText}>Sentiment analysis on market news</Text>
+        </View>
+        <View style={styles.featureItem}>
+          <MaterialIcons name="notifications-active" size={20} color="#FFD700" />
+          <Text style={styles.featureText}>Customizable alert preferences</Text>
+        </View>
+        <View style={styles.featureItem}>
+          <MaterialIcons name="bookmark" size={20} color="#FF6B6B" />
+          <Text style={styles.featureText}>Save and track important news</Text>
+        </View>
+        <View style={styles.featureItem}>
+          <MaterialIcons name="public" size={20} color={colors.accentPositive} />
+          <Text style={styles.featureText}>Global market coverage across regions</Text>
+        </View>
+
+        <Text style={styles.sectionTitle}>Built For Traders</Text>
         <Text style={styles.sectionContent}>
-          • AI-powered market analysis and sentiment tracking{'\n'}
-          • Real-time commodity news and price alerts{'\n'}
-          • Bring Your Own Key (BYOK) AI integration{'\n'}
-          • Customizable alert preferences{'\n'}
-          • Secure API key management{'\n'}
-          • Professional-grade financial insights
+          Integra was born from the real-world pain points of commodity traders—designed
+          to cut through complex, fast-moving market data and turn it into clear,
+          actionable insight.
         </Text>
-        
-        <Text style={styles.sectionTitle}>AI Integration</Text>
         <Text style={styles.sectionContent}>
-          Our Bring Your Own Key (BYOK) model ensures you maintain full control over your AI 
-          interactions. We support integration with leading AI providers including OpenAI, 
-          Anthropic Claude, and Groq, allowing you to leverage cutting-edge AI technology 
-          while maintaining data privacy and cost control.
+          Volatility is everywhere. Data is fragmented. Integra brings structure to
+          chaos—so you can trade with confidence.
         </Text>
-        
-        <Text style={styles.sectionTitle}>Data & Privacy</Text>
-        <Text style={styles.sectionContent}>
-          We prioritize your privacy and data security. Your API keys are encrypted and stored 
-          locally on your device. We never access, store, or transmit your API keys to our 
-          servers, ensuring your AI interactions remain private and secure.
-        </Text>
-        
+
         <Text style={styles.sectionTitle}>Support & Contact</Text>
         <Text style={styles.sectionContent}>
-          For technical support, feature requests, or general inquiries:{'\n\n'}
-          
-          Email: support@integra-markets.com{'\n'}
-          Website: www.integra-markets.com{'\n'}
-          Response time: Within 24 hours
+          Found a bug? Have a feature request? We actually read our emails.
         </Text>
-        
-        <Text style={styles.sectionTitle}>Credits</Text>
-        <Text style={styles.sectionContent}>
-          Integra Markets is built with React Native and powered by Supabase. We use 
-          Material Design icons and follow modern mobile development best practices 
-          to deliver a professional trading experience.
-        </Text>
-        
+
+        <TouchableOpacity style={styles.contactButton} onPress={handleContact}>
+          <MaterialIcons name="email" size={20} color={colors.bgPrimary} />
+          <Text style={styles.contactButtonText}>Contact Us</Text>
+        </TouchableOpacity>
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            © 2024 Integra Markets. All rights reserved.
+            © 2026 Integra Markets. All rights reserved.
           </Text>
           <Text style={styles.footerSubtext}>
-            Built for professional commodity traders worldwide.
+            Built for commodity traders worldwide.
           </Text>
         </View>
       </ScrollView>
@@ -143,15 +162,17 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 20,
-    backgroundColor: colors.accentPositive,
+    backgroundColor: colors.bgSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.accentPositive,
   },
-  logoText: {
-    color: colors.bgPrimary,
-    fontSize: 36,
-    fontWeight: '700',
+  logoImage: {
+    width: 100,
+    height: 100,
+    marginBottom: 16,
   },
   appName: {
     color: colors.textPrimary,
@@ -174,7 +195,33 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 16,
     lineHeight: 24,
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  featureText: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    flex: 1,
+  },
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentPositive,
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginTop: 16,
+    gap: 8,
+  },
+  contactButtonText: {
+    color: colors.bgPrimary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   footer: {
     marginTop: 32,
