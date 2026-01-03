@@ -159,11 +159,17 @@ export default function Dashboard() {
         const enriched = [...rawArticles];
 
         const enrichSingle = async (article: NewsItem, index: number) => {
-            // 1. Enrich Sentiment if missing
+            // 1. Normalize sentiment to uppercase if it exists
+            if (article.sentiment) {
+                article.sentiment = article.sentiment.toUpperCase();
+            }
+
+            // 2. Enrich Sentiment ONLY if truly missing
             let newSentiment = null;
             let newScore = null;
 
-            const needsSentiment = !article.sentiment || article.sentiment === 'NEUTRAL' || !article.sentiment_score || article.sentiment_score === 0.5;
+            // Only enrich if no sentiment at all OR sentiment_score is literally missing/0
+            const needsSentiment = !article.sentiment || (!article.sentiment_score && article.sentiment_score !== 0);
 
             if (needsSentiment) {
                 try {
@@ -177,7 +183,7 @@ export default function Dashboard() {
                     if (res.ok) {
                         const data = await res.json();
                         if (data.sentiment) {
-                            newSentiment = data.sentiment;
+                            newSentiment = data.sentiment.toUpperCase();
                             newScore = data.confidence || 0.5;
                         }
                     }
@@ -186,7 +192,7 @@ export default function Dashboard() {
                 }
             }
 
-            // 2. Enrich Image if missing
+            // 3. Enrich Image if missing
             let newImage = null;
             const needsImage = !article.image_url && !article.banner_image;
 

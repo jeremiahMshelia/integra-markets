@@ -126,10 +126,12 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
 
     const scoreVal = rawScore ?? 0.5;
     const score = Number(scoreVal).toFixed(2);
-    const isDefault = score === '0.50' && (!item.sentiment || item.sentiment === 'NEUTRAL');
+
+    // Only show "AI ANALYSIS" if there's literally no sentiment data
+    const isDefault = !item.sentiment && score === '0.50';
 
     const timeStr = formatTimeAgo(item.time_published || item.published);
-    const sentiment = isDefault ? 'AI ANALYSIS' : (item.sentiment || 'NEUTRAL');
+    const sentiment = isDefault ? 'AI ANALYSIS' : (item.sentiment?.toUpperCase() || 'NEUTRAL');
     const imageUrl = item.image_url || item.banner_image;
 
     // Custom color for default state

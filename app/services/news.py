@@ -504,7 +504,7 @@ class NewsService:
                         sentiment_result = await analyze_sentiment(text)
                         
                         article.update({
-                            "sentiment": sentiment_result.get("sentiment", "neutral"),
+                            "sentiment": sentiment_result.get("sentiment", "NEUTRAL").upper(),
                             "sentiment_score": sentiment_result.get("confidence", 0.0),
                             "sentiment_analysis": sentiment_result
                         })
@@ -521,7 +521,7 @@ class NewsService:
                     # Only set defaults if no sentiment exists
                     if not article.get("sentiment"):
                         article.update({
-                            "sentiment": "neutral",
+                            "sentiment": "NEUTRAL",
                             "sentiment_score": 0.0
                         })
         
