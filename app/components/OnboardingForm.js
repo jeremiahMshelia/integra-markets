@@ -471,43 +471,20 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
     };
 
     const handleSubmit = () => {
-        // Allow submission with minimal data
-        const minimalRequired = formData.role && formData.experience;
-
-        if (!minimalRequired) {
-            Alert.alert(
-                'Almost Done!',
-                'Please select your role and experience level to continue.',
-                [
-                    { text: 'Continue Setup', style: 'cancel' }
-                ]
-            );
-            return;
-        }
-
-        // Check for required username
-        if (!formData.username || formData.username.trim() === '') {
+        // All fields are truly optional now - only username is required if provided
+        // Check for required username if it was entered
+        if (formData.username && formData.username.trim() === '') {
             Alert.alert(
                 'Username Required',
-                'Please enter a username to identify yourself in the community.',
+                'Please enter a username or leave the field empty.',
                 [{ text: 'OK', style: 'cancel' }]
             );
             return;
         }
 
-        Alert.alert(
-            'Setup Complete!',
-            'Welcome to Integra Markets. Your profile has been created.',
-            [
-                {
-                    text: 'Continue',
-                    onPress: () => {
-                        console.log('Onboarding completed:', formData);
-                        onComplete && onComplete(formData);
-                    }
-                }
-            ]
-        );
+        // Proceed with completion - all optional fields are truly optional
+        console.log('Onboarding completed:', formData);
+        onComplete && onComplete(formData);
     };
 
     const updateFormData = (field, value) => {

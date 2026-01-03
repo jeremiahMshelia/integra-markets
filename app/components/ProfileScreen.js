@@ -247,18 +247,20 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
             )}
 
             <View style={styles.profileStats}>
-              <View style={styles.profileStat}>
+              <TouchableOpacity style={styles.profileStat} onPress={() => onNavigateToSettings?.('EditMarketFocus')}>
                 <Text style={styles.profileStatValue}>
                   {defaultUserProfile.marketFocus?.length || 0}
                 </Text>
                 <Text style={styles.profileStatLabel}>Market Focus</Text>
-              </View>
-              <View style={styles.profileStat}>
+                <MaterialIcons name="edit" size={12} color={colors.accentPositive} style={{ marginTop: 4 }} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.profileStat} onPress={() => onNavigateToSettings?.('EditExperience')}>
                 <Text style={styles.profileStatValue}>
-                  {defaultUserProfile.experience}
+                  {defaultUserProfile.experience || '—'}
                 </Text>
                 <Text style={styles.profileStatLabel}>Experience</Text>
-              </View>
+                <MaterialIcons name="edit" size={12} color={colors.accentPositive} style={{ marginTop: 4 }} />
+              </TouchableOpacity>
               <View style={styles.profileStat}>
                 <Text style={styles.profileStatValue}>
                   {bookmarks.length}

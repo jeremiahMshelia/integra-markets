@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 class SupabaseService {
     constructor() {
         this.currentUserId = null;
+        this.supabase = supabase; // Expose supabase client
     }
 
     /**
@@ -43,11 +44,12 @@ class SupabaseService {
 
     /**
      * Get user profile from database
+     * @param {string} userId - Optional user ID. If not provided, uses current session user.
      */
-    async getProfile() {
+    async getProfile(userId = null) {
         try {
-            const userId = await this.getCurrentUserId();
-            if (!userId) {
+            const targetUserId = userId || await this.getCurrentUserId();
+            if (!targetUserId) {
                 console.log('[SupabaseService] No user ID, returning null profile');
                 return null;
             }
@@ -55,7 +57,7 @@ class SupabaseService {
             const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
-                .eq('id', userId)
+                .eq('id', targetUserId)
                 .single();
 
             if (error) {
@@ -512,6 +514,25 @@ class SupabaseService {
             return { success: true };
         } catch (error) {
             console.error('[SupabaseService] registerPushToken error:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Sign out the current user
+     */
+    async signOut() {
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+                console.error('[SupabaseService] Sign out error:', error);
+                return { success: false, error: error.message };
+            }
+            this.currentUserId = null;
+            console.log('[SupabaseService] User signed out');
+            return { success: true };
+        } catch (error) {
+            console.error('[SupabaseService] signOut error:', error);
             return { success: false, error: error.message };
         }
     }

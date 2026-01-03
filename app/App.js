@@ -8,6 +8,8 @@ import {
   StatusBar,
   TouchableOpacity,
   ScrollView,
+  FlatList,
+  RefreshControl,
   Alert,
   Image,
   Platform,
@@ -135,6 +137,7 @@ const App = () => {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showNotifHelp, setShowNotifHelp] = useState(false);
   const [alertPreferences, setAlertPreferences] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Load alert preferences
   const loadAlertPreferences = async () => {
@@ -432,6 +435,15 @@ const App = () => {
     return analyzed;
   };
 
+  // Pull-to-refresh handler
+  const onRefresh = async () => {
+    console.log('[App] Pull-to-refresh triggered');
+    setRefreshing(true);
+    await loadNews();
+    setRefreshing(false);
+    console.log('[App] Refresh complete');
+  };
+
   useEffect(() => { (async () => { await loadCachedFeed(); await loadNews(); })(); }, []);
   useEffect(() => {
     (async () => {
@@ -532,8 +544,67 @@ const App = () => {
         storedUserData: storedUserData ? 'exists' : 'null'
       });
 
+      // Try to load fresh profile from Supabase
       if (storedUserData) {
-        setUserData(JSON.parse(storedUserData));
+        let parsedUserData = JSON.parse(storedUserData);
+
+        // If we have a user ID, fetch fresh profile from Supabase
+        if (parsedUserData.id) {
+          try {
+            const { supabaseService } = require('./services/supabaseService');
+            const profile = await supabaseService.getProfile(parsedUserData.id);
+
+            if (profile) {
+              console.log('[App] Loaded profile from Supabase in checkAppState');
+              parsedUserData = {
+                ...parsedUserData,
+                username: profile.username || parsedUserData.username,
+                fullName: profile.full_name || parsedUserData.fullName,
+                role: profile.role || '',
+                experience: profile.experience_level || '',
+                institution: profile.company || '',
+                bio: profile.bio || '',
+                marketFocus: profile.market_focus || [],
+                avatarUrl: profile.avatar_url || '',
+                linkedin: profile.linkedin || '',
+                github: profile.github || '',
+              };
+            }
+          } catch (e) {
+            console.log('[App] Could not load profile from Supabase:', e);
+          }
+        }
+
+        setUserData(parsedUserData);
+      } else if (onboardingCompleted === 'true') {
+        // No stored user data but onboarding was completed - check Supabase session
+        try {
+          const { supabaseService } = require('./services/supabaseService');
+          const { data: { session } } = await supabaseService.supabase.auth.getSession();
+
+          if (session?.user) {
+            console.log('[App] Found active Supabase session, loading profile');
+            const profile = await supabaseService.getProfile(session.user.id);
+
+            const restoredUserData = {
+              id: session.user.id,
+              email: session.user.email,
+              username: profile?.username || session.user.email?.split('@')[0],
+              fullName: profile?.full_name || '',
+              role: profile?.role || '',
+              experience: profile?.experience_level || '',
+              institution: profile?.company || '',
+              bio: profile?.bio || '',
+              marketFocus: profile?.market_focus || [],
+              avatarUrl: profile?.avatar_url || '',
+            };
+
+            setUserData(restoredUserData);
+            await AsyncStorage.setItem('user_data', JSON.stringify(restoredUserData));
+          }
+        } catch (e) {
+          console.log('[App] Could not restore from Supabase session:', e);
+        }
       }
 
       if (onboardingCompleted !== 'true') {
@@ -559,10 +630,37 @@ const App = () => {
   const handleAuthComplete = async (authData) => {
     console.log('handleAuthComplete called with:', authData);
 
-    setUserData(authData);
+    // Fetch full profile from Supabase
+    let fullUserData = { ...authData };
+    try {
+      const { supabaseService } = require('./services/supabaseService');
+      const profile = await supabaseService.getProfile(authData.id);
+
+      if (profile) {
+        console.log('[App] Loaded profile from Supabase:', profile);
+        fullUserData = {
+          ...authData,
+          username: profile.username || authData.username,
+          fullName: profile.full_name || authData.fullName,
+          role: profile.role || '',
+          experience: profile.experience_level || '',
+          institution: profile.company || '',
+          bio: profile.bio || '',
+          marketFocus: profile.market_focus || [],
+          avatarUrl: profile.avatar_url || '',
+          linkedin: profile.linkedin || '',
+          github: profile.github || '',
+        };
+      }
+    } catch (e) {
+      console.log('[App] Could not load profile from Supabase:', e);
+    }
+
+    setUserData(fullUserData);
+    await AsyncStorage.setItem('user_data', JSON.stringify(fullUserData));
     setShowAuth(false);
 
-    // Check if we should skip onboarding (returning user signing in with Google)
+    // Check if we should skip onboarding (returning user)
     if (authData.skipOnboarding) {
       console.log('User has skipOnboarding=true, checking alerts...');
       // User has already completed onboarding, go straight to main app
@@ -596,8 +694,22 @@ const App = () => {
 
       // Save profile to Supabase
       const { supabaseService } = require('./services/supabaseService');
+
+      // Upload profile photo if provided
+      if (formData.profilePhoto) {
+        try {
+          console.log('[App] Uploading profile photo to Supabase...');
+          await supabaseService.uploadAvatar(formData.profilePhoto);
+          console.log('[App] Profile photo uploaded successfully');
+        } catch (photoError) {
+          console.error('[App] Failed to upload profile photo:', photoError);
+          // Continue with profile save even if photo upload fails
+        }
+      }
+
       await supabaseService.updateProfile({
         full_name: formData.fullName || userData?.fullName,
+        username: formData.username || userData?.username,
         company: formData.institution,
         role: formData.role,
         experience_level: formData.experience,
@@ -749,7 +861,20 @@ const App = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.clear();
+              // Don't clear onboarding/alerts completion - user should never redo these
+              // Only clear session-specific data
+              await AsyncStorage.removeItem('user_data');
+              await AsyncStorage.removeItem('auth_token');
+              await AsyncStorage.removeItem('session');
+
+              // Sign out from Supabase
+              try {
+                const { supabaseService } = require('./services/supabaseService');
+                await supabaseService.signOut();
+              } catch (e) {
+                console.log('Supabase signout error:', e);
+              }
+
               setUserData(null);
               setActiveNav('Today');
               setShowAuth(true);
@@ -889,7 +1014,8 @@ const App = () => {
     return (
       <OnboardingForm
         onComplete={handleOnboardingComplete}
-        showSkipOption={false}
+        onSkip={handleOnboardingSkip}
+        showSkipOption={true}
         userData={userData}
       />
     );
@@ -900,7 +1026,8 @@ const App = () => {
     return (
       <AlertPreferencesForm
         onComplete={handleAlertPreferencesComplete}
-        showSkipOption={false}
+        onSkip={handleAlertPreferencesComplete}
+        showSkipOption={true}
       />
     );
   }
@@ -918,6 +1045,40 @@ const App = () => {
             else if (screen === 'PrivacyPolicy') setShowPrivacyPolicy(true);
             else if (screen === 'TermsOfService') setShowTermsOfService(true);
             else if (screen === 'About') setShowAbout(true);
+            else if (screen === 'EditMarketFocus') {
+              Alert.alert(
+                'Edit Market Focus',
+                'You can update your market focus in the Alerts section.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Go to Alerts', onPress: () => setActiveNav('Alerts') }
+                ]
+              );
+            }
+            else if (screen === 'EditExperience') {
+              const experienceOptions = ['0-2 years', '3-5 years', '6-10 years', '10+ years'];
+              Alert.alert(
+                'Years of Experience',
+                'Select your experience level:',
+                [
+                  ...experienceOptions.map(label => ({
+                    text: label,
+                    onPress: async () => {
+                      const value = label.replace(' years', '');
+                      try {
+                        const { supabaseService } = require('./services/supabaseService');
+                        await supabaseService.updateProfile({ experience_level: value });
+                        setUserData(prev => ({ ...prev, experience: value }));
+                        Alert.alert('Updated!', `Experience set to ${label}`);
+                      } catch (e) {
+                        Alert.alert('Error', 'Failed to update experience');
+                      }
+                    }
+                  })),
+                  { text: 'Cancel', style: 'cancel' }
+                ]
+              );
+            }
           }}
           onOpenArticle={(article) => {
             setSelectedArticle(article);
@@ -1049,30 +1210,45 @@ const App = () => {
           ))}
         </ScrollView>
 
-        <ScrollView style={styles.feed} showsVerticalScrollIndicator={false}>
-          {getFilteredNews().map((item) => (
-            <NewsCard key={item.id} item={item} onAIClick={handleArticlePress} />
-          ))}
-
-          <View style={styles.endOfFeed}>
-            {allNews.length > liveNews.length ? (
-              <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
-                <Text style={styles.loadMoreText}>Load More</Text>
-              </TouchableOpacity>
-            ) : (
-              <>
-                <View style={styles.integraIcon}>
-                  <Text style={styles.integraIconText}>i</Text>
-                </View>
-                <Text style={styles.endOfFeedText}>You're all caught up!</Text>
-                <TouchableOpacity style={styles.refreshButton} onPress={loadNews}>
-                  <MaterialIcons name="refresh" size={16} color={colors.accentData} />
-                  <Text style={styles.refreshText}>Refresh</Text>
+        <FlatList
+          data={getFilteredNews()}
+          keyExtractor={(item) => item.id?.toString()}
+          renderItem={({ item }) => (
+            <NewsCard item={item} onAIClick={handleArticlePress} />
+          )}
+          style={styles.feed}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#4ECCA3"
+              colors={['#4ECCA3', '#30A5FF']}
+              progressBackgroundColor="#1E1E1E"
+            />
+          }
+          ListFooterComponent={() => (
+            <View style={styles.endOfFeed}>
+              {allNews.length > liveNews.length ? (
+                <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
+                  <Text style={styles.loadMoreText}>Load More</Text>
                 </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </ScrollView>
+              ) : (
+                <>
+                  <View style={styles.integraIcon}>
+                    <Text style={styles.integraIconText}>i</Text>
+                  </View>
+                  <Text style={styles.endOfFeedText}>You're all caught up!</Text>
+                  <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+                    <MaterialIcons name="refresh" size={16} color={colors.accentData} />
+                    <Text style={styles.refreshText}>Refresh</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+        />
 
         {renderBottomNav()}
       </View>

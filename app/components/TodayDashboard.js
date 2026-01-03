@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Share, Alert } from 'react-native';
+import { View, Text, ScrollView, FlatList, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Share, Alert } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { dashboardApi, sentimentApi, marketDataApi } from '../services/api';
 import IntegraIcon from './IntegraIcon';
@@ -14,7 +14,7 @@ const TodayDashboard = ({ agentActive }) => {
   const [sentimentModalVisible, setSentimentModalVisible] = useState(false);
   const [sentimentAnalysis, setSentimentAnalysis] = useState(null);
   const [sentimentLoading, setSentimentLoading] = useState(false);
-const [marketData, setMarketData] = useState(null);
+  const [marketData, setMarketData] = useState(null);
   const [aiOverlayVisible, setAiOverlayVisible] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
 
@@ -82,7 +82,7 @@ const [marketData, setMarketData] = useState(null);
       'IEA': 'https://www.iea.org',
       'EIA': 'https://www.eia.gov',
     };
-    
+
     return sourceUrls[source] || null;
   };
 
@@ -113,9 +113,11 @@ const [marketData, setMarketData] = useState(null);
   };
 
   const onRefresh = async () => {
+    console.log('[TodayDashboard] Pull-to-refresh triggered');
     setRefreshing(true);
     await loadDashboardData();
     setRefreshing(false);
+    console.log('[TodayDashboard] Refresh complete');
   };
 
   const getSentimentColor = (sentiment) => {
@@ -391,22 +393,22 @@ const [marketData, setMarketData] = useState(null);
     </Modal>
   );
 
-const renderNewsCard = (item) => {
-    
+  const renderNewsCard = (item) => {
+
     const openAIOverlay = (article) => {
       setSelectedNews(article);
       setAiOverlayVisible(true);
     };
-    
+
     const handleShare = async () => {
       try {
         const shareContent = {
           message: `${item.headline}\n\n${item.summary}\n\nSentiment: ${item.sentiment} (${item.sentimentScore})\nSource: ${item.source}\n\nShared via Integra Markets`,
           title: item.headline,
         };
-        
+
         const result = await Share.share(shareContent);
-        
+
         if (result.action === Share.sharedAction) {
           // User shared successfully
           console.log('Shared successfully');
@@ -419,51 +421,51 @@ const renderNewsCard = (item) => {
         console.error('Share error:', error);
       }
     };
-    
+
     return (
-    <View key={item.id} style={styles.newsCard}>
-      <View style={styles.cardHeader}>
-        <View style={styles.sentimentContainer}>
-          <MaterialIcons
-            name={getSentimentIcon(item.sentiment)}
-            size={16}
-            color={getSentimentColor(item.sentiment)}
-          />
-          <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
-            {item.sentiment}
-          </Text>
-          <Text style={styles.sentimentScore}>{item.sentimentScore}</Text>
+      <View key={item.id} style={styles.newsCard}>
+        <View style={styles.cardHeader}>
+          <View style={styles.sentimentContainer}>
+            <MaterialIcons
+              name={getSentimentIcon(item.sentiment)}
+              size={16}
+              color={getSentimentColor(item.sentiment)}
+            />
+            <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
+              {item.sentiment}
+            </Text>
+            <Text style={styles.sentimentScore}>{item.sentimentScore}</Text>
+          </View>
+          <View style={styles.cardHeaderRight}>
+            <TouchableOpacity
+              style={styles.aiButton}
+              onPress={() => openAIOverlay(item)}
+            >
+              <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.moreButton}
+              onPress={() => Alert.alert('More Options', 'Additional article options will be available in the next update')}
+            >
+              <MaterialIcons name="more-horiz" size={20} color="#A0A0A0" />
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.cardHeaderRight}>
-          <TouchableOpacity
-            style={styles.aiButton}
-            onPress={() => openAIOverlay(item)}
-          >
-            <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.moreButton}
-            onPress={() => Alert.alert('More Options', 'Additional article options will be available in the next update')}
-          >
-            <MaterialIcons name="more-horiz" size={20} color="#A0A0A0" />
-          </TouchableOpacity>
+        <Text style={styles.newsHeadline}>{item.headline}</Text>
+        <Text style={styles.newsSummary} numberOfLines={2}>{item.summary}</Text>
+        <View style={styles.cardFooter}>
+          <View style={styles.sourceInfo}>
+            <Text style={styles.sourceText}>{item.source}</Text>
+            <MaterialIcons name="link" size={12} color="#30A5FF" style={styles.linkIcon} />
+          </View>
+          <View style={styles.cardActions}>
+            <Text style={styles.timeAgo}>{item.timeAgo}</Text>
+            <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+              <MaterialIcons name="share" size={16} color="#A0A0A0" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-      <Text style={styles.newsHeadline}>{item.headline}</Text>
-      <Text style={styles.newsSummary} numberOfLines={2}>{item.summary}</Text>
-      <View style={styles.cardFooter}>
-        <View style={styles.sourceInfo}>
-          <Text style={styles.sourceText}>{item.source}</Text>
-          <MaterialIcons name="link" size={12} color="#30A5FF" style={styles.linkIcon} />
-        </View>
-        <View style={styles.cardActions}>
-          <Text style={styles.timeAgo}>{item.timeAgo}</Text>
-          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-            <MaterialIcons name="share" size={16} color="#A0A0A0" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
     );
   };
 
@@ -548,9 +550,9 @@ const renderNewsCard = (item) => {
 
   const renderLoadingScreen = () => (
     <View style={styles.loadingContainer}>
-      <IntegraIcon 
-        size={120} 
-        animated={true} 
+      <IntegraIcon
+        size={120}
+        animated={true}
         variant="default"
         style={{ marginBottom: 20 }}
       />
@@ -563,9 +565,9 @@ const renderNewsCard = (item) => {
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
-        <IntegraIcon 
-          size={32} 
-          animated={agentActive} 
+        <IntegraIcon
+          size={32}
+          animated={agentActive}
           variant="default"
           style={{ marginRight: 12 }}
         />
@@ -588,45 +590,51 @@ const renderNewsCard = (item) => {
   return (
     <SafeAreaView style={styles.container}>
       {renderHeader()}
-      
+
       <View style={styles.filtersContainer}>
         {filterOptions.map(renderFilterButton)}
       </View>
-      
+
       {isLoading ? (
         renderLoadingScreen()
       ) : (
-        <ScrollView
+        <FlatList
+          data={filteredNews}
+          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+          renderItem={({ item }) => renderNewsCard(item)}
           style={styles.scrollView}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
               tintColor="#4ECCA3"
+              colors={['#4ECCA3', '#30A5FF']}
+              progressBackgroundColor="#1E1E1E"
             />
           }
           showsVerticalScrollIndicator={false}
-        >
-          {filteredNews.map(renderNewsCard)}
-          <View style={styles.endMessage}>
-            <IntegraIcon 
-              size={48} 
-              animated={false} 
-              variant="default"
-              style={{ marginBottom: 12, opacity: 0.5 }}
-            />
-            <Text style={styles.endMessageText}>You're all caught up!</Text>
-            <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-              <MaterialIcons name="refresh" size={16} color="#30A5FF" />
-              <Text style={styles.refreshButtonText}>Refresh</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+          ListFooterComponent={() => (
+            <View style={styles.endMessage}>
+              <IntegraIcon
+                size={48}
+                animated={false}
+                variant="default"
+                style={{ marginBottom: 12, opacity: 0.5 }}
+              />
+              <Text style={styles.endMessageText}>You're all caught up!</Text>
+              <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+                <MaterialIcons name="refresh" size={16} color="#30A5FF" />
+                <Text style={styles.refreshButtonText}>Refresh</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        />
       )}
-      
+
       {renderSentimentModal()}
-      <AIAnalysisOverlay 
-        isVisible={aiOverlayVisible} 
+      <AIAnalysisOverlay
+        isVisible={aiOverlayVisible}
         onClose={() => setAiOverlayVisible(false)}
         news={selectedNews}
       />

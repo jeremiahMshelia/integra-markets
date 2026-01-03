@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { User } from 'lucide-react';
+import { User, Bell } from 'lucide-react';
 
 interface DashboardHeaderProps {
     userEmail?: string;
@@ -11,26 +11,41 @@ interface DashboardHeaderProps {
 
 export default function DashboardHeader({ userEmail, onProfileClick }: DashboardHeaderProps) {
     return (
-        <header className="sticky top-0 z-40 bg-[#121212]/95 backdrop-blur-md border-b border-[#2a2a2a]">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-                {/* Logo - Same styling as main Header */}
-                <Link href="/" className="flex items-center gap-2 group">
-                    <div className="relative w-6 h-6">
-                        <Image src="/logoNew.png" alt="Integra" fill className="object-contain" />
-                    </div>
-                    <div className="flex items-center">
-                        <span className="text-white font-medium text-[16px]">integra</span>
-                        <span className="text-zinc-500 font-medium text-[16px] ml-1 group-hover:text-zinc-400 transition-colors">Markets</span>
+        <header className="sticky top-0 z-50 bg-[#121212]/95 backdrop-blur-md border-b border-[#2a2a2a]">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+                {/* Logo */}
+                <Link href="/" className="flex items-center gap-2.5">
+                    <Image src="/logoNew.png" alt="Integra" width={28} height={28} />
+                    <div className="flex items-baseline">
+                        <span className="text-white font-medium text-lg">integra</span>
+                        <span className="text-[#a0a0a0] text-lg ml-1">Markets</span>
                     </div>
                 </Link>
 
-                {/* Profile Button */}
-                <button
-                    onClick={onProfileClick}
-                    className="w-9 h-9 rounded-full bg-[#2a2a2a] hover:bg-[#3a3a3a] flex items-center justify-center transition-colors"
-                >
-                    <User size={18} className="text-zinc-400" />
-                </button>
+                {/* Right Actions */}
+                <div className="flex items-center gap-4">
+                    {/* Alerts - Links to App Store */}
+                    <Link
+                        href="#get-app"
+                        className="hidden sm:flex items-center gap-2 px-4 py-2 bg-[#2a2a2a] hover:bg-[#3a3a3a] rounded-full transition-colors"
+                    >
+                        <Bell size={16} className="text-[#4a9eff]" />
+                        <span className="text-sm text-zinc-400">Get Alerts</span>
+                    </Link>
+
+                    {/* User Email (Desktop) */}
+                    <span className="hidden md:block text-sm text-zinc-500 mr-2">
+                        {userEmail}
+                    </span>
+
+                    {/* Profile Button */}
+                    <button
+                        onClick={onProfileClick}
+                        className="w-10 h-10 rounded-full bg-[#2a2a2a] hover:bg-[#3a3a3a] flex items-center justify-center transition-colors"
+                    >
+                        <User size={20} className="text-zinc-400" />
+                    </button>
+                </div>
             </div>
         </header>
     );

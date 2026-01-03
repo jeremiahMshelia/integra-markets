@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase';
 import { motion } from 'framer-motion';
 import { Bell } from 'lucide-react';
-import Link from 'next/link';
-import Image from 'next/image';
 
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import FilterTabs, { FilterType } from '@/components/dashboard/FilterTabs';
@@ -14,7 +12,6 @@ import AIAnalysisModal from '@/components/dashboard/AIAnalysisModal';
 import ProfileSidebar from '@/components/dashboard/ProfileSidebar';
 
 const filterTabs: FilterType[] = ['All', 'Bullish', 'Neutral', 'Bearish'];
-
 const ARTICLES_PER_PAGE = 10;
 
 export default function Dashboard() {
@@ -24,19 +21,14 @@ export default function Dashboard() {
     const [activeFilter, setActiveFilter] = useState<FilterType>('All');
     const [user, setUser] = useState<{ email?: string; name?: string; avatar_url?: string } | null>(null);
 
-    // Pagination
     const [displayCount, setDisplayCount] = useState(ARTICLES_PER_PAGE);
     const [loadingMore, setLoadingMore] = useState(false);
-
-    // Bookmarks state
     const [bookmarkedUrls, setBookmarkedUrls] = useState<Set<string>>(new Set());
 
-    // Modal states
     const [selectedArticle, setSelectedArticle] = useState<NewsItem | null>(null);
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-    // Auth check
     useEffect(() => {
         const checkAuth = async () => {
             const supabase = createClient();
@@ -51,7 +43,6 @@ export default function Dashboard() {
                 avatar_url: user.user_metadata?.avatar_url
             });
 
-            // Load bookmarks
             const savedBookmarks = localStorage.getItem('integra_bookmarks');
             if (savedBookmarks) {
                 const parsed = JSON.parse(savedBookmarks);
@@ -61,75 +52,247 @@ export default function Dashboard() {
         checkAuth();
     }, []);
 
-    // Fetch news
-    useEffect(() => {
-        const fetchNews = async () => {
+    const loadBookmarks = async (userId: string) => {
+        try {
+            const supabase = createClient();
+            const { data, error } = await supabase
+                .from('bookmarks')
+                .select('article_id')
+                .eq('user_id', userId);
+
+            if (data) {
+                setBookmarkedUrls(new Set(data.map(b => b.article_id)));
+            }
+        } catch (e) {
+            console.error('Error loading bookmarks:', e);
+        }
+    };
+
+    const fetchNews = async (commodities: string[] | null) => {
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://integra-markets-9zz1.onrender.com';
+
+            let newsData = { articles: [] };
+            const cacheBuster = `?t=${Date.now()}`;
+
             try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://integra-markets-9zz1.onrender.com';
-                const response = await fetch(`${apiUrl}/api/news/analysis?hours=24`);
+                console.log('Fetching news with commodities:', commodities);
+                // Try POST /api/news/latest first (same as mobile)
+                const response = await fetch(`${apiUrl}/api/news/latest${cacheBuster}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ commodities: commodities, hours: 24 }),
+                });
 
-                if (!response.ok) {
-                    throw new Error('Failed to fetch news');
+                if (response.ok) {
+                    newsData = await response.json();
+                    console.log('Got news from POST /news/latest:', newsData.articles?.[0]);
                 }
+            } catch (e) {
+                console.log('POST /news/latest failed, trying GET /news/analysis');
+            }
 
-                const data = await response.json();
-                setArticles(data.articles || []);
-            } catch (err) {
-                console.error('Error fetching news:', err);
-                setError('Failed to load news. Please try again.');
-            } finally {
-                setLoading(false);
+            // Fallback to GET /api/news/analysis
+            if (!newsData.articles || newsData.articles.length === 0) {
+                const response = await fetch(`${apiUrl}/api/news/analysis?hours=24&t=${Date.now()}`);
+                if (response.ok) {
+                    newsData = await response.json();
+                    console.log('Got news from GET /news/analysis:', newsData.articles?.[0]);
+                }
+            }
+
+            setArticles(newsData.articles || []);
+
+            // Trigger client-side sentiment enrichment if needed
+            if (newsData.articles && newsData.articles.length > 0) {
+                enrichArticles(newsData.articles);
+            }
+        } catch (err) {
+            console.error('Error fetching news:', err);
+            setError('Failed to load news. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        const checkAuthAndLoadData = async () => {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                window.location.href = '/login';
+                return;
+            }
+            setUser({
+                email: user.email,
+                name: user.user_metadata?.full_name || user.email?.split('@')[0],
+                avatar_url: user.user_metadata?.avatar_url
+            });
+
+            // Load bookmarks
+            loadBookmarks(user.id);
+
+            // Fetch News with User's Commodities
+            let userCommodities = ['Oil', 'Gold', 'Gas']; // Default to bypass stale general cache
+            try {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('market_focus')
+                    .eq('id', user.id)
+                    .single();
+
+                if (profile?.market_focus && Array.isArray(profile.market_focus) && profile.market_focus.length > 0) {
+                    userCommodities = profile.market_focus;
+                }
+            } catch (e) {
+                console.error('Error fetching profile commodities:', e);
+            }
+
+            fetchNews(userCommodities);
+        };
+        checkAuthAndLoadData();
+    }, []);
+
+    const enrichArticles = async (rawArticles: NewsItem[]) => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://integra-markets-9zz1.onrender.com';
+
+        const enriched = [...rawArticles];
+
+        const enrichSingle = async (article: NewsItem, index: number) => {
+            // 1. Enrich Sentiment if missing
+            let newSentiment = null;
+            let newScore = null;
+
+            const needsSentiment = !article.sentiment || article.sentiment === 'NEUTRAL' || !article.sentiment_score || article.sentiment_score === 0.5;
+
+            if (needsSentiment) {
+                try {
+                    const text = `${article.title} ${article.summary}`;
+                    const res = await fetch(`${apiUrl}/api/sentiment`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text, enhanced: false })
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.sentiment) {
+                            newSentiment = data.sentiment;
+                            newScore = data.confidence || 0.5;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Sentiment enrichment error:', e);
+                }
+            }
+
+            // 2. Enrich Image if missing
+            let newImage = null;
+            const needsImage = !article.image_url && !article.banner_image;
+
+            if (needsImage && article.url) {
+                try {
+                    const imgRes = await fetch('/api/meta-image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: article.url })
+                    });
+
+                    if (imgRes.ok) {
+                        const imgData = await imgRes.json();
+                        if (imgData.imageUrl) {
+                            newImage = imgData.imageUrl;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Image enrichment error:', e);
+                }
+            }
+
+            // Update if changed
+            if (newSentiment || newImage) {
+                enriched[index] = {
+                    ...article,
+                    sentiment: newSentiment || article.sentiment,
+                    sentiment_score: newScore !== null ? newScore : article.sentiment_score,
+                    image_url: newImage || article.image_url || article.banner_image,
+                    summary: article.summary
+                };
             }
         };
 
-        fetchNews();
-    }, []);
+        // Process in chunks to avoid overwhelming browser/api
+        const chunkSize = 5;
+        for (let i = 0; i < enriched.length; i += chunkSize) {
+            const chunk = enriched.slice(i, i + chunkSize);
+            await Promise.all(chunk.map((a, idx) => enrichSingle(a, i + idx)));
+            // Update state incrementally for better UX
+            setArticles([...enriched]);
+        }
+    };
 
-    // Reset display count when filter changes
     useEffect(() => {
         setDisplayCount(ARTICLES_PER_PAGE);
     }, [activeFilter]);
 
-    // Filter articles by sentiment
     const filteredArticles = activeFilter === 'All'
         ? articles
-        : articles.filter(a =>
-            a.sentiment?.toUpperCase() === activeFilter.toUpperCase()
-        );
+        : articles.filter(a => a.sentiment?.toUpperCase() === activeFilter.toUpperCase());
 
-    // Paginated articles
     const displayedArticles = filteredArticles.slice(0, displayCount);
     const hasMore = displayCount < filteredArticles.length;
 
-    // Handlers
     const handleAIClick = (article: NewsItem) => {
         setSelectedArticle(article);
         setIsAIModalOpen(true);
     };
 
-    const handleBookmarkToggle = useCallback((article: NewsItem) => {
+    const handleBookmarkToggle = useCallback(async (article: NewsItem) => {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
         const articleId = article.url || article.title;
+        const isBookmarked = bookmarkedUrls.has(articleId);
 
-        // Get current bookmarks
-        const savedBookmarks = localStorage.getItem('integra_bookmarks');
-        let bookmarks = savedBookmarks ? JSON.parse(savedBookmarks) : [];
+        // Optimistic Update
+        setBookmarkedUrls(prev => {
+            const next = new Set(prev);
+            if (isBookmarked) next.delete(articleId);
+            else next.add(articleId);
+            return next;
+        });
 
-        const exists = bookmarks.some((b: { id: string }) => b.id === articleId);
-
-        if (exists) {
-            bookmarks = bookmarks.filter((b: { id: string }) => b.id !== articleId);
-        } else {
-            bookmarks.push({
-                id: articleId,
-                title: article.title,
-                source: article.source,
-                sentiment: article.sentiment || 'NEUTRAL'
-            });
+        try {
+            if (isBookmarked) {
+                // Remove from Supabase
+                await supabase
+                    .from('bookmarks')
+                    .delete()
+                    .eq('user_id', user.id)
+                    .eq('article_id', articleId);
+            } else {
+                // Add to Supabase
+                await supabase
+                    .from('bookmarks')
+                    .insert({
+                        user_id: user.id,
+                        article_id: articleId,
+                        title: article.title,
+                        url: article.url,
+                        source: article.source,
+                        sentiment: article.sentiment,
+                        sentiment_score: article.sentiment_score,
+                        image_url: article.image_url,
+                        published_at: article.published,
+                    });
+            }
+        } catch (error) {
+            console.error('Error toggling bookmark:', error);
+            // Revert optimistic update on error if needed
+            loadBookmarks(user.id);
         }
-
-        localStorage.setItem('integra_bookmarks', JSON.stringify(bookmarks));
-        setBookmarkedUrls(new Set(bookmarks.map((b: { id: string }) => b.id)));
-    }, []);
+    }, [bookmarkedUrls]);
 
     const handleLoadMore = () => {
         setLoadingMore(true);
@@ -145,7 +308,6 @@ export default function Dashboard() {
         window.location.href = '/';
     };
 
-    // Loading state
     if (loading) {
         return (
             <div className="min-h-screen bg-[#121212] flex items-center justify-center">
@@ -159,110 +321,88 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-[#121212]">
-            {/* Header */}
-            <DashboardHeader
-                userEmail={user?.email}
-                onProfileClick={() => setIsProfileOpen(true)}
-            />
+            <DashboardHeader userEmail={user?.email} onProfileClick={() => setIsProfileOpen(true)} />
 
-            {/* Main Content - Wider for Perplexity style */}
-            <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                {/* Page Title */}
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-between mb-6"
-                >
-                    <h1 className="text-2xl font-semibold text-white">Today</h1>
-                    <button className="p-2 rounded-lg hover:bg-white/5 transition-colors">
-                        <Bell size={22} className="text-zinc-400" />
-                    </button>
-                </motion.div>
-
-                {/* Filter Tabs */}
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="mb-6"
-                >
-                    <FilterTabs
-                        tabs={filterTabs}
-                        activeTab={activeFilter}
-                        onTabChange={setActiveFilter}
-                    />
-                </motion.div>
-
-                {/* Error State */}
-                {error && (
-                    <div className="bg-[#F05454]/10 border border-[#F05454]/20 text-[#F05454] px-4 py-3 rounded-xl mb-6">
-                        {error}
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+                {/* Page Title & Controls */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-white mb-1">Today</h1>
+                        <p className="text-zinc-400 text-sm">Your AI-curated market intelligence feed</p>
                     </div>
-                )}
-
-                {/* Empty State */}
-                {filteredArticles.length === 0 && !error && (
-                    <div className="text-center py-16">
-                        <p className="text-zinc-500 mb-2">No {activeFilter.toLowerCase()} articles found.</p>
-                        <button
-                            onClick={() => setActiveFilter('All')}
-                            className="text-[#4ECCA3] text-sm hover:underline"
-                        >
-                            View all articles
+                    <div className="flex items-center gap-3">
+                        <FilterTabs tabs={filterTabs} activeTab={activeFilter} onTabChange={setActiveFilter} />
+                        <button className="p-2.5 rounded-full bg-[#1C1C1E] border border-[#333] hover:bg-[#2a2a2a] transition-colors">
+                            <Bell size={20} className="text-zinc-400" />
                         </button>
                     </div>
+                </motion.div>
+
+                {error && <div className="bg-[#F05454]/10 border border-[#F05454]/20 text-[#F05454] px-4 py-3 rounded-xl mb-6">{error}</div>}
+
+                {filteredArticles.length === 0 && !error && !loading && (
+                    <div className="text-center py-24 bg-[#1C1C1E] rounded-3xl border border-[#2a2a2a] border-dashed">
+                        <p className="text-zinc-500 mb-4 text-lg">No {activeFilter.toLowerCase()} articles found.</p>
+                        <button onClick={() => setActiveFilter('All')} className="px-6 py-2 bg-[#2a2a2a] rounded-full text-white text-sm font-medium hover:bg-[#333] transition-colors">Clear Filters</button>
+                    </div>
                 )}
 
-                {/* Two Column Grid for Desktop (Perplexity style) */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                    {displayedArticles.map((article, index) => (
-                        <motion.div
-                            key={article.url + index}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: Math.min(index * 0.03, 0.3) }}
-                        >
+                {/* News Feed Grid System */}
+                <div className="space-y-8">
+                    {/* Featured Article (First Item) */}
+                    {displayedArticles.length > 0 && (
+                        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}>
                             <NewsCard
-                                item={article}
+                                featured={true}
+                                item={displayedArticles[0]}
                                 onAIClick={handleAIClick}
-                                isBookmarked={bookmarkedUrls.has(article.url || article.title)}
+                                isBookmarked={bookmarkedUrls.has(displayedArticles[0].url || displayedArticles[0].title)}
                                 onBookmarkToggle={handleBookmarkToggle}
                             />
                         </motion.div>
-                    ))}
+                    )}
+
+                    {/* Grid for remaining articles (2 Columns) */}
+                    {displayedArticles.length > 1 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {displayedArticles.slice(1).map((article, index) => (
+                                <motion.div
+                                    key={article.url + index}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: index * 0.05 }}
+                                >
+                                    <NewsCard
+                                        item={article}
+                                        onAIClick={handleAIClick}
+                                        isBookmarked={bookmarkedUrls.has(article.url || article.title)}
+                                        onBookmarkToggle={handleBookmarkToggle}
+                                    />
+                                </motion.div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {/* Load More Button */}
                 {hasMore && (
-                    <div className="text-center py-8">
-                        <button
-                            onClick={handleLoadMore}
-                            disabled={loadingMore}
-                            className="px-8 py-3 bg-[#1E1E1E] hover:bg-[#2a2a2a] text-white rounded-xl font-medium transition-colors border border-[#333] disabled:opacity-50"
-                        >
-                            {loadingMore ? (
-                                <span className="flex items-center gap-2">
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    Loading...
-                                </span>
-                            ) : (
-                                `Load More (${filteredArticles.length - displayCount} remaining)`
-                            )}
+                    <div className="text-center py-12">
+                        <button onClick={handleLoadMore} disabled={loadingMore} className="group relative px-8 py-3 bg-[#1C1C1E] border border-[#333] rounded-full overflow-hidden hover:border-[#4ECCA3]/50 transition-colors disabled:opacity-50">
+                            <span className="relative z-10 flex items-center gap-2 text-white font-medium">
+                                {loadingMore ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> :
+                                    (<><span>Load More Stories</span><span className="text-zinc-500 text-xs">({filteredArticles.length - displayCount} remaining)</span></>)
+                                }
+                            </span>
                         </button>
                     </div>
                 )}
 
-                {/* Article Count */}
                 {!hasMore && filteredArticles.length > 0 && (
-                    <div className="text-center py-8">
-                        <p className="text-zinc-600 text-sm">
-                            Showing all {filteredArticles.length} articles
-                        </p>
+                    <div className="text-center py-12 border-t border-[#2a2a2a] mt-12">
+                        <p className="text-zinc-600">You've reached the end of the feed.</p>
                     </div>
                 )}
             </main>
 
-            {/* AI Analysis Modal */}
             <AIAnalysisModal
                 isOpen={isAIModalOpen}
                 onClose={() => setIsAIModalOpen(false)}
@@ -271,13 +411,7 @@ export default function Dashboard() {
                 isBookmarked={selectedArticle ? bookmarkedUrls.has(selectedArticle.url || selectedArticle.title) : false}
             />
 
-            {/* Profile Sidebar */}
-            <ProfileSidebar
-                isOpen={isProfileOpen}
-                onClose={() => setIsProfileOpen(false)}
-                user={user}
-                onLogout={handleLogout}
-            />
+            <ProfileSidebar isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} />
         </div>
     );
 }

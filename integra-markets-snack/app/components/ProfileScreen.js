@@ -1,13 +1,13 @@
 import React, { useState } from "react";
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   Alert,
   SafeAreaView,
-  StatusBar 
+  StatusBar
 } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -108,7 +108,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bgPrimary} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -149,11 +149,11 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
                 )}
               </View>
             </View>
-            
+
             {defaultUserProfile.bio && (
               <Text style={styles.profileBio}>{defaultUserProfile.bio}</Text>
             )}
-            
+
             <View style={styles.profileStats}>
               <View style={styles.profileStat}>
                 <Text style={styles.profileStatValue}>
@@ -299,7 +299,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
                     </Text>
                     <Text style={styles.bookmarkSource}>{bookmark.source}</Text>
                   </View>
-                  <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
+                  <MaterialIcons name="bookmark" color={colors.accentPositive} size={16} />
                 </View>
               ))}
               {defaultBookmarks.length > 3 && (

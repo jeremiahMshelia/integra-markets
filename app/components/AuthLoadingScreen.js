@@ -171,13 +171,30 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                 const result = await authService.signInWithEmail(email.trim(), password);
 
                 if (result.success) {
+                    // Check if this is a returning user who has completed onboarding
+                    const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
+                    const isReturningUser = onboardingCompleted === 'true';
+
+                    // Also check Supabase profile for onboarding status
+                    let hasSupabaseProfile = false;
+                    try {
+                        const { supabaseService } = require('../services/supabaseService');
+                        const profile = await supabaseService.getProfile(result.user?.id);
+                        hasSupabaseProfile = profile && (profile.role || profile.experience_level || profile.full_name);
+                    } catch (e) {
+                        console.log('Could not check Supabase profile:', e);
+                    }
+
+                    const shouldSkipOnboarding = isReturningUser || hasSupabaseProfile;
+
                     const userData = {
                         id: result.user?.id || Date.now().toString(),
                         email: result.user?.email || email.trim(),
                         fullName: result.user?.fullName || email.split('@')[0],
                         username: email.split('@')[0],
                         authMethod: 'email',
-                        isNewUser: false,
+                        isNewUser: !shouldSkipOnboarding,
+                        skipOnboarding: shouldSkipOnboarding,
                     };
                     onAuthComplete(userData);
                 } else {

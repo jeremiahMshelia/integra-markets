@@ -76,7 +76,7 @@ const WelcomeCard = ({ onNext }) => (
                 The AI-powered platform for commodity trading insights and prediction markets
             </Text>
         </View>
-        
+
         <View style={styles.featuresList}>
             <View style={styles.featureItem}>
                 <MaterialIcons name="auto-awesome" size={24} color={colors.accentPositive} />
@@ -100,7 +100,7 @@ const RoleSelectionCard = ({ selectedRole, onSelect }) => (
     <View style={styles.formCard}>
         <Text style={styles.cardTitle}>What's your role? (Optional)</Text>
         <Text style={styles.cardSubtitle}>Help us customize your experience - you can skip this if you prefer</Text>
-        
+
         <View style={styles.optionsGrid}>
             {roleOptions.map((role) => (
                 <TouchableOpacity
@@ -111,10 +111,10 @@ const RoleSelectionCard = ({ selectedRole, onSelect }) => (
                     ]}
                     onPress={() => onSelect(role.value)}
                 >
-                    <MaterialIcons 
-                        name={role.icon} 
-                        size={24} 
-                        color={selectedRole === role.value ? colors.bgPrimary : colors.accentPositive} 
+                    <MaterialIcons
+                        name={role.icon}
+                        size={24}
+                        color={selectedRole === role.value ? colors.bgPrimary : colors.accentPositive}
                     />
                     <Text style={[
                         styles.optionTitle,
@@ -144,7 +144,7 @@ const ExperienceSelectionCard = ({ selectedExperience, onSelect }) => (
     <View style={styles.formCard}>
         <Text style={styles.cardTitle}>Years of experience? (Optional)</Text>
         <Text style={styles.cardSubtitle}>This helps us tailor content complexity - you can skip this if you prefer</Text>
-        
+
         <View style={styles.optionsList}>
             {experienceOptions.map((exp) => (
                 <TouchableOpacity
@@ -183,7 +183,7 @@ const MarketFocusCard = ({ selectedMarkets, onToggle, onSkip }) => (
     <View style={styles.formCard}>
         <Text style={styles.cardTitle}>Market focus areas (Optional)</Text>
         <Text style={styles.cardSubtitle}>Select your primary interests (multiple allowed) - you can skip this if you prefer</Text>
-        
+
         <View style={styles.marketGrid}>
             {marketFocusOptions.map((market) => (
                 <TouchableOpacity
@@ -194,10 +194,10 @@ const MarketFocusCard = ({ selectedMarkets, onToggle, onSkip }) => (
                     ]}
                     onPress={() => onToggle(market.value)}
                 >
-                    <MaterialIcons 
-                        name={market.icon} 
-                        size={32} 
-                        color={selectedMarkets.includes(market.value) ? colors.bgPrimary : market.color} 
+                    <MaterialIcons
+                        name={market.icon}
+                        size={32}
+                        color={selectedMarkets.includes(market.value) ? colors.bgPrimary : market.color}
                     />
                     <Text style={[
                         styles.marketOptionTitle,
@@ -213,7 +213,7 @@ const MarketFocusCard = ({ selectedMarkets, onToggle, onSkip }) => (
                 </TouchableOpacity>
             ))}
         </View>
-        
+
         <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
             <Text style={styles.skipButtonText}>Skip for now</Text>
         </TouchableOpacity>
@@ -225,7 +225,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
     const pickImage = async () => {
         // Request permission
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        
+
         if (permissionResult.granted === false) {
             Alert.alert("Permission required", "You need to grant camera roll permission to upload a photo.");
             return;
@@ -254,7 +254,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
 
     const takePhoto = async () => {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-        
+
         if (permissionResult.granted === false) {
             Alert.alert("Permission required", "You need to grant camera permission to take a photo.");
             return;
@@ -318,7 +318,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
         <View style={styles.formCard}>
             <Text style={styles.cardTitle}>Additional details (Optional)</Text>
             <Text style={styles.cardSubtitle}>Help us personalize your experience - all fields are optional</Text>
-            
+
             {/* Profile Photo Section */}
             <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Profile Photo (Optional)</Text>
@@ -420,11 +420,11 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
 const ProgressIndicator = ({ currentStep, totalSteps }) => (
     <View style={styles.progressContainer}>
         <View style={styles.progressBar}>
-            <View 
+            <View
                 style={[
-                    styles.progressFill, 
+                    styles.progressFill,
                     { width: `${(currentStep / totalSteps) * 100}%` }
-                ]} 
+                ]}
             />
         </View>
         <Text style={styles.progressText}>{currentStep} of {totalSteps}</Text>
@@ -480,34 +480,9 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
     };
 
     const handleSubmit = () => {
-        // Allow submission with minimal data
-        const minimalRequired = formData.role && formData.experience;
-        
-        if (!minimalRequired) {
-            Alert.alert(
-                'Almost Done!',
-                'Please select your role and experience level to continue.',
-                [
-                    { text: 'Complete Later', onPress: () => onSkip && onSkip() },
-                    { text: 'Continue Setup', style: 'cancel' }
-                ]
-            );
-            return;
-        }
-
-        Alert.alert(
-            'Setup Complete!',
-            'Welcome to Integra Markets. Your profile has been created.',
-            [
-                {
-                    text: 'Continue',
-                    onPress: () => {
-                        console.log('Onboarding completed:', formData);
-                        onComplete && onComplete(formData);
-                    }
-                }
-            ]
-        );
+        // All fields are truly optional now - allow submission with any data
+        console.log('Onboarding completed:', formData);
+        onComplete && onComplete(formData);
     };
 
     const updateFormData = (field, value) => {
@@ -580,7 +555,7 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" backgroundColor={colors.bgPrimary} />
-            
+
             {/* Header with skip option */}
             <View style={styles.header}>
                 {currentStep > 0 ? (
@@ -590,11 +565,11 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
                 ) : (
                     <View style={styles.headerSpacer} />
                 )}
-                
+
                 {currentStep > 0 && (
                     <ProgressIndicator currentStep={currentStep} totalSteps={totalSteps} />
                 )}
-                
+
                 {showSkipOption && (
                     <TouchableOpacity style={styles.skipHeaderButton} onPress={handleSkipOnboarding}>
                         <Text style={styles.skipHeaderText}>Skip</Text>
@@ -602,8 +577,8 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
                 )}
             </View>
 
-            <ScrollView 
-                style={styles.container} 
+            <ScrollView
+                style={styles.container}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
@@ -634,10 +609,10 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
                                         canProceed() ? colors.bgPrimary : colors.textSecondary
                                     } />
                                 </TouchableOpacity>
-                                
+
                                 {showSkipOption && currentStep > 1 && (
-                                    <TouchableOpacity 
-                                        style={styles.skipStepButton} 
+                                    <TouchableOpacity
+                                        style={styles.skipStepButton}
                                         onPress={handleNext}
                                     >
                                         <Text style={styles.skipStepText}>Skip this step</Text>
@@ -711,18 +686,18 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         fontSize: 12,
     },
-    
+
     skipHeaderButton: {
         paddingVertical: 8,
         paddingHorizontal: 16,
     },
-    
+
     skipHeaderText: {
         color: colors.accentData,
         fontSize: 16,
         fontWeight: '500',
     },
-    
+
     // Welcome Card Styles
     welcomeCard: {
         backgroundColor: '#000000', // Jet black background as requested
@@ -782,7 +757,7 @@ const styles = StyleSheet.create({
         marginLeft: 12,
         fontWeight: '500',
     },
-    
+
     // Form Card Styles
     formCard: {
         backgroundColor: colors.bgSecondary,
@@ -801,7 +776,7 @@ const styles = StyleSheet.create({
         marginBottom: 24,
         lineHeight: 22,
     },
-    
+
     // Button Styles
     primaryButton: {
         backgroundColor: colors.accentPositive,
@@ -843,7 +818,7 @@ const styles = StyleSheet.create({
     disabledButtonText: {
         color: colors.textSecondary,
     },
-    
+
     // Option Cards Grid
     optionsGrid: {
         flexDirection: 'row',
@@ -896,7 +871,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    
+
     // List Options
     optionsList: {
         width: '100%',
@@ -935,7 +910,7 @@ const styles = StyleSheet.create({
     selectedListOptionDescription: {
         color: colors.textPrimary,
     },
-    
+
     // Market Focus Grid
     marketGrid: {
         flexDirection: 'row',
@@ -978,7 +953,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    
+
     // Form Inputs
     inputGroup: {
         marginBottom: 20,
@@ -1001,7 +976,7 @@ const styles = StyleSheet.create({
     textArea: {
         height: 80,
     },
-    
+
     // Profile Photo Styles
     photoSection: {
         flexDirection: 'row',
@@ -1064,7 +1039,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         marginLeft: 8,
     },
-    
+
     // Footer
     footer: {
         position: 'absolute',
