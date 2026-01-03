@@ -101,11 +101,21 @@ export default function Dashboard() {
                 }
             }
 
-            setArticles(newsData.articles || []);
+            // Normalize sentiment data and log what we received
+            const normalizedArticles = (newsData.articles || []).map((article: NewsItem) => {
+                // Normalize sentiment to uppercase
+                if (article.sentiment) {
+                    article.sentiment = article.sentiment.toUpperCase();
+                }
+                console.log(`[Backend] ${article.title?.slice(0, 40)}... sentiment=${article.sentiment} score=${article.sentiment_score}`);
+                return article;
+            });
 
-            // Trigger client-side sentiment enrichment if needed
-            if (newsData.articles && newsData.articles.length > 0) {
-                enrichArticles(newsData.articles);
+            setArticles(normalizedArticles);
+
+            // Only enrich images, NOT sentiment (trust backend data)
+            if (normalizedArticles.length > 0) {
+                enrichArticleImages(normalizedArticles);
             }
         } catch (err) {
             console.error('Error fetching news:', err);
@@ -153,47 +163,12 @@ export default function Dashboard() {
         checkAuthAndLoadData();
     }, []);
 
-    const enrichArticles = async (rawArticles: NewsItem[]) => {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://integra-markets-9zz1.onrender.com';
-
+    // Only enrich images, NOT sentiment - sentiment comes from backend
+    const enrichArticleImages = async (rawArticles: NewsItem[]) => {
         const enriched = [...rawArticles];
 
         const enrichSingle = async (article: NewsItem, index: number) => {
-            // 1. Normalize sentiment to uppercase if it exists
-            if (article.sentiment) {
-                article.sentiment = article.sentiment.toUpperCase();
-            }
-
-            // 2. Enrich Sentiment ONLY if truly missing
-            let newSentiment = null;
-            let newScore = null;
-
-            // Only enrich if no sentiment at all OR sentiment_score is literally missing/0
-            const needsSentiment = !article.sentiment || (!article.sentiment_score && article.sentiment_score !== 0);
-
-            if (needsSentiment) {
-                try {
-                    const text = `${article.title} ${article.summary}`;
-                    const res = await fetch(`${apiUrl}/api/sentiment`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text, enhanced: false })
-                    });
-
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.sentiment) {
-                            newSentiment = data.sentiment.toUpperCase();
-                            newScore = data.confidence || 0.5;
-                        }
-                    }
-                } catch (e) {
-                    console.error('Sentiment enrichment error:', e);
-                }
-            }
-
-            // 3. Enrich Image if missing
-            let newImage = null;
+            // Only enrich Image if missing
             const needsImage = !article.image_url && !article.banner_image;
 
             if (needsImage && article.url) {
@@ -207,32 +182,23 @@ export default function Dashboard() {
                     if (imgRes.ok) {
                         const imgData = await imgRes.json();
                         if (imgData.imageUrl) {
-                            newImage = imgData.imageUrl;
+                            enriched[index] = {
+                                ...article,
+                                image_url: imgData.imageUrl
+                            };
                         }
                     }
                 } catch (e) {
                     console.error('Image enrichment error:', e);
                 }
             }
-
-            // Update if changed
-            if (newSentiment || newImage) {
-                enriched[index] = {
-                    ...article,
-                    sentiment: newSentiment || article.sentiment,
-                    sentiment_score: newScore !== null ? newScore : article.sentiment_score,
-                    image_url: newImage || article.image_url || article.banner_image,
-                    summary: article.summary
-                };
-            }
         };
 
-        // Process in chunks to avoid overwhelming browser/api
+        // Process in chunks
         const chunkSize = 5;
         for (let i = 0; i < enriched.length; i += chunkSize) {
             const chunk = enriched.slice(i, i + chunkSize);
             await Promise.all(chunk.map((a, idx) => enrichSingle(a, i + idx)));
-            // Update state incrementally for better UX
             setArticles([...enriched]);
         }
     };

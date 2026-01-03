@@ -339,13 +339,23 @@ class AlphaVantageClient:
             # Process articles
             articles = []
             for article in feed:
-                # Extract sentiment data
-                sentiment = article.get("overall_sentiment_score", 0)
-                sentiment_label = "NEUTRAL"
-                if sentiment > 0.25:
+                # Extract sentiment data from Alpha Vantage
+                # Alpha Vantage returns overall_sentiment_score in range -1 to +1
+                raw_sentiment = article.get("overall_sentiment_score", 0)
+                
+                # Determine sentiment label based on score
+                if raw_sentiment > 0.25:
                     sentiment_label = "BULLISH"
-                elif sentiment < -0.25:
+                elif raw_sentiment < -0.25:
                     sentiment_label = "BEARISH"
+                else:
+                    sentiment_label = "NEUTRAL"
+                
+                # Normalize score to 0-1 range for frontend
+                # Higher absolute value = higher confidence
+                # Map -1 to +1 → 0.5 to 1.0 (confidence in the direction)
+                confidence = 0.5 + (abs(raw_sentiment) * 0.5)
+                confidence = min(0.99, max(0.5, confidence))  # Clamp to 0.5-0.99
                 
                 # Map to our format
                 articles.append({
@@ -355,7 +365,8 @@ class AlphaVantageClient:
                     "summary": article.get("summary", ""),
                     "source": article.get("source", ""),
                     "categories": article.get("topics", []),
-                    "sentiment_score": sentiment,
+                    "sentiment_score": round(confidence, 2),  # Normalized 0-1 score
+                    "sentiment_raw": raw_sentiment,  # Keep raw score for debugging
                     "sentiment": sentiment_label,
                     "tickers": [t.get("ticker") for t in article.get("ticker_sentiment", [])]
                 })

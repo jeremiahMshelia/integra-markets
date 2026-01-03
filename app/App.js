@@ -362,19 +362,13 @@ const App = () => {
       const limited = prioritized.slice(0, 20);
       setAllNews(limited);
 
-      // Analyze the first batch (8) so card sentiment matches overlay
-      const initial = await analyzeBatch(limited, 0, Math.min(8, limited.length));
-      setLiveNews(initial);
-
-      // Merge analysis back into allNews
-      setAllNews(prev => {
-        const merged = [...prev];
-        for (let i = 0; i < initial.length; i++) merged[i] = initial[i];
-        return merged;
-      });
+      // Trust backend sentiment - no need to re-analyze
+      // The backend already provides sentiment and sentiment_score
+      console.log('[News] Using backend sentiment, sample:', limited[0]?.sentiment, limited[0]?.sentimentScore);
+      setLiveNews(limited.slice(0, 8));
 
       // Persist latest non-empty feed
-      await saveFeedCache(initial);
+      await saveFeedCache(limited.slice(0, 8));
     } catch (e) {
       console.error('Live news fetch failed:', e);
       await loadCachedFeed();

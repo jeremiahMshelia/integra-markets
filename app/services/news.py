@@ -488,8 +488,15 @@ class NewsService:
         if include_sentiment:
             for article in all_articles:
                 try:
-                    # Skip if article already has sentiment from Alpha Vantage
-                    if article.get("sentiment") and article.get("sentiment") != "NEUTRAL" and article.get("sentiment_score", 0) != 0:
+                    # Skip if article already has valid sentiment from Alpha Vantage
+                    # Trust the original sentiment - don't re-analyze
+                    has_valid_sentiment = (
+                        article.get("sentiment") and 
+                        article.get("sentiment_score") is not None and
+                        article.get("sentiment_score") >= 0.5  # Our normalized scores are 0.5-0.99
+                    )
+                    if has_valid_sentiment:
+                        logger.debug(f"Skipping sentiment analysis - already has: {article.get('sentiment')} {article.get('sentiment_score')}")
                         continue
                     
                     # Use cached sentiment analysis
