@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase';
 import { motion } from 'framer-motion';
-import { Bell } from 'lucide-react';
 
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import FilterTabs, { FilterType } from '@/components/dashboard/FilterTabs';
@@ -101,22 +100,21 @@ export default function Dashboard() {
                 }
             }
 
-            // Normalize sentiment data and log what we received
-            const normalizedArticles = (newsData.articles || []).map((article: NewsItem) => {
+            // Normalize sentiment data
+            const normalizedArticles = (newsData.articles || []).map((article: NewsItem, idx: number) => {
                 // Normalize sentiment to uppercase
                 if (article.sentiment) {
                     article.sentiment = article.sentiment.toUpperCase();
                 }
-                console.log(`[Backend] ${article.title?.slice(0, 40)}... sentiment=${article.sentiment} score=${article.sentiment_score}`);
+                // Log first few articles to verify backend is sending images
+                if (idx < 3) {
+                    console.log(`[Article ${idx}] "${article.title?.slice(0, 30)}..." image_url=${article.image_url ? 'YES' : 'NO'}`);
+                }
                 return article;
             });
 
+            // Display articles - images come from backend, no client-side fetching
             setArticles(normalizedArticles);
-
-            // Only enrich images, NOT sentiment (trust backend data)
-            if (normalizedArticles.length > 0) {
-                enrichArticleImages(normalizedArticles);
-            }
         } catch (err) {
             console.error('Error fetching news:', err);
             setError('Failed to load news. Please try again.');
@@ -163,45 +161,8 @@ export default function Dashboard() {
         checkAuthAndLoadData();
     }, []);
 
-    // Only enrich images, NOT sentiment - sentiment comes from backend
-    const enrichArticleImages = async (rawArticles: NewsItem[]) => {
-        const enriched = [...rawArticles];
-
-        const enrichSingle = async (article: NewsItem, index: number) => {
-            // Only enrich Image if missing
-            const needsImage = !article.image_url && !article.banner_image;
-
-            if (needsImage && article.url) {
-                try {
-                    const imgRes = await fetch('/api/meta-image', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: article.url })
-                    });
-
-                    if (imgRes.ok) {
-                        const imgData = await imgRes.json();
-                        if (imgData.imageUrl) {
-                            enriched[index] = {
-                                ...article,
-                                image_url: imgData.imageUrl
-                            };
-                        }
-                    }
-                } catch (e) {
-                    console.error('Image enrichment error:', e);
-                }
-            }
-        };
-
-        // Process in chunks
-        const chunkSize = 5;
-        for (let i = 0; i < enriched.length; i += chunkSize) {
-            const chunk = enriched.slice(i, i + chunkSize);
-            await Promise.all(chunk.map((a, idx) => enrichSingle(a, i + idx)));
-            setArticles([...enriched]);
-        }
-    };
+    // NOTE: Images now come from backend - no client-side fetching needed
+    // Backend enriches articles with image_url before returning
 
     useEffect(() => {
         setDisplayCount(ARTICLES_PER_PAGE);
@@ -304,9 +265,6 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-3">
                         <FilterTabs tabs={filterTabs} activeTab={activeFilter} onTabChange={setActiveFilter} />
-                        <button className="p-2.5 rounded-full bg-[#1C1C1E] border border-[#333] hover:bg-[#2a2a2a] transition-colors">
-                            <Bell size={20} className="text-zinc-400" />
-                        </button>
                     </div>
                 </motion.div>
 

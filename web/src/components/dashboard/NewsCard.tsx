@@ -84,9 +84,22 @@ const PLACEHOLDERS = [
     'linear-gradient(135deg, #000046, #1CB5E0)',
 ];
 
+// Get source logo using Clearbit (free) or Google favicon
+const getSourceLogo = (url?: string): string | null => {
+    if (!url) return null;
+    try {
+        const domain = new URL(url).hostname.replace('www.', '');
+        // Use Clearbit Logo API (free, high quality)
+        return `https://logo.clearbit.com/${domain}`;
+    } catch {
+        return null;
+    }
+};
+
 export default function NewsCard({ item, featured = false, onAIClick, isBookmarked = false, onBookmarkToggle }: NewsCardProps) {
     const [bookmarked, setBookmarked] = useState(isBookmarked);
     const [imageError, setImageError] = useState(false);
+    const [logoError, setLogoError] = useState(false);
 
     const handleShare = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -141,6 +154,8 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
     const placeholderBg = PLACEHOLDERS[(item.title?.length || 0) % PLACEHOLDERS.length];
 
     if (featured) {
+        const sourceLogo = getSourceLogo(item.url);
+
         return (
             <article
                 onClick={openUrl}
@@ -156,7 +171,19 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                             onError={() => setImageError(true)}
                         />
                     ) : (
-                        <div className="w-full h-full" style={{ background: placeholderBg }} />
+                        <div className="w-full h-full relative" style={{ background: placeholderBg }}>
+                            {/* Show source logo when no image */}
+                            {sourceLogo && !logoError && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <img
+                                        src={sourceLogo}
+                                        alt={item.source}
+                                        className="w-24 h-24 object-contain opacity-30"
+                                        onError={() => setLogoError(true)}
+                                    />
+                                </div>
+                            )}
+                        </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-[#121212]/80 to-transparent" />
                 </div>
@@ -210,6 +237,8 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
     }
 
     // STANDARD GRID CARD (Perplexity Style)
+    const sourceLogo = getSourceLogo(item.url);
+
     return (
         <article
             onClick={openUrl}
@@ -225,8 +254,18 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                         onError={() => setImageError(true)}
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center" style={{ background: placeholderBg }}>
-                        <span className="text-5xl opacity-20">📰</span>
+                    <div className="w-full h-full flex items-center justify-center relative" style={{ background: placeholderBg }}>
+                        {/* Show source logo when no image */}
+                        {sourceLogo && !logoError ? (
+                            <img
+                                src={sourceLogo}
+                                alt={item.source}
+                                className="w-16 h-16 object-contain opacity-40"
+                                onError={() => setLogoError(true)}
+                            />
+                        ) : (
+                            <span className="text-5xl opacity-20">📰</span>
+                        )}
                     </div>
                 )}
 

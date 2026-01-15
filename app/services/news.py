@@ -29,10 +29,16 @@ class NewsService:
     
     def __init__(self):
         """Initialize the news service with enhanced caching"""
+        # Use Twitterbot User-Agent - most news sites whitelist this
+        # because they want their articles to preview correctly on Twitter
         self.client = httpx.AsyncClient(
             timeout=30.0,
             follow_redirects=True,
-            headers={"User-Agent": "IntegraMarketsNewsBot/1.0"},
+            headers={
+                "User-Agent": "Twitterbot/1.0",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+            },
         )
         
         # Enhanced cache TTL for production (aggressive caching for 100-1000 users)
@@ -217,6 +223,13 @@ class NewsService:
     async def _extract_article_image(self, url: str) -> Optional[str]:
         """
         Extract og:image or other image from article URL.
+        Uses social media crawler approach for maximum compatibility.
+        
+        Priority:
+        1. og:image / og:image:url
+        2. twitter:image / twitter:image:src
+        3. First significant image in content
+        4. Site logo (better than nothing)
         
         Args:
             url: Article URL
@@ -225,44 +238,94 @@ class NewsService:
             Image URL or None if not found
         """
         try:
-            # Quick timeout for image extraction
-            response = await self.client.get(url, timeout=10.0)
+            # Fetch with shorter timeout for image extraction
+            response = await self.client.get(url, timeout=8.0)
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.text, 'html.parser')
+            html = response.text
+            soup = BeautifulSoup(html, 'html.parser')
             
-            # Try og:image first (most reliable)
-            og_image = soup.find('meta', property='og:image')
-            if og_image and og_image.get('content'):
-                return og_image['content']
+            # Priority 1: og:image (most reliable for social previews)
+            for prop in ['og:image', 'og:image:url', 'og:image:secure_url']:
+                og_image = soup.find('meta', property=prop)
+                if og_image and og_image.get('content'):
+                    img_url = og_image['content']
+                    if img_url.startswith('http'):
+                        logger.debug(f"Found {prop} for {url}: {img_url[:50]}...")
+                        return img_url
             
-            # Try twitter:image
-            twitter_image = soup.find('meta', attrs={'name': 'twitter:image'})
-            if twitter_image and twitter_image.get('content'):
-                return twitter_image['content']
+            # Priority 2: twitter:image
+            for name in ['twitter:image', 'twitter:image:src']:
+                twitter_image = soup.find('meta', attrs={'name': name})
+                if twitter_image and twitter_image.get('content'):
+                    img_url = twitter_image['content']
+                    if img_url.startswith('http'):
+                        logger.debug(f"Found {name} for {url}: {img_url[:50]}...")
+                        return img_url
+                # Also check property attribute
+                twitter_image = soup.find('meta', property=name)
+                if twitter_image and twitter_image.get('content'):
+                    img_url = twitter_image['content']
+                    if img_url.startswith('http'):
+                        return img_url
             
-            # Try first large image in article
-            images = soup.find_all('img')
+            # Priority 3: image_src link tag
+            image_link = soup.find('link', rel='image_src')
+            if image_link and image_link.get('href'):
+                return image_link['href']
+            
+            # Priority 4: First significant image in article/main content
+            main_content = soup.find('article') or soup.find('main') or soup.find('div', class_='content') or soup
+            images = main_content.find_all('img', src=True)
+            
             for img in images:
                 src = img.get('src', '')
-                # Filter out small icons, tracking pixels, etc.
-                if src and not any(x in src.lower() for x in ['icon', 'logo', 'avatar', 'pixel', '1x1', 'tracking']):
-                    # Check for width/height attributes indicating a real image
-                    width = img.get('width', '')
-                    height = img.get('height', '')
-                    try:
-                        if (width and int(width) >= 200) or (height and int(height) >= 150):
-                            return src
-                    except (ValueError, TypeError):
-                        pass
-                    # If no size info, still use if it looks like a content image
-                    if any(x in src.lower() for x in ['article', 'content', 'media', 'image', 'photo']):
+                if not src:
+                    continue
+                    
+                # Skip tiny images and trackers
+                if any(x in src.lower() for x in ['1x1', 'pixel', 'spacer', 'blank', 'tracking']):
+                    continue
+                if src.startswith('data:') and len(src) < 1000:
+                    continue
+                    
+                # Make relative URLs absolute
+                if not src.startswith('http'):
+                    from urllib.parse import urljoin
+                    src = urljoin(url, src)
+                
+                # Check if it's a real content image
+                width = img.get('width', '')
+                height = img.get('height', '')
+                try:
+                    w = int(width) if width else 0
+                    h = int(height) if height else 0
+                    if w >= 200 or h >= 150:
+                        logger.debug(f"Found large img for {url}: {src[:50]}...")
                         return src
+                except (ValueError, TypeError):
+                    pass
+                
+                # Accept if path suggests content image
+                if any(x in src.lower() for x in ['article', 'content', 'media', 'image', 'photo', 'news', 'upload']):
+                    return src
             
+            # Priority 5: Site logo (fallback - better than nothing)
+            logo = soup.find('meta', property='og:logo')
+            if logo and logo.get('content'):
+                return logo['content']
+            
+            # Try common logo locations
+            for img in soup.find_all('img', src=True):
+                src = img.get('src', '')
+                if 'logo' in src.lower() and src.startswith('http'):
+                    return src
+            
+            logger.debug(f"No image found for {url}")
             return None
             
         except Exception as e:
-            logger.debug(f"Could not extract image from {url}: {str(e)}")
+            logger.warning(f"Could not extract image from {url}: {str(e)}")
             return None
     
     async def _enrich_articles_with_images(self, articles: List[Dict[str, Any]], max_concurrent: int = 5) -> None:

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Bell } from 'lucide-react';
+import { User } from 'lucide-react';
 
 interface DashboardHeaderProps {
     userEmail?: string;
@@ -24,14 +24,6 @@ export default function DashboardHeader({ userEmail, onProfileClick }: Dashboard
 
                 {/* Right Actions */}
                 <div className="flex items-center gap-4">
-                    {/* Alerts - Links to App Store */}
-                    <Link
-                        href="#get-app"
-                        className="hidden sm:flex items-center gap-2 px-4 py-2 bg-[#2a2a2a] hover:bg-[#3a3a3a] rounded-full transition-colors"
-                    >
-                        <Bell size={16} className="text-[#4a9eff]" />
-                        <span className="text-sm text-zinc-400">Get Alerts</span>
-                    </Link>
 
                     {/* User Email (Desktop) */}
                     <span className="hidden md:block text-sm text-zinc-500 mr-2">
