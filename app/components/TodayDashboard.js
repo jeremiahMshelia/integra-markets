@@ -31,18 +31,68 @@ const TodayDashboard = ({ agentActive }) => {
     try {
       const dashboardData = await dashboardApi.getTodayDashboard(trackedCommodities);
 
-      // Use local sample news data for the Today dashboard cards so
-      // headlines, summaries, sentiment scores, links, and AI overlay
-      // continue to work exactly as before backend news integration.
-      setNewsData(sampleNewsData);
+      // Use real news data from backend with proper field mapping
+      if (dashboardData.news && dashboardData.news.length > 0) {
+        const mappedNews = dashboardData.news.map((article, index) => ({
+          id: index + 1,
+          headline: article.title,
+          summary: article.summary,
+          source: article.source,
+          timeAgo: formatTimePublished(article.time_published || article.published),
+          sentiment: article.sentiment || 'NEUTRAL',
+          sentimentScore: article.sentiment_score || 0.5,
+          category: detectCategory(article.title + ' ' + (article.summary || '')),
+          url: article.url,
+          image_url: article.image_url,
+          // Pass keywords directly for AI Analysis
+          keywords: article.keywords || [],
+        }));
+        setNewsData(mappedNews);
+      } else {
+        // Fallback to sample data if no backend news
+        setNewsData(sampleNewsData);
+      }
       setMarketData(dashboardData);
       setIsLoading(false);
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
+      console.error('[TodayDashboard] Error loading dashboard data:', error);
       // On error, still show sample data so the UI remains useful
       setNewsData(sampleNewsData);
       setIsLoading(false);
     }
+  };
+
+  // Format time_published from backend (format: 20260115T212955) to relative time
+  const formatTimePublished = (timestamp) => {
+    if (!timestamp) return "recently";
+    try {
+      let date;
+      // Handle Alpha Vantage format: 20260115T212955
+      if (timestamp.length >= 15 && timestamp[8] === 'T') {
+        const year = parseInt(timestamp.slice(0, 4));
+        const month = parseInt(timestamp.slice(4, 6)) - 1;
+        const day = parseInt(timestamp.slice(6, 8));
+        const hour = parseInt(timestamp.slice(9, 11));
+        const minute = parseInt(timestamp.slice(11, 13));
+        const second = parseInt(timestamp.slice(13, 15));
+        date = new Date(Date.UTC(year, month, day, hour, minute, second));
+      } else {
+        date = new Date(timestamp);
+      }
+      if (isNaN(date.getTime())) return "recently";
+      return formatTimeAgo(date);
+    } catch (e) {
+      return "recently";
+    }
+  };
+
+  // Detect category from text
+  const detectCategory = (text) => {
+    const s = text.toLowerCase();
+    if (/(oil|crude|brent|wti|opec|petroleum|energy|gas|lng)/.test(s)) return 'energy';
+    if (/(gold|silver|copper|platinum|metals)/.test(s)) return 'metals';
+    if (/(wheat|corn|soybean|agriculture|crop|grain)/.test(s)) return 'agriculture';
+    return 'general';
   };
 
   const formatTimeAgo = (timestamp) => {

@@ -316,11 +316,14 @@ const App = () => {
             bulls,
             bears,
             neuts,
-            keywords: serverAnalysis.keywords || [],
+            keywords: serverAnalysis.keywords || a.keywords || [],
             impact: (serverAnalysis.market_impact || 'MEDIUM').toString().toUpperCase(),
             confidence: Number(serverAnalysis.confidence ?? score),
           };
         }
+
+        // Get keywords directly from backend (top-level) - for AI Analysis overlay
+        const backendKeywords = a.keywords || serverAnalysis?.keywords || [];
 
         return {
           id: String(i + 1),
@@ -332,6 +335,8 @@ const App = () => {
           sentiment,
           sentimentScore,
           analysis,
+          // Include top-level keywords for AIAnalysisOverlay
+          keywords: backendKeywords,
         };
       });
 
@@ -1093,12 +1098,21 @@ const App = () => {
         />
         {showAIAnalysis && selectedArticle && (
           <AIAnalysisOverlay
-            visible={showAIAnalysis}
+            isVisible={showAIAnalysis}
             onClose={() => {
               setShowAIAnalysis(false);
               setSelectedArticle(null);
             }}
-            article={selectedArticle}
+            newsData={{
+              title: selectedArticle.title,
+              summary: selectedArticle.summary || selectedArticle.content || '',
+              source: selectedArticle.source || 'Unknown',
+              timeAgo: selectedArticle.timeAgo || selectedArticle.date || '2 hours ago',
+              sentiment: selectedArticle.sentiment || 'NEUTRAL',
+              sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
+              analysis: selectedArticle.analysis,
+              keywords: selectedArticle.keywords || selectedArticle.analysis?.keywords || [],
+            }}
           />
         )}
       </>
@@ -1257,6 +1271,8 @@ const App = () => {
             sentiment: selectedArticle.sentiment || 'NEUTRAL',
             sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
             analysis: selectedArticle.analysis,
+            // Include keywords from backend for Key Sentiment Drivers
+            keywords: selectedArticle.keywords || selectedArticle.analysis?.keywords || [],
           }}
           isVisible={showAIAnalysis}
           onClose={() => {

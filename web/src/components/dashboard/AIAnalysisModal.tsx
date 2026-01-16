@@ -84,6 +84,81 @@ const calculateSentiment = (sentiment: string, score: number) => {
     }
 };
 
+// Detect commodity from article text
+const detectCommodity = (text: string): string | null => {
+    const s = text.toLowerCase();
+    if (/(brent|wti|crude|oil|opec)/.test(s)) return 'OIL';
+    if (/(nat\s?gas|natural gas|lng)/.test(s)) return 'NAT GAS';
+    if (/(gold|bullion)/.test(s)) return 'GOLD';
+    if (/(wheat|corn|soybean|soybeans)/.test(s)) return 'WHEAT';
+    if (/(silver|copper|platinum)/.test(s)) return 'SILVER';
+    return null;
+};
+
+// Generate trader insights based on sentiment
+const generateTraderInsights = (sentimentProbs: { bullish: number; bearish: number; neutral: number }, keyDrivers: string[]): string[] => {
+    const insights: string[] = [];
+    const { bullish, bearish, neutral } = sentimentProbs;
+    const dominant = Math.max(bullish, bearish, neutral);
+
+    if (bullish === dominant && bullish > 40) {
+        insights.push('Sentiment strongly favors bullish positioning');
+    } else if (bearish === dominant && bearish > 40) {
+        insights.push('Bearish sentiment dominates; exercise caution on long positions');
+    } else if (neutral === dominant && neutral > 50) {
+        insights.push('Market sentiment is neutral/mixed');
+    } else {
+        insights.push('Sentiment is balanced across different perspectives');
+    }
+
+    insights.push('Consider momentum trades with defined risk parameters');
+
+    if (keyDrivers.length > 0) {
+        insights.push(`Key factors: ${keyDrivers.slice(0, 2).join(', ')}`);
+    }
+
+    return insights;
+};
+
+// Generate trade ideas based on sentiment and commodity
+const generateTradeIdeas = (sentimentProbs: { bullish: number; bearish: number }, commodity: string | null): string[] => {
+    const ideas: string[] = [];
+    const { bullish, bearish } = sentimentProbs;
+
+    if (bullish > bearish && bullish > 50) {
+        if (commodity === 'OIL') {
+            ideas.push('Consider long positions in crude oil futures if prices hold above key support');
+            ideas.push('Monitor OPEC statements for confirmation of bullish outlook');
+        } else if (commodity === 'GOLD') {
+            ideas.push('Look for dips to accumulate gold exposure');
+            ideas.push('Track USD weakness for additional upside confirmation');
+        } else if (commodity === 'NAT GAS') {
+            ideas.push('Consider seasonal long positions ahead of heating demand');
+            ideas.push('Monitor storage levels for continued supply tightness');
+        } else {
+            ideas.push('Consider momentum trades with defined risk parameters');
+            ideas.push('Look for breakout confirmations above resistance levels');
+        }
+    } else if (bearish > bullish && bearish > 50) {
+        if (commodity === 'OIL') {
+            ideas.push('Consider shorting crude oil futures if prices fall below support');
+            ideas.push('Watch for oversupply signals from inventory reports');
+        } else if (commodity === 'GOLD') {
+            ideas.push('Consider reducing gold exposure on rallies');
+            ideas.push('Monitor Fed rate path for further downside pressure');
+        } else {
+            ideas.push('Consider protective strategies or reduced exposure');
+            ideas.push('Monitor support levels for potential breakdown');
+        }
+    } else {
+        ideas.push('Wait for clearer directional signals before taking positions');
+        ideas.push('Consider range-bound strategies until breakout occurs');
+    }
+    ideas.push('Watch for seasonal demand patterns in upcoming weeks');
+
+    return ideas;
+};
+
 export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, isBookmarked }: AIAnalysisModalProps) {
     const [userVote, setUserVote] = useState<VoteType>(null);
     const [pollData, setPollData] = useState<PollData>({
@@ -184,6 +259,9 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
     const sentimentProbs = calculateSentiment(article.sentiment || 'neutral', article.sentiment_score || 0.5);
     const keyDrivers = extractKeyDrivers(article);
     const confidence = (article.sentiment_score || 0.5).toFixed(2);
+    const commodity = detectCommodity(article.title + ' ' + (article.summary || ''));
+    const traderInsights = generateTraderInsights(sentimentProbs, keyDrivers);
+    const tradeIdeas = generateTradeIdeas(sentimentProbs, commodity);
 
     // Display poll percentages (use AI sentiment if no votes yet)
     const displayBullish = pollData.total > 0 ? pollData.bullishPercent : sentimentProbs.bullish;
@@ -302,6 +380,38 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                             {parseFloat(confidence) > 0.7 ? 'HIGH' : parseFloat(confidence) > 0.4 ? 'MEDIUM' : 'LOW'}
                                         </span>
                                         <span className="text-zinc-400 text-[13px]">Confidence: {confidence}</span>
+                                    </div>
+                                </div>
+
+                                {/* What this means for Traders */}
+                                <div>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-1 h-4 bg-[#4ECCA3] rounded-full" />
+                                        <h4 className="text-white font-semibold text-sm">What this means for Traders</h4>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {traderInsights.map((insight, idx) => (
+                                            <div key={idx} className="flex items-start gap-2">
+                                                <span className="text-zinc-500">•</span>
+                                                <span className="text-[13px] text-zinc-300">{insight}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Trade Ideas */}
+                                <div>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-1 h-4 bg-[#4ECCA3] rounded-full" />
+                                        <h4 className="text-white font-semibold text-sm">Trade Ideas</h4>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {tradeIdeas.map((idea, idx) => (
+                                            <div key={idx} className="flex items-start gap-2">
+                                                <span className="text-zinc-500">•</span>
+                                                <span className="text-[13px] text-zinc-300">{idea}</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
 

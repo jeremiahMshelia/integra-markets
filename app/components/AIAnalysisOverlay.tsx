@@ -7,12 +7,15 @@ import { sentimentApi } from '../services/api';
 import { supabaseService } from '../services/supabaseService';
 
 interface NewsData {
-    title: string;
+    title?: string;
+    headline?: string;  // TodayDashboard uses headline
     summary: string;
     source: string;
-    timeAgo: string;
+    timeAgo?: string;
     sentiment: string;
     sentimentScore: number;
+    // Backend keywords from API
+    keywords?: { word: string; score?: number; sentiment?: string }[];
     analysis?: {
         bulls: number;
         bears: number;
@@ -24,12 +27,20 @@ interface NewsData {
 }
 
 interface AIAnalysisOverlayProps {
-    newsData: NewsData | null;
+    newsData?: NewsData | null;
+    news?: NewsData | null;  // TodayDashboard uses 'news' prop
     isVisible: boolean;
     onClose: () => void;
 }
 
-const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisible, onClose }) => {
+const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDataProp, news, isVisible, onClose }) => {
+    // Support both prop names
+    const newsData = newsDataProp || news;
+    // Normalize title field (TodayDashboard uses 'headline')
+    const normalizedNewsData = newsData ? {
+        ...newsData,
+        title: newsData.title || newsData.headline || ''
+    } : null;
     const [userVote, setUserVote] = useState<'BULLISH' | 'BEARISH' | 'NEUTRAL' | null>(null);
     const { addBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
     const [analysis, setAnalysis] = useState<{
@@ -204,21 +215,21 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
     const displayNeutral = pollData.total > 0 ? pollData.neutralPercent : (analysis?.finBertSentiment?.neutral || 0);
 
 
-    const isCurrentlyBookmarked = newsData ? isBookmarked(newsData.title) : false;
+    const isCurrentlyBookmarked = newsData ? isBookmarked(newsData.title || '') : false;
 
     const handleBookmarkToggle = async () => {
         if (!newsData || !analysis) return;
 
         try {
             if (isCurrentlyBookmarked) {
-                const bookmarkToRemove = bookmarks.find((b: any) => b.title === newsData.title);
+                const bookmarkToRemove = bookmarks.find((b: any) => b.title === (newsData.title || ''));
                 if (bookmarkToRemove) {
                     await removeBookmark(bookmarkToRemove.id);
                     Alert.alert('Removed', 'Analysis removed from bookmarks');
                 }
             } else {
                 await addBookmark({
-                    title: newsData.title,
+                    title: newsData.title || '',
                     summary: analysis.summary,
                     source: newsData.source,
                     sentiment: analysis.finBertSentiment.bullish > analysis.finBertSentiment.bearish
@@ -498,20 +509,64 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                 };
                 const commodity = guessCommodity(text);
 
+                // Use web-style sentiment calculation for consistent display
+                const calculateSentimentFromScore = (sentiment: string, score: number) => {
+                    const sentimentType = (sentiment || 'NEUTRAL').toUpperCase();
+                    const confidence = Math.min(Math.max(score || 0.5, 0), 1);
+
+                    if (sentimentType === 'BULLISH') {
+                        const bullish = Math.round(confidence * 100);
+                        const remaining = 100 - bullish;
+                        return { bullish, bearish: Math.round(remaining * 0.3), neutral: Math.round(remaining * 0.7) };
+                    } else if (sentimentType === 'BEARISH') {
+                        const bearish = Math.round(confidence * 100);
+                        const remaining = 100 - bearish;
+                        return { bullish: Math.round(remaining * 0.3), bearish, neutral: Math.round(remaining * 0.7) };
+                    } else {
+                        return { bullish: 33, bearish: 33, neutral: 34 };
+                    }
+                };
+
+                // Use backend keywords directly (matching web behavior)
+                const getDirectKeywords = (): { text: string; score: number }[] => {
+                    // First check if article has top-level keywords from backend
+                    if (newsData.keywords && newsData.keywords.length > 0) {
+                        return newsData.keywords.map(k => ({
+                            text: k.word,
+                            score: k.score || 0.9
+                        }));
+                    }
+                    // Fall back to analysis keywords
+                    if (newsData.analysis?.keywords && newsData.analysis.keywords.length > 0) {
+                        return newsData.analysis.keywords.map(k => ({
+                            text: k.word,
+                            score: k.score || 0.9
+                        }));
+                    }
+                    return [];
+                };
+
+                // Get sentiment from backend or calculate
+                const webSentiment = calculateSentimentFromScore(newsData.sentiment, newsData.sentimentScore);
+                const directDrivers = getDirectKeywords();
+
+                // If we have backend/pre-computed data, use it
                 if (newsData.analysis && typeof newsData.analysis.bulls === 'number') {
                     const a = newsData.analysis;
-                    const bulls = Math.max(0, Math.min(100, Math.round(a.bulls)));
-                    const bears = Math.max(0, Math.min(100, Math.round(a.bears)));
-                    const neuts = Math.max(0, Math.min(100, Math.round(a.neuts)));
-                    const drivers = Array.isArray(a.keywords)
-                        ? pickDrivers(
-                            a.keywords
-                                .map((k) => ({ text: String((k as any).word ?? ''), score: Number((k as any).score ?? 0) })),
+                    // Use keywords directly without complex filtering
+                    const drivers = directDrivers.length > 0
+                        ? directDrivers
+                        : pickDrivers(
+                            a.keywords.map((k) => ({ text: String((k as any).word ?? ''), score: Number((k as any).score ?? 0) })),
                             fullText
-                        )
-                        : [];
+                        );
+
+                    // Use web-style sentiment calculation for consistent bars
+                    const bulls = webSentiment.bullish;
+                    const bears = webSentiment.bearish;
+                    const neuts = webSentiment.neutral;
                     const level = a.impact || 'MEDIUM';
-                    const conf = typeof a.confidence === 'number' ? a.confidence : 0.5;
+                    const conf = typeof a.confidence === 'number' ? a.confidence : newsData.sentimentScore;
 
                     const insights: string[] = [];
                     const dominant = Math.max(bulls, bears, neuts);
@@ -532,34 +587,16 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                     });
                     return; // Skip network call to keep numbers identical to the card
                 }
-                const res = commodity
-                    ? await sentimentApi.analyzeEnhanced(text, commodity as any)
-                    : await sentimentApi.analyzeEnhanced(text as any);
-                // Convert from decimal to percentage and ensure they sum to 100
-                let bulls = Math.round(((res?.bullish ?? 0) as number) * 100);
-                let bears = Math.round(((res?.bearish ?? 0) as number) * 100);
-                let neuts = Math.round(((res?.neutral ?? 0) as number) * 100);
 
-                // Normalize to ensure sum is 100
-                const total = bulls + bears + neuts;
-                if (total > 0 && total !== 100) {
-                    const scale = 100 / total;
-                    bulls = Math.round(bulls * scale);
-                    bears = Math.round(bears * scale);
-                    neuts = 100 - bulls - bears; // Ensure exact 100
-                }
-                const drivers = Array.isArray(res?.keywords)
-                    ? pickDrivers(
-                        (res.keywords as any[])
-                            .map((k) => ({
-                                text: (k?.word ?? String(k)).toString(),
-                                score: Number(k?.score ?? 0),
-                            })),
-                        text
-                    )
-                    : [];
-                const level = (res?.impact as string) || 'MEDIUM';
-                const conf = Number(res?.confidence ?? 0.5);
+                // No pre-computed analysis - use web-style calculation based on sentiment/score
+                const bulls = webSentiment.bullish;
+                const bears = webSentiment.bearish;
+                const neuts = webSentiment.neutral;
+
+                // Use direct keywords from backend
+                const drivers = directDrivers;
+                const level = newsData.sentimentScore > 0.7 ? 'HIGH' : newsData.sentimentScore > 0.4 ? 'MEDIUM' : 'LOW';
+                const conf = newsData.sentimentScore || 0.5;
                 const insights: string[] = [];
 
                 // Generate meaningful insights based on the analysis
@@ -793,17 +830,21 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                             </View>
 
                             {/* Key Sentiment Drivers - Now with individual keywords */}
-                            {analysisData.keyDrivers.length > 0 && (
-                                <View style={styles.section}>
-                                    <View style={styles.sectionHeader}>
-                                        <View style={styles.sectionIndicator} />
-                                        <Text style={styles.sectionTitle}>Key Sentiment Drivers</Text>
-                                    </View>
-                                    <View style={styles.driversContainer}>
-                                        {analysisData.keyDrivers.slice(0, 5).map(renderDriverPill)}
-                                    </View>
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
+                                    <View style={styles.sectionIndicator} />
+                                    <Text style={styles.sectionTitle}>Key Sentiment Drivers</Text>
                                 </View>
-                            )}
+                                <View style={styles.driversContainer}>
+                                    {analysisData.keyDrivers.length > 0 ? (
+                                        analysisData.keyDrivers.slice(0, 5).map(renderDriverPill)
+                                    ) : (
+                                        <View style={styles.driverPill}>
+                                            <Text style={styles.driverText}>Market Activity</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
 
                             {/* Market Impact */}
                             <View style={styles.section}>
@@ -812,7 +853,16 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                     <Text style={styles.sectionTitle}>Market Impact</Text>
                                 </View>
                                 <View style={styles.marketImpactContainer}>
-                                    <View style={styles.impactBadge}>
+                                    <View style={[
+                                        styles.impactBadge,
+                                        {
+                                            backgroundColor: analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.bearish
+                                                ? '#4ECCA3'  // Green for bullish
+                                                : analysisData.finBertSentiment.bearish > analysisData.finBertSentiment.bullish
+                                                    ? '#F05454'  // Red for bearish
+                                                    : '#EAB308'  // Yellow for neutral
+                                        }
+                                    ]}>
                                         <Text style={styles.impactLevel}>{analysisData.marketImpact.level}</Text>
                                     </View>
                                     <Text style={styles.confidenceText}>
