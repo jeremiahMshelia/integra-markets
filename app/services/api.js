@@ -9,7 +9,7 @@ const request = async (path, options = {}) => {
 
   try {
     console.log('[api]', (options.method || 'GET'), url);
-  } catch {}
+  } catch { }
 
   const response = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
@@ -18,7 +18,7 @@ const request = async (path, options = {}) => {
 
   if (!response.ok) {
     const message = await response.text();
-    try { console.log('[api] error', response.status, message?.slice?.(0, 200)); } catch {}
+    try { console.log('[api] error', response.status, message?.slice?.(0, 200)); } catch { }
     throw new Error(`API error ${response.status}: ${message}`);
   }
 
@@ -103,6 +103,53 @@ export const marketDataApi = {
   },
 };
 
+// Q-Learning Alert Recommendation API
+export const alertsApi = {
+  /**
+   * Get alert recommendation for an article using Q-learning
+   * @param {string} userId - User ID
+   * @param {Object} article - Article to evaluate
+   * @param {Object} preferences - User preferences
+   * @returns {Promise<Object>} Alert recommendation
+   */
+  async getRecommendation(userId, article, preferences = {}) {
+    return request('/alerts/recommend', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, article, preferences }),
+    });
+  },
+
+  /**
+   * Record user feedback for Q-learning training
+   * @param {string} trackingId - Tracking ID from recommendation
+   * @param {string} feedbackType - 'opened', 'dismissed', 'action_taken'
+   * @returns {Promise<Object>} Feedback result
+   */
+  async recordFeedback(trackingId, feedbackType) {
+    return request('/alerts/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ tracking_id: trackingId, feedback_type: feedbackType }),
+    });
+  },
+
+  /**
+   * Get user-specific alert insights
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} User insights
+   */
+  async getUserInsights(userId) {
+    return request(`/alerts/insights/${userId}`);
+  },
+
+  /**
+   * Get overall Q-learning statistics
+   * @returns {Promise<Object>} Stats
+   */
+  async getStats() {
+    return request('/alerts/stats');
+  },
+};
+
 export const fetchMarketSentiment = sentimentApi.getMarketSentiment;
 export const fetchTopMovers = sentimentApi.getTopMovers;
 export const fetchNewsAnalysis = marketDataApi.getNewsAnalysis;
@@ -131,17 +178,17 @@ export const preprocessNews = async (rawText) => {
   try {
     const response = await fetch(`${API_URL}/preprocess-news`, {
       method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` }),
       },
       body: JSON.stringify({ text: rawText }),
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error('News preprocessing failed:', error);
@@ -191,17 +238,17 @@ export const getSentimentAnalysis = async (text, commodity = null) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
-        text, 
+      body: JSON.stringify({
+        text,
         commodity,
         enhanced: true // Request enhanced analysis
       }),
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error('Sentiment analysis failed:', error);

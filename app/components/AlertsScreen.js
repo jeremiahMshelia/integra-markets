@@ -22,7 +22,8 @@ import {
   checkNotificationPermissions,
   getStoredPushToken,
 } from '../services/notificationService';
-import { dashboardApi } from '../services/api';
+import { dashboardApi, alertsApi } from '../services/api';
+import { supabaseService } from '../services/supabaseService';
 import HollowCircularIcon from './HollowCircularIcon';
 
 // Color Palette
@@ -249,6 +250,8 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
             timeAgo,
             read: false,
             severity: score > 15 ? 'high' : score > 5 ? 'medium' : 'low',
+            // Store original article for Q-learning
+            originalArticle: article,
           };
         })
         // Only show matched articles if user has preferences, otherwise show all
@@ -263,8 +266,53 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
         .sort((a, b) => b.score - a.score)
         .slice(0, 15);
 
-      console.log('[AlertsScreen] Found', newsAlerts.length, 'matching alerts');
-      setAlerts(newsAlerts);
+      // Enhance alerts with Q-learning recommendations
+      const userId = await supabaseService.getCurrentUserId();
+      if (userId) {
+        try {
+          const enhancedAlerts = await Promise.all(
+            newsAlerts.map(async (alert) => {
+              try {
+                const recommendation = await alertsApi.getRecommendation(
+                  userId,
+                  alert.originalArticle,
+                  preferences
+                );
+                return {
+                  ...alert,
+                  qLearning: {
+                    shouldSend: recommendation.send_alert,
+                    priority: recommendation.priority,
+                    confidence: recommendation.confidence,
+                    trackingId: recommendation.tracking_id,
+                  },
+                };
+              } catch (err) {
+                console.log('[Q-Learning] Enhancement failed for alert:', err.message);
+                return alert;
+              }
+            })
+          );
+
+          // Sort by Q-learning priority if available
+          enhancedAlerts.sort((a, b) => {
+            const priorityOrder = { high: 3, medium: 2, low: 1 };
+            const aPriority = priorityOrder[a.qLearning?.priority] || 0;
+            const bPriority = priorityOrder[b.qLearning?.priority] || 0;
+            if (bPriority !== aPriority) return bPriority - aPriority;
+            return b.score - a.score;
+          });
+
+          console.log('[AlertsScreen] Enhanced', enhancedAlerts.length, 'alerts with Q-learning');
+          setAlerts(enhancedAlerts);
+        } catch (err) {
+          console.log('[Q-Learning] Batch enhancement failed:', err.message);
+          setAlerts(newsAlerts);
+        }
+      } else {
+        console.log('[AlertsScreen] Found', newsAlerts.length, 'matching alerts (no user for Q-learning)');
+        setAlerts(newsAlerts);
+      }
     } catch (error) {
       console.error('Error loading alerts:', error);
     } finally {
@@ -306,6 +354,16 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
         a.id === alert.id ? { ...a, read: true } : a
       )
     );
+
+    // Record Q-learning feedback (user opened the alert)
+    if (alert.qLearning?.trackingId) {
+      try {
+        await alertsApi.recordFeedback(alert.qLearning.trackingId, 'opened');
+        console.log('[Q-Learning] Recorded feedback: opened');
+      } catch (err) {
+        console.log('[Q-Learning] Failed to record feedback:', err.message);
+      }
+    }
 
     // Open article if it has a URL
     if (alert.sourceUrl) {

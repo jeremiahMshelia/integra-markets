@@ -1167,22 +1167,37 @@ def _fetch_live_news(commodities, hours=72):
             _write_cache(arts)
             return {"articles": arts}
 
-        # Fall back to cached feed when provider returns empty (e.g., rate limit)
-        cached = _read_cache()
-        if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
-            print(f"[news/cache] returning cached articles: {len(cached['articles'])}")
-            # Re-enrich cached articles if missing images/sentiment
-            _enrich_articles_with_images(cached["articles"])
-            _enrich_articles_with_sentiment(cached["articles"])
-            return cached
-        
-        # Last resort: Try RSS feeds
-        print("[news] Alpha Vantage empty, trying RSS fallback...")
+        # Alpha Vantage failed or rate limited - try RSS FIRST for fresh data
+        print("[news] Alpha Vantage empty/rate-limited, trying RSS for fresh news...")
         rss_articles = _fetch_rss_fallback()
         if rss_articles:
+            print(f"[news/rss] Got {len(rss_articles)} fresh articles from RSS")
             _enrich_articles_with_images(rss_articles)
-            _enrich_articles_with_sentiment(rss_articles)  # Analyze RSS articles
+            _enrich_articles_with_sentiment(rss_articles)
             return {"articles": rss_articles, "source": "rss_fallback"}
+        
+        # Only use cache if RSS also fails - and check staleness
+        cached = _read_cache()
+        if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
+            # Check if cache is less than 24 hours old
+            saved_at = cached.get("saved_at", "")
+            is_stale = True
+            if saved_at:
+                try:
+                    saved_time = datetime.datetime.fromisoformat(saved_at.replace("Z", "+00:00"))
+                    age_hours = (datetime.datetime.now(datetime.timezone.utc) - saved_time).total_seconds() / 3600
+                    is_stale = age_hours > 24
+                    print(f"[news/cache] Cache age: {age_hours:.1f} hours, stale: {is_stale}")
+                except:
+                    pass
+            
+            if not is_stale:
+                print(f"[news/cache] returning cached articles: {len(cached['articles'])}")
+                _enrich_articles_with_images(cached["articles"])
+                _enrich_articles_with_sentiment(cached["articles"])
+                return cached
+            else:
+                print("[news/cache] Cache is stale (>24h), returning empty")
         
         return {"articles": []}
     except Exception as e:
