@@ -15,6 +15,7 @@ interface NewsItem {
     sentiment?: string;
     sentiment_score?: number;
     image_url?: string;
+    keywords?: Array<{ word: string; sentiment?: string; score?: number }>;
 }
 
 interface AIAnalysisModalProps {
@@ -46,13 +47,19 @@ const getSentimentColor = (sentiment: string): string => {
     }
 };
 
-const extractKeyDrivers = (text: string): string[] => {
-    const keywords = ['earnings', 'revenue', 'growth', 'oil', 'gas', 'market', 'investment', 'ipo', 'stock', 'trading', 'crude', 'prices'];
+const extractKeyDrivers = (article: NewsItem): string[] => {
+    // Use backend keywords if available
+    if (article.keywords && article.keywords.length > 0) {
+        return article.keywords.map(k => k.word);
+    }
+
+    // Fallback to text extraction
+    const keywords = ['earnings', 'revenue', 'growth', 'oil', 'gas', 'market', 'investment', 'ipo', 'stock', 'trading', 'crude', 'prices', 'fed', 'rates', 'opec'];
     const found: string[] = [];
-    const lowerText = text.toLowerCase();
+    const text = (article.title + ' ' + (article.summary || '')).toLowerCase();
 
     for (const keyword of keywords) {
-        if (lowerText.includes(keyword) && found.length < 3) {
+        if (text.includes(keyword) && found.length < 3) {
             found.push(keyword.charAt(0).toUpperCase() + keyword.slice(1));
         }
     }
@@ -175,7 +182,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
     if (!article) return null;
 
     const sentimentProbs = calculateSentiment(article.sentiment || 'neutral', article.sentiment_score || 0.5);
-    const keyDrivers = extractKeyDrivers(article.title + ' ' + (article.summary || ''));
+    const keyDrivers = extractKeyDrivers(article);
     const confidence = (article.sentiment_score || 0.5).toFixed(2);
 
     // Display poll percentages (use AI sentiment if no votes yet)

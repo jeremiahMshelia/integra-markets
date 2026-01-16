@@ -29,13 +29,13 @@ class NewsService:
     
     def __init__(self):
         """Initialize the news service with enhanced caching"""
-        # Use Twitterbot User-Agent - most news sites whitelist this
-        # because they want their articles to preview correctly on Twitter
+        # Use Googlebot User-Agent - sites allow this for SEO
+        # TipRanks and similar sites block Twitterbot but allow Googlebot
         self.client = httpx.AsyncClient(
             timeout=30.0,
             follow_redirects=True,
             headers={
-                "User-Agent": "Twitterbot/1.0",
+                "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.5",
             },

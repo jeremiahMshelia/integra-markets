@@ -16,6 +16,7 @@ interface NewsItem {
     sentiment_score?: number;
     image_url?: string;
     banner_image?: string;
+    keywords?: Array<{ word: string; sentiment?: string; score?: number }>;
 }
 
 interface NewsCardProps {

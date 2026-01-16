@@ -637,6 +637,437 @@ def _concept_drivers(text: str, maxn: int = 2):
 
     return drivers[:maxn]
 
+
+# ----- IMAGE EXTRACTION FOR ARTICLE CARDS -----
+_IMAGE_CACHE = {}  # Simple in-memory cache for images
+
+# Different sites block different User-Agents, so we try multiple
+_USER_AGENTS = [
+    # Googlebot - works for TipRanks, Yahoo
+    ("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", "text/html"),
+    # Chrome - works for Investing.com, CNBC
+    ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36", "text/html,application/xhtml+xml"),
+]
+
+def _extract_article_image(url: str) -> Optional[str]:
+    """
+    Extract og:image or other image from article URL.
+    Tries multiple User-Agents for maximum compatibility.
+    """
+    if not url:
+        return None
+    
+    # Check cache first
+    if url in _IMAGE_CACHE:
+        return _IMAGE_CACHE[url]
+    
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return None
+    
+    # Try each User-Agent until one works
+    for ua, accept in _USER_AGENTS:
+        try:
+            response = requests.get(
+                url,
+                timeout=5,
+                headers={
+                    "User-Agent": ua,
+                    "Accept": accept,
+                    "Accept-Language": "en-US,en;q=0.5",
+                },
+                allow_redirects=True
+            )
+            
+            if response.status_code != 200:
+                continue
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Priority 1: og:image
+            for prop in ['og:image', 'og:image:url', 'og:image:secure_url']:
+                og_image = soup.find('meta', property=prop)
+                if og_image and og_image.get('content'):
+                    img_url = og_image['content']
+                    if img_url.startswith('http'):
+                        _IMAGE_CACHE[url] = img_url
+                        print(f"[image] Found {prop} for {url[:40]}...")
+                        return img_url
+            
+            # Priority 2: twitter:image
+            for name in ['twitter:image', 'twitter:image:src']:
+                tw_image = soup.find('meta', attrs={'name': name}) or soup.find('meta', property=name)
+                if tw_image and tw_image.get('content'):
+                    img_url = tw_image['content']
+                    if img_url.startswith('http'):
+                        _IMAGE_CACHE[url] = img_url
+                        return img_url
+            
+            # Priority 3: First significant image in article
+            main = soup.find('article') or soup.find('main') or soup
+            for img in main.find_all('img', src=True)[:10]:
+                src = img.get('src', '')
+                if not src or 'logo' in src.lower() or '1x1' in src or 'pixel' in src:
+                    continue
+                if src.startswith('http') and len(src) < 500:
+                    _IMAGE_CACHE[url] = src
+                    return src
+                    
+        except Exception:
+            continue  # Try next User-Agent
+    
+    # No image found with any User-Agent
+    _IMAGE_CACHE[url] = None
+    return None
+
+
+def _enrich_articles_with_images(articles: list, max_articles: int = 12) -> None:
+    """Enrich first N articles with images. Modifies list in place."""
+    if not articles:
+        return
+    
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    def enrich_one(art):
+        url = art.get('url')
+        if url and not art.get('image_url'):
+            img = _extract_article_image(url)
+            if img:
+                art['image_url'] = img
+    
+    # Process first N articles in parallel (max 4 threads to avoid overwhelming)
+    to_process = articles[:min(max_articles, len(articles))]
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(enrich_one, art) for art in to_process]
+        for f in as_completed(futures, timeout=20):
+            try:
+                f.result()
+            except Exception:
+                pass
+    
+    enriched_count = sum(1 for a in to_process if a.get('image_url'))
+    print(f"[image] Enriched {enriched_count}/{len(to_process)} articles with images")
+
+
+# ----- SENTIMENT ENRICHMENT FOR ARTICLES -----
+def _enrich_articles_with_sentiment(articles: list, max_articles: int = 20) -> None:
+    """
+    Enrich articles with sentiment analysis, drivers, and keywords.
+    Modifies list in place.
+    """
+    if not articles:
+        return
+    
+    for i, art in enumerate(articles[:max_articles]):
+        # Skip if already has sentiment
+        if art.get("sentiment") and art.get("sentiment_score"):
+            continue
+        
+        # Combine title and summary for analysis
+        text = f"{art.get('title', '')} {art.get('summary', '')}"
+        if not text.strip():
+            continue
+        
+        try:
+            # Try FinBERT/GROQ first
+            fin_result = _hf_finbert_infer(text[:500])
+            
+            if fin_result and fin_result.get("label"):
+                label = fin_result["label"].upper()
+                confidence = fin_result.get("confidence", 0.5)
+                
+                # Map to BULLISH/BEARISH/NEUTRAL
+                sentiment_map = {"POSITIVE": "BULLISH", "NEGATIVE": "BEARISH", "NEUTRAL": "NEUTRAL"}
+                art["sentiment"] = sentiment_map.get(label, label)
+                art["sentiment_score"] = round(confidence, 3)
+            else:
+                # Fallback to heuristic
+                heur = _advanced_heuristic_sentiment(text)
+                art["sentiment"] = {"positive": "BULLISH", "negative": "BEARISH"}.get(heur["sentiment"], "NEUTRAL")
+                art["sentiment_score"] = round(heur["confidence"], 3)
+            
+            # Add drivers/keywords
+            drivers = _concept_drivers(text, maxn=2)
+            if drivers:
+                art["keywords"] = drivers
+            
+        except Exception as e:
+            print(f"[sentiment] Error enriching article {i}: {e}")
+            # Set defaults
+            art["sentiment"] = "NEUTRAL"
+            art["sentiment_score"] = 0.5
+    
+    enriched = sum(1 for a in articles[:max_articles] if a.get("sentiment"))
+    print(f"[sentiment] Enriched {enriched}/{min(max_articles, len(articles))} articles with sentiment")
+
+
+
+RSS_SOURCES = {
+    "reuters_commodities": "https://feeds.reuters.com/reuters/commoditiesNews",
+    "reuters_energy": "https://feeds.reuters.com/reuters/energy",
+    "marketwatch": "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
+}
+
+def _fetch_rss_fallback() -> list:
+    """Fetch news from RSS feeds when Alpha Vantage fails/rate limits."""
+    try:
+        import feedparser
+        from datetime import datetime
+        
+        all_articles = []
+        
+        for source_name, url in RSS_SOURCES.items():
+            try:
+                feed = feedparser.parse(url)
+                for entry in feed.entries[:10]:  # Limit per source
+                    # Parse published time
+                    published = ""
+                    try:
+                        if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                            from time import mktime
+                            dt = datetime.fromtimestamp(mktime(entry.published_parsed))
+                            published = dt.strftime("%Y%m%dT%H%M%S")
+                    except:
+                        pass
+                    
+                    # Clean summary
+                    summary = entry.get("summary", "") or entry.get("description", "")
+                    if summary:
+                        try:
+                            from bs4 import BeautifulSoup
+                            summary = BeautifulSoup(summary, "html.parser").get_text(" ", strip=True)
+                        except:
+                            pass
+                    
+                    all_articles.append({
+                        "title": entry.get("title", ""),
+                        "url": entry.get("link", ""),
+                        "source": feed.feed.get("title", source_name),
+                        "summary": summary[:500] if summary else "",
+                        "time_published": published,
+                    })
+            except Exception as e:
+                print(f"[rss] Error fetching {source_name}: {e}")
+                continue
+        
+        # Sort by time (newest first) and limit
+        all_articles.sort(key=lambda x: x.get("time_published", ""), reverse=True)
+        print(f"[rss] Fetched {len(all_articles)} articles from RSS fallback")
+        return all_articles[:20]
+        
+    except ImportError:
+        print("[rss] feedparser not installed, skipping RSS fallback")
+        return []
+    except Exception as e:
+        print(f"[rss] RSS fallback failed: {e}")
+        return []
+
+
+# ----- Q-LEARNING ALERT RECOMMENDATION SYSTEM -----
+import numpy as np
+from collections import deque, defaultdict
+import random
+
+class SimpleQLearningAgent:
+    """
+    Simplified Q-Learning agent for alert personalization.
+    Learns when to send alerts based on user behavior.
+    """
+    
+    def __init__(self):
+        # Q-table: state -> action values
+        self.q_table = defaultdict(lambda: np.zeros(4))  # 4 actions
+        self.learning_rate = 0.1
+        self.gamma = 0.95  # Discount factor
+        self.epsilon = 0.2  # Exploration rate
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.995
+        
+        # User behavior tracking
+        self.user_stats = defaultdict(lambda: {
+            "alerts_sent": 0,
+            "alerts_clicked": 0,
+            "alerts_dismissed": 0,
+            "commodity_clicks": defaultdict(int),
+            "last_alert_time": None
+        })
+        
+        # Action mappings
+        self.actions = {
+            0: {"send": False, "priority": None},
+            1: {"send": True, "priority": "low"},
+            2: {"send": True, "priority": "medium"},
+            3: {"send": True, "priority": "high"},
+        }
+        
+        # Pending outcomes for learning
+        self.pending = {}
+    
+    def _discretize_state(self, features: dict) -> tuple:
+        """Convert continuous features to discrete state."""
+        sentiment = features.get("sentiment", "NEUTRAL")
+        severity = features.get("severity", "low")
+        confidence = features.get("confidence", 0.5)
+        click_rate = features.get("user_click_rate", 0.5)
+        
+        # Discretize
+        sent_bin = {"BULLISH": 0, "NEUTRAL": 1, "BEARISH": 2}.get(sentiment.upper(), 1)
+        sev_bin = {"low": 0, "medium": 1, "high": 2}.get(severity.lower(), 0)
+        conf_bin = 0 if confidence < 0.4 else (1 if confidence < 0.7 else 2)
+        click_bin = 0 if click_rate < 0.3 else (1 if click_rate < 0.6 else 2)
+        
+        return (sent_bin, sev_bin, conf_bin, click_bin)
+    
+    def choose_action(self, state: tuple, training: bool = True) -> int:
+        """Epsilon-greedy action selection."""
+        if training and random.random() < self.epsilon:
+            return random.randint(0, 3)
+        return int(np.argmax(self.q_table[state]))
+    
+    def learn(self, state: tuple, action: int, reward: float, next_state: tuple):
+        """Update Q-value using Q-learning update rule."""
+        old_value = self.q_table[state][action]
+        next_max = np.max(self.q_table[next_state])
+        new_value = old_value + self.learning_rate * (reward + self.gamma * next_max - old_value)
+        self.q_table[state][action] = new_value
+        
+        # Decay epsilon
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+    
+    def calculate_reward(self, action: int, user_feedback: dict, actual_movement: float = 0) -> float:
+        """Calculate reward based on user feedback and market movement."""
+        reward = 0.0
+        action_info = self.actions[action]
+        
+        if action_info["send"]:
+            # We sent an alert
+            if user_feedback.get("clicked"):
+                reward += 5.0
+            if user_feedback.get("helpful"):
+                reward += 8.0
+            if user_feedback.get("dismissed"):
+                reward -= 3.0
+            # Correct prediction bonus
+            if abs(actual_movement) > 1.5:  # Significant move
+                reward += 5.0
+            elif abs(actual_movement) < 0.3:  # No move, probably spam
+                reward -= 2.0
+        else:
+            # We didn't send alert
+            if abs(actual_movement) > 2.0:  # Missed opportunity
+                reward -= 6.0
+            else:  # Good decision not to spam
+                reward += 1.0
+        
+        return reward
+    
+    def get_recommendation(self, article: dict, user_id: str) -> dict:
+        """Get alert recommendation for an article."""
+        # Build features
+        user_data = self.user_stats[user_id]
+        click_rate = user_data["alerts_clicked"] / max(user_data["alerts_sent"], 1)
+        
+        features = {
+            "sentiment": article.get("sentiment", "NEUTRAL"),
+            "severity": "medium",  # Default
+            "confidence": article.get("sentiment_score", 0.5),
+            "user_click_rate": click_rate,
+        }
+        
+        # Check for high-impact keywords
+        text = (article.get("title", "") + " " + article.get("summary", "")).lower()
+        high_impact = ["breaking", "urgent", "surge", "crash", "sanctions", "war", "opec"]
+        if any(kw in text for kw in high_impact):
+            features["severity"] = "high"
+        
+        state = self._discretize_state(features)
+        action = self.choose_action(state, training=False)
+        action_info = self.actions[action]
+        
+        # Track for learning
+        tracking_id = f"{user_id}_{datetime.datetime.now().timestamp()}"
+        self.pending[tracking_id] = {
+            "state": state,
+            "action": action,
+            "user_id": user_id,
+            "article_title": article.get("title", "")[:50]
+        }
+        
+        if action_info["send"]:
+            self.user_stats[user_id]["alerts_sent"] += 1
+        
+        return {
+            "send_alert": action_info["send"],
+            "priority": action_info["priority"],
+            "confidence": features["confidence"],
+            "tracking_id": tracking_id,
+            "message": self._create_alert_message(article, action_info["priority"])
+        }
+    
+    def record_feedback(self, tracking_id: str, feedback_type: str) -> bool:
+        """Record user feedback and learn from it."""
+        if tracking_id not in self.pending:
+            return False
+        
+        pending = self.pending[tracking_id]
+        user_id = pending["user_id"]
+        
+        # Update user stats
+        if feedback_type == "clicked":
+            self.user_stats[user_id]["alerts_clicked"] += 1
+        elif feedback_type == "dismissed":
+            self.user_stats[user_id]["alerts_dismissed"] += 1
+        
+        # Calculate reward and learn
+        feedback = {feedback_type: True}
+        reward = self.calculate_reward(pending["action"], feedback)
+        
+        # Create next state (same features, updated click rate)
+        click_rate = self.user_stats[user_id]["alerts_clicked"] / max(self.user_stats[user_id]["alerts_sent"], 1)
+        next_features = {"sentiment": "NEUTRAL", "severity": "low", "confidence": 0.5, "user_click_rate": click_rate}
+        next_state = self._discretize_state(next_features)
+        
+        self.learn(pending["state"], pending["action"], reward, next_state)
+        
+        del self.pending[tracking_id]
+        return True
+    
+    def _create_alert_message(self, article: dict, priority: str) -> str:
+        """Create user-friendly alert message."""
+        sentiment = article.get("sentiment", "NEUTRAL").upper()
+        title = article.get("title", "Market Update")[:60]
+        
+        icons = {"BULLISH": "🟢", "BEARISH": "🔴", "NEUTRAL": "🟡"}
+        icon = icons.get(sentiment, "📊")
+        
+        priority_text = {"high": "⚡ HIGH", "medium": "📣", "low": "📌"}.get(priority, "")
+        
+        return f"{icon} {priority_text} {title}"
+    
+    def get_user_insights(self, user_id: str) -> dict:
+        """Get insights about user behavior."""
+        stats = self.user_stats[user_id]
+        click_rate = stats["alerts_clicked"] / max(stats["alerts_sent"], 1)
+        
+        return {
+            "user_id": user_id,
+            "total_alerts": stats["alerts_sent"],
+            "clicked": stats["alerts_clicked"],
+            "click_rate": round(click_rate, 2),
+            "top_commodities": dict(sorted(
+                stats["commodity_clicks"].items(),
+                key=lambda x: x[1],
+                reverse=True
+            )[:5])
+        }
+
+
+# Global Q-Learning agent instance
+ql_agent = SimpleQLearningAgent()
+
+
 def _fetch_live_news(commodities, hours=72):
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
     # Simple file cache helpers (defined early so we can use when key is missing)
@@ -722,6 +1153,8 @@ def _fetch_live_news(commodities, hours=72):
             print(f"[news/av] trying topics='{tv}' from={params.get('time_from')}")
             arts = _call_and_parse(params)
             if arts:
+                _enrich_articles_with_images(arts)  # Add images
+                _enrich_articles_with_sentiment(arts)  # Add sentiment analysis
                 _write_cache(arts)
                 return {"articles": arts}
 
@@ -729,6 +1162,8 @@ def _fetch_live_news(commodities, hours=72):
         arts = _call_and_parse(dict(base_params))
         print("[news/av] no topics returned count=", len(arts) if arts else 0)
         if arts:
+            _enrich_articles_with_images(arts)  # Add images
+            _enrich_articles_with_sentiment(arts)  # Add sentiment analysis
             _write_cache(arts)
             return {"articles": arts}
 
@@ -736,7 +1171,19 @@ def _fetch_live_news(commodities, hours=72):
         cached = _read_cache()
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
             print(f"[news/cache] returning cached articles: {len(cached['articles'])}")
+            # Re-enrich cached articles if missing images/sentiment
+            _enrich_articles_with_images(cached["articles"])
+            _enrich_articles_with_sentiment(cached["articles"])
             return cached
+        
+        # Last resort: Try RSS feeds
+        print("[news] Alpha Vantage empty, trying RSS fallback...")
+        rss_articles = _fetch_rss_fallback()
+        if rss_articles:
+            _enrich_articles_with_images(rss_articles)
+            _enrich_articles_with_sentiment(rss_articles)  # Analyze RSS articles
+            return {"articles": rss_articles, "source": "rss_fallback"}
+        
         return {"articles": []}
     except Exception as e:
         print(f"[news] exception: {e}")
@@ -745,6 +1192,14 @@ def _fetch_live_news(commodities, hours=72):
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
             print(f"[news/cache] returning cached articles after exception: {len(cached['articles'])}")
             return cached
+        
+        # Try RSS as last resort on exception
+        rss_articles = _fetch_rss_fallback()
+        if rss_articles:
+            _enrich_articles_with_images(rss_articles)
+            _enrich_articles_with_sentiment(rss_articles)  # Analyze RSS articles
+            return {"articles": rss_articles, "source": "rss_fallback"}
+        
         return {"articles": []}
 
 
@@ -1069,3 +1524,88 @@ def commodity_series(payload: dict = Body(...)):
     points.sort(key=lambda x: x["timestamp"])  # ascending
     print(f"[market/commodities/series] {symbol}({mapped}) points={len(points)}")
     return {"symbol": symbol, "mapped": mapped, "points": points, "source": "alpha_vantage"}
+
+
+# ----- Q-LEARNING ALERT ENDPOINTS -----
+
+class AlertRecommendationRequest(BaseModel):
+    article: dict
+    user_id: str
+
+class AlertFeedbackRequest(BaseModel):
+    tracking_id: str
+    feedback_type: str  # "clicked", "dismissed", "helpful"
+
+@app.post('/api/alerts/recommend')
+def get_alert_recommendation(request: AlertRecommendationRequest):
+    """
+    Get personalized alert recommendation for an article.
+    Uses Q-learning to optimize based on user behavior.
+    """
+    try:
+        result = ql_agent.get_recommendation(request.article, request.user_id)
+        return result
+    except Exception as e:
+        print(f"[alerts/recommend] error: {e}")
+        # Fallback: always recommend for high-confidence articles
+        return {
+            "send_alert": request.article.get("sentiment_score", 0.5) > 0.7,
+            "priority": "medium",
+            "confidence": request.article.get("sentiment_score", 0.5),
+            "tracking_id": None,
+            "message": request.article.get("title", "Market Update")[:60]
+        }
+
+@app.post('/api/alerts/feedback')
+def record_alert_feedback(request: AlertFeedbackRequest):
+    """
+    Record user feedback on an alert for Q-learning.
+    This helps the system learn user preferences.
+    """
+    try:
+        success = ql_agent.record_feedback(request.tracking_id, request.feedback_type)
+        return {
+            "success": success,
+            "message": "Feedback recorded" if success else "Tracking ID not found"
+        }
+    except Exception as e:
+        print(f"[alerts/feedback] error: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.get('/api/alerts/insights/{user_id}')
+def get_user_alert_insights(user_id: str):
+    """
+    Get insights about user's alert preferences and behavior.
+    """
+    try:
+        insights = ql_agent.get_user_insights(user_id)
+        return insights
+    except Exception as e:
+        print(f"[alerts/insights] error: {e}")
+        return {
+            "user_id": user_id,
+            "total_alerts": 0,
+            "clicked": 0,
+            "click_rate": 0.0,
+            "top_commodities": {}
+        }
+
+@app.get('/api/alerts/stats')
+def get_alert_system_stats():
+    """
+    Get overall Q-learning system statistics.
+    """
+    try:
+        total_users = len(ql_agent.user_stats)
+        total_pending = len(ql_agent.pending)
+        q_table_size = len(ql_agent.q_table)
+        
+        return {
+            "active_users": total_users,
+            "pending_outcomes": total_pending,
+            "learned_states": q_table_size,
+            "exploration_rate": round(ql_agent.epsilon, 3),
+            "status": "active"
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
