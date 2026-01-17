@@ -1078,31 +1078,49 @@ def _fetch_live_news(commodities, hours=72):
         "limit": 50,
         "apikey": api_key,
     }
+    
+    # Check cache FIRST - if cached articles exist and are fresh (<6 hours), use them
+    cached = _read_cache()
+    cache_age_hours = 999
+    if cached.get("saved_at"):
+        try:
+            from datetime import timezone
+            saved_time = datetime.datetime.fromisoformat(cached["saved_at"].replace("Z", "+00:00"))
+            cache_age_hours = (datetime.datetime.now(timezone.utc) - saved_time).total_seconds() / 3600
+            print(f"[news/cache] Cache age: {cache_age_hours:.1f} hours, articles: {len(cached.get('articles', []))}")
+        except:
+            pass
+    
+    # If cache is fresh (< 6 hours) and has articles, use it to save API calls
+    if cache_age_hours < 6 and len(cached.get("articles", [])) >= 5:
+        print(f"[news/cache] Using fresh cache ({cache_age_hours:.1f}h old), {len(cached['articles'])} articles")
+        _enrich_articles_with_images(cached["articles"])
+        _enrich_articles_with_sentiment(cached["articles"])
+        return cached
+    
+    # Only try 3 topic variants max (instead of 9) to conserve API quota
     topic_variants = []
     inferred_topics = _commodities_to_topics(commodities)
     if inferred_topics:
         topic_variants.append(",".join(inferred_topics))
-    # Add broad fallbacks with valid topics
     topic_variants.extend([
         "financial_markets",
-        "economy_macro",
-        "economy_monetary",
-        "economy_fiscal",
-        "energy",
-        "manufacturing",
-        "technology",
-        "retail_wholesale",
-        "finance",
+        "energy",  # Good for commodities
     ])
-    # cache helpers already defined above
 
     def _call_and_parse(params: dict):
         r = requests.get("https://www.alphavantage.co/query", params=params, timeout=12)
         r.raise_for_status()
         data = r.json()
-        if data.get("Note") or data.get("Information") or data.get("Error Message"):
-            print("[alpha_vantage] warn:", data.get("Note") or data.get("Information") or data.get("Error Message"))
-            print("[alpha_vantage] params:", {k: v for k, v in params.items() if k != "apikey"})
+        
+        # Check for rate limit BEFORE processing
+        note = data.get("Note") or data.get("Information") or data.get("Error Message")
+        if note:
+            print("[alpha_vantage] warn:", note[:100])
+            # Return None to signal rate limit - don't try more topics
+            if "rate limit" in note.lower() or "thank you for using" in note.lower() or "requests" in note.lower():
+                return None  # Signal rate limit
+        
         feed = data.get("feed") or []
         articles = []
         for item in feed:
@@ -1117,46 +1135,38 @@ def _fetch_live_news(commodities, hours=72):
         return articles
 
     try:
-        # Try each topic variant until we get articles
+        # Try each topic variant until we get articles OR hit rate limit
         for tv in topic_variants:
             params = dict(base_params)
             params["topics"] = tv
-            print(f"[news/av] trying topics='{tv}' from={params.get('time_from')}")
+            print(f"[news/av] trying topics='{tv}'")
             arts = _call_and_parse(params)
+            
+            # If rate limited (None), stop immediately - don't burn more requests
+            if arts is None:
+                print("[news/av] Rate limited - stopping API calls, using cache")
+                break
+                
             if arts:
-                _enrich_articles_with_images(arts)  # Add images
-                _enrich_articles_with_sentiment(arts)  # Add sentiment analysis
+                _enrich_articles_with_images(arts)
+                _enrich_articles_with_sentiment(arts)
                 _write_cache(arts)
                 return {"articles": arts}
 
-        # Try without topics as last resort (provider may default to broad feed)
-        arts = _call_and_parse(dict(base_params))
-        print("[news/av] no topics returned count=", len(arts) if arts else 0)
-        if arts:
-            _enrich_articles_with_images(arts)  # Add images
-            _enrich_articles_with_sentiment(arts)  # Add sentiment analysis
-            _write_cache(arts)
-            return {"articles": arts}
-
-        # Alpha Vantage failed or rate limited - use cached articles
-        cached = _read_cache()
+        # All topics exhausted or rate limited - use cache
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
-            print(f"[news/cache] Alpha Vantage rate-limited, returning cached: {len(cached['articles'])} articles")
-            # Re-enrich cached articles if missing images/sentiment
+            print(f"[news/cache] Returning cached: {len(cached['articles'])} articles")
             _enrich_articles_with_images(cached["articles"])
             _enrich_articles_with_sentiment(cached["articles"])
             return cached
         
-        print("[news] No articles available - Alpha Vantage rate-limited and no cache")
+        print("[news] No articles available - rate-limited and no cache")
         return {"articles": []}
     except Exception as e:
         print(f"[news] exception: {e}")
-        # Fall back to cached feed on any error
-        cached = _read_cache()
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
             print(f"[news/cache] returning cached articles after exception: {len(cached['articles'])}")
             return cached
-        
         return {"articles": []}
 
 
