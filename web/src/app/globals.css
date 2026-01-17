@@ -8,12 +8,35 @@
 :root {
   --background: #000000;
   --foreground: #ffffff;
-  --font-geist-sans: "Geist Sans", sans-serif;
-  /* fallback */
+  --font-geist-sans: "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-geist-mono: "Geist Mono", ui-monospace, monospace;
+}
+
+* {
+  font-family: var(--font-geist-sans);
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
+  font-family: var(--font-geist-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure consistent font across all elements */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-geist-sans);
+}
+
+input,
+button,
+textarea,
+select {
   font-family: var(--font-geist-sans);
 }

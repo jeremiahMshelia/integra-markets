@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
-export default function PrivacySettingsPage() {
+export default function PrivacyPage() {
     return (
         <div className="min-h-screen bg-[#0a0a0a] font-[var(--font-geist-sans)]">
             <header className="sticky top-0 bg-[#0a0a0a]/80 backdrop-blur-md border-b border-white/5 px-4 py-4">
                 <div className="max-w-3xl mx-auto flex items-center gap-4">
-                    <Link href="/dashboard" className="p-2 hover:bg-white/5 rounded-lg transition-colors">
+                    <Link href="/" className="p-2 hover:bg-white/5 rounded-lg transition-colors">
                         <ArrowLeft size={20} className="text-zinc-400" />
                     </Link>
                     <h1 className="text-lg font-semibold text-white">Privacy Policy</h1>
@@ -50,7 +50,30 @@ export default function PrivacySettingsPage() {
                     </section>
 
                     <section>
-                        <h2 className="text-white font-semibold text-xl mb-3">4. Data Security & Protection</h2>
+                        <h2 className="text-white font-semibold text-xl mb-3">4. Data Usage for Service Improvement</h2>
+                        <p className="mb-4">To enhance our financial analysis accuracy and relevance:</p>
+                        <ul className="list-disc list-inside space-y-2 ml-4">
+                            <li>We may analyze anonymized and aggregated usage patterns</li>
+                            <li>Market queries and interactions are obfuscated to remove personal identifiers</li>
+                            <li>Proprietary trading strategies and personal financial data are never stored or shared</li>
+                            <li>Data analysis helps improve news relevance, market sentiment accuracy, and feature development</li>
+                            <li>All personal information and specific trading queries remain confidential</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h2 className="text-white font-semibold text-xl mb-3">5. Third-Party AI Services</h2>
+                        <p className="mb-4">When using BYOK with third-party AI providers:</p>
+                        <ul className="list-disc list-inside space-y-2 ml-4">
+                            <li>OpenAI, Anthropic, Groq: Your queries are subject to their respective privacy policies</li>
+                            <li>We recommend reviewing your chosen AI provider&apos;s data usage policies</li>
+                            <li>Your interactions with AI services are direct and not monitored by Integra Markets</li>
+                            <li>We do not store or access the content of your AI conversations</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h2 className="text-white font-semibold text-xl mb-3">6. Data Security & Protection</h2>
                         <p className="mb-4">We implement robust security measures:</p>
                         <ul className="list-disc list-inside space-y-2 ml-4">
                             <li>End-to-end encryption for sensitive data transmission</li>
@@ -62,7 +85,18 @@ export default function PrivacySettingsPage() {
                     </section>
 
                     <section>
-                        <h2 className="text-white font-semibold text-xl mb-3">5. Your Privacy Rights</h2>
+                        <h2 className="text-white font-semibold text-xl mb-3">7. Information Sharing & Disclosure</h2>
+                        <p className="mb-4">We do not sell, trade, or share your personal information. Limited disclosure may occur:</p>
+                        <ul className="list-disc list-inside space-y-2 ml-4">
+                            <li>When required by law or legal process</li>
+                            <li>To protect our rights or prevent fraud</li>
+                            <li>With your explicit consent</li>
+                            <li>In anonymized, aggregated form for market research (no personal identifiers)</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h2 className="text-white font-semibold text-xl mb-3">8. Your Privacy Rights</h2>
                         <p className="mb-4">You have comprehensive control over your data:</p>
                         <ul className="list-disc list-inside space-y-2 ml-4">
                             <li>Access and review your stored information</li>
@@ -75,7 +109,31 @@ export default function PrivacySettingsPage() {
                     </section>
 
                     <section>
-                        <h2 className="text-white font-semibold text-xl mb-3">6. Contact Information</h2>
+                        <h2 className="text-white font-semibold text-xl mb-3">9. Data Retention</h2>
+                        <ul className="list-disc list-inside space-y-2 ml-4">
+                            <li>Account data: Retained while your account is active</li>
+                            <li>Usage analytics: Anonymized data retained for service improvement</li>
+                            <li>API keys: Deleted immediately upon account deletion or key removal</li>
+                            <li>Cached market data: Automatically expired and refreshed regularly</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h2 className="text-white font-semibold text-xl mb-3">10. International Data Transfers</h2>
+                        <p>
+                            Your data may be processed in different countries where our service providers operate. We ensure appropriate safeguards are in place to protect your information in accordance with this policy.
+                        </p>
+                    </section>
+
+                    <section>
+                        <h2 className="text-white font-semibold text-xl mb-3">11. Changes to This Policy</h2>
+                        <p>
+                            We may update this Privacy Policy periodically. Significant changes will be communicated through the app or via email. Your continued use of Integra Markets constitutes acceptance of any updates.
+                        </p>
+                    </section>
+
+                    <section>
+                        <h2 className="text-white font-semibold text-xl mb-3">12. Contact Information</h2>
                         <p className="mb-4">For privacy-related questions or concerns:</p>
                         <p className="text-white">Email: privacy@integra-markets.com</p>
                         <p className="text-white">Data Protection Officer: dpo@integra-markets.com</p>

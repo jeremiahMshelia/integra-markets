@@ -802,69 +802,8 @@ def _enrich_articles_with_sentiment(articles: list, max_articles: int = 20) -> N
     print(f"[sentiment] Enriched {enriched}/{min(max_articles, len(articles))} articles with sentiment")
 
 
-
-RSS_SOURCES = {
-    "reuters_commodities": "https://feeds.reuters.com/reuters/commoditiesNews",
-    "reuters_energy": "https://feeds.reuters.com/reuters/energy",
-    "marketwatch": "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
-}
-
-def _fetch_rss_fallback() -> list:
-    """Fetch news from RSS feeds when Alpha Vantage fails/rate limits."""
-    try:
-        import feedparser
-        from datetime import datetime
-        
-        all_articles = []
-        
-        for source_name, url in RSS_SOURCES.items():
-            try:
-                feed = feedparser.parse(url)
-                for entry in feed.entries[:10]:  # Limit per source
-                    # Parse published time
-                    published = ""
-                    try:
-                        if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                            from time import mktime
-                            dt = datetime.fromtimestamp(mktime(entry.published_parsed))
-                            published = dt.strftime("%Y%m%dT%H%M%S")
-                    except:
-                        pass
-                    
-                    # Clean summary
-                    summary = entry.get("summary", "") or entry.get("description", "")
-                    if summary:
-                        try:
-                            from bs4 import BeautifulSoup
-                            summary = BeautifulSoup(summary, "html.parser").get_text(" ", strip=True)
-                        except:
-                            pass
-                    
-                    all_articles.append({
-                        "title": entry.get("title", ""),
-                        "url": entry.get("link", ""),
-                        "source": feed.feed.get("title", source_name),
-                        "summary": summary[:500] if summary else "",
-                        "time_published": published,
-                    })
-            except Exception as e:
-                print(f"[rss] Error fetching {source_name}: {e}")
-                continue
-        
-        # Sort by time (newest first) and limit
-        all_articles.sort(key=lambda x: x.get("time_published", ""), reverse=True)
-        print(f"[rss] Fetched {len(all_articles)} articles from RSS fallback")
-        return all_articles[:20]
-        
-    except ImportError:
-        print("[rss] feedparser not installed, skipping RSS fallback")
-        return []
-    except Exception as e:
-        print(f"[rss] RSS fallback failed: {e}")
-        return []
-
-
 # ----- Q-LEARNING ALERT RECOMMENDATION SYSTEM -----
+# (RSS fallback removed - was returning old articles)
 import numpy as np
 from collections import deque, defaultdict
 import random
@@ -1086,12 +1025,44 @@ def _fetch_live_news(commodities, hours=72):
         except Exception:
             return {"articles": []}
 
-    def _write_cache(arts: list):
+    def _write_cache(new_arts: list):
+        """Append new articles to cache, dedupe by URL, keep newest 100."""
         try:
+            existing = _read_cache()
+            existing_articles = existing.get("articles", [])
+            
+            # Create set of existing URLs for deduplication
+            existing_urls = {a.get("url", "") for a in existing_articles}
+            
+            # Add only truly new articles
+            added = 0
+            for art in new_arts:
+                url = art.get("url", "")
+                if url and url not in existing_urls:
+                    existing_articles.append(art)
+                    existing_urls.add(url)
+                    added += 1
+            
+            # Sort by time_published (newest first)
+            def get_time(a):
+                t = a.get("time_published", "") or ""
+                return t
+            existing_articles.sort(key=get_time, reverse=True)
+            
+            # Keep only the newest 100 articles
+            existing_articles = existing_articles[:100]
+            
             with open(_cache_path(), "w", encoding="utf-8") as f:
-                json.dump({"articles": arts, "saved_at": _now_iso()}, f)
-        except Exception:
-            pass
+                json.dump({
+                    "articles": existing_articles, 
+                    "saved_at": _now_iso(),
+                    "total_cached": len(existing_articles),
+                    "added_this_update": added,
+                }, f)
+            
+            print(f"[cache] Added {added} new articles, total cached: {len(existing_articles)}")
+        except Exception as e:
+            print(f"[cache] Write error: {e}")
 
     if not api_key:
         cached = _read_cache()
@@ -1167,38 +1138,16 @@ def _fetch_live_news(commodities, hours=72):
             _write_cache(arts)
             return {"articles": arts}
 
-        # Alpha Vantage failed or rate limited - try RSS FIRST for fresh data
-        print("[news] Alpha Vantage empty/rate-limited, trying RSS for fresh news...")
-        rss_articles = _fetch_rss_fallback()
-        if rss_articles:
-            print(f"[news/rss] Got {len(rss_articles)} fresh articles from RSS")
-            _enrich_articles_with_images(rss_articles)
-            _enrich_articles_with_sentiment(rss_articles)
-            return {"articles": rss_articles, "source": "rss_fallback"}
-        
-        # Only use cache if RSS also fails - and check staleness
+        # Alpha Vantage failed or rate limited - use cached articles
         cached = _read_cache()
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
-            # Check if cache is less than 24 hours old
-            saved_at = cached.get("saved_at", "")
-            is_stale = True
-            if saved_at:
-                try:
-                    saved_time = datetime.datetime.fromisoformat(saved_at.replace("Z", "+00:00"))
-                    age_hours = (datetime.datetime.now(datetime.timezone.utc) - saved_time).total_seconds() / 3600
-                    is_stale = age_hours > 24
-                    print(f"[news/cache] Cache age: {age_hours:.1f} hours, stale: {is_stale}")
-                except:
-                    pass
-            
-            if not is_stale:
-                print(f"[news/cache] returning cached articles: {len(cached['articles'])}")
-                _enrich_articles_with_images(cached["articles"])
-                _enrich_articles_with_sentiment(cached["articles"])
-                return cached
-            else:
-                print("[news/cache] Cache is stale (>24h), returning empty")
+            print(f"[news/cache] Alpha Vantage rate-limited, returning cached: {len(cached['articles'])} articles")
+            # Re-enrich cached articles if missing images/sentiment
+            _enrich_articles_with_images(cached["articles"])
+            _enrich_articles_with_sentiment(cached["articles"])
+            return cached
         
+        print("[news] No articles available - Alpha Vantage rate-limited and no cache")
         return {"articles": []}
     except Exception as e:
         print(f"[news] exception: {e}")
@@ -1207,13 +1156,6 @@ def _fetch_live_news(commodities, hours=72):
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
             print(f"[news/cache] returning cached articles after exception: {len(cached['articles'])}")
             return cached
-        
-        # Try RSS as last resort on exception
-        rss_articles = _fetch_rss_fallback()
-        if rss_articles:
-            _enrich_articles_with_images(rss_articles)
-            _enrich_articles_with_sentiment(rss_articles)  # Analyze RSS articles
-            return {"articles": rss_articles, "source": "rss_fallback"}
         
         return {"articles": []}
 

@@ -54,57 +54,95 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-6 py-12">
-            <div className="w-full max-w-md">
-                {/* Back Link */}
-                <Link
-                    href="/"
-                    className="inline-flex items-center gap-2 text-[#888] hover:text-white transition-colors mb-8"
-                >
-                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M10 12L6 8l4-4" />
-                    </svg>
-                    Back to home
-                </Link>
-
-                {/* Card */}
-                <div className="bg-[#121212] border border-white/10 rounded-2xl p-8">
-                    {/* Logo */}
-                    <div className="flex items-center justify-center gap-3 mb-8">
+        <div className="min-h-screen bg-black flex">
+            {/* Left Side - Form (40%) */}
+            <div className="w-full lg:w-[40%] flex items-center justify-center px-8 py-12">
+                <div className="w-full max-w-sm">
+                    {/* Logo - links to home */}
+                    <Link href="/" className="flex items-center justify-center gap-2.5 mb-10 hover:opacity-80 transition-opacity">
                         <Image
                             src="/logoNew.png"
                             alt="Integra Markets"
-                            width={40}
-                            height={40}
-                            className="w-10 h-10"
+                            width={28}
+                            height={28}
+                            className="w-7 h-7"
                         />
                         <div className="flex items-center">
-                            <span className="text-white font-semibold text-xl">integra</span>
-                            <span className="text-[#888] text-xl ml-1">Markets</span>
+                            <span className="text-white font-semibold text-base">integra</span>
+                            <span className="text-[#888] text-base ml-1">Markets</span>
                         </div>
-                    </div>
+                    </Link>
 
-                    <h1 className="text-2xl font-bold text-white text-center mb-2">Welcome back</h1>
-                    <p className="text-[#888] text-center mb-8">Sign in to your account</p>
+                    <h1 className="text-2xl font-bold text-white mb-1.5 text-center">Welcome back</h1>
+                    <p className="text-[#888] text-sm mb-8 text-center">Sign in to your account</p>
 
                     {/* Error */}
                     {error && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg mb-6 text-sm">
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg mb-5 text-sm">
                             {error}
                         </div>
                     )}
+
+                    {/* Form */}
+                    <form onSubmit={handleEmailLogin} className="space-y-4">
+                        <div>
+                            <label className="block text-[#888] text-xs mb-1.5">Email</label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="you@example.com"
+                                className="w-full bg-[#111] border border-white/10 rounded-lg py-2.5 px-3.5 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#4ecca3]/50 transition-all"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[#888] text-xs mb-1.5">Password</label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                className="w-full bg-[#111] border border-white/10 rounded-lg py-2.5 px-3.5 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#4ecca3]/50 transition-all"
+                                required
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-[#4ECCA3] hover:bg-[#45b393] text-black font-semibold py-2.5 px-4 rounded-lg text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {loading ? (
+                                <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                'Sign In'
+                            )}
+                        </button>
+                    </form>
+
+                    {/* Divider */}
+                    <div className="relative my-5">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-white/10"></div>
+                        </div>
+                        <div className="relative flex justify-center text-xs">
+                            <span className="px-3 bg-black text-[#555]">or</span>
+                        </div>
+                    </div>
 
                     {/* Google Button */}
                     <button
                         onClick={handleGoogleLogin}
                         disabled={googleLoading}
-                        className="w-full btn-secondary mb-6 disabled:opacity-50"
+                        className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 text-white font-medium py-2.5 px-4 rounded-lg text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2.5"
                     >
                         {googleLoading ? (
-                            <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                            <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
                         ) : (
                             <>
-                                <svg width="18" height="18" viewBox="0 0 24 24">
+                                <svg width="16" height="16" viewBox="0 0 24 24">
                                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
                                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
@@ -115,62 +153,26 @@ export default function LoginPage() {
                         )}
                     </button>
 
-                    {/* Divider */}
-                    <div className="relative mb-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-white/10"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm">
-                            <span className="px-4 bg-[#121212] text-[#666]">or continue with email</span>
-                        </div>
-                    </div>
-
-                    {/* Form */}
-                    <form onSubmit={handleEmailLogin} className="space-y-4">
-                        <div>
-                            <label className="block text-[#888] text-sm mb-2">Email</label>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@example.com"
-                                className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg py-3 px-4 text-white placeholder-[#666] focus:outline-none focus:border-[#4ecca3]/50 transition-colors"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-[#888] text-sm mb-2">Password</label>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                                className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg py-3 px-4 text-white placeholder-[#666] focus:outline-none focus:border-[#4ecca3]/50 transition-colors"
-                                required
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full btn-primary disabled:opacity-50"
-                        >
-                            {loading ? (
-                                <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                                'Sign In'
-                            )}
-                        </button>
-                    </form>
-
-                    <p className="text-center text-[#888] mt-6">
-                        Don't have an account?{' '}
-                        <Link href="/signup" className="text-[#4ecca3] hover:text-[#5fd9b3] transition-colors">
+                    <p className="text-center text-[#888] text-sm mt-6">
+                        Don&apos;t have an account?{' '}
+                        <Link href="/signup" className="text-[#4ecca3] hover:text-[#5fd9b3] transition-colors font-medium">
                             Sign up
                         </Link>
                     </p>
                 </div>
+            </div>
+
+            {/* Right Side - Video (60%) */}
+            <div className="hidden lg:flex w-[60%] relative bg-black items-center justify-center">
+                <video
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                >
+                    <source src="/video_ascii_integra.webm" type="video/webm" />
+                </video>
             </div>
         </div>
     );

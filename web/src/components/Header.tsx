@@ -1,11 +1,43 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { createClient } from '@/lib/supabase';
+import { User } from '@supabase/supabase-js';
 
 export default function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [user, setUser] = useState<User | null>(null);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const checkUser = async () => {
+            try {
+                const supabase = createClient();
+                const { data: { user } } = await supabase.auth.getUser();
+                setUser(user);
+
+                if (user) {
+                    // Fetch profile for avatar
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('avatar_url')
+                        .eq('id', user.id)
+                        .single();
+
+                    setAvatarUrl(profile?.avatar_url || null);
+                }
+            } catch (error) {
+                console.error('Error checking user:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        checkUser();
+    }, []);
 
     return (
         <header className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md transition-all duration-300">
@@ -21,7 +53,6 @@ export default function Header() {
                         />
                     </div>
                     <div className="flex items-center">
-                        {/* Larger text size requested */}
                         <span className="text-white font-medium text-[18px] tracking-tight">integra</span>
                         <span className="text-zinc-500 font-medium text-[18px] ml-1.5 group-hover:text-zinc-400 transition-colors">Markets</span>
                     </div>
@@ -40,17 +71,46 @@ export default function Header() {
                     </Link>
                 </nav>
 
-                {/* Auth Buttons */}
-                <div className="hidden md:flex items-center gap-6">
-                    <Link href="/login" className="text-[14px] font-light text-zinc-400 hover:text-white transition-colors">
-                        Sign In
-                    </Link>
-                    <Link
-                        href="/signup"
-                        className="text-[14px] font-medium bg-[#4ECCA3] hover:bg-[#45b393] text-black px-5 py-2.5 rounded-[6px] transition-all"
-                    >
-                        Sign Up
-                    </Link>
+                {/* Auth Section */}
+                <div className="hidden md:flex items-center gap-4">
+                    {loading ? (
+                        <div className="w-8 h-8 rounded-full bg-zinc-800 animate-pulse" />
+                    ) : user ? (
+                        <>
+                            <Link
+                                href="/dashboard"
+                                className="text-[13px] font-medium bg-[#4ECCA3] hover:bg-[#45b393] text-black px-4 py-2 rounded-[6px] transition-all"
+                            >
+                                Dashboard
+                            </Link>
+                            <Link href="/dashboard" className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-[#4ECCA3]/50 hover:border-[#4ECCA3] transition-colors">
+                                {avatarUrl ? (
+                                    <Image
+                                        src={avatarUrl}
+                                        alt="Profile"
+                                        fill
+                                        className="object-cover"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-[#4ECCA3] to-[#30A5FF] flex items-center justify-center text-white font-semibold text-xs">
+                                        {user.email?.charAt(0).toUpperCase() || 'U'}
+                                    </div>
+                                )}
+                            </Link>
+                        </>
+                    ) : (
+                        <>
+                            <Link href="/login" className="text-[14px] font-light text-zinc-400 hover:text-white transition-colors">
+                                Sign In
+                            </Link>
+                            <Link
+                                href="/signup"
+                                className="text-[14px] font-medium bg-[#4ECCA3] hover:bg-[#45b393] text-black px-5 py-2.5 rounded-[6px] transition-all"
+                            >
+                                Sign Up
+                            </Link>
+                        </>
+                    )}
                 </div>
 
                 {/* Mobile Menu Toggle */}
@@ -76,10 +136,18 @@ export default function Header() {
                         <Link href="/#how-it-works" className="text-[15px] font-light text-zinc-400 hover:text-white">How It Works</Link>
                         <Link href="/#about" className="text-[15px] font-light text-zinc-400 hover:text-white">About</Link>
                         <div className="h-px bg-white/10 w-full my-2" />
-                        <Link href="/login" className="text-[15px] font-light text-zinc-400 hover:text-white">Sign In</Link>
-                        <Link href="/signup" className="text-[15px] font-medium bg-[#4ECCA3] text-black px-4 py-3 rounded-[6px] text-center">
-                            Sign Up
-                        </Link>
+                        {user ? (
+                            <Link href="/dashboard" className="text-[15px] font-medium bg-[#4ECCA3] text-black px-4 py-3 rounded-[6px] text-center">
+                                Go to Dashboard
+                            </Link>
+                        ) : (
+                            <>
+                                <Link href="/login" className="text-[15px] font-light text-zinc-400 hover:text-white">Sign In</Link>
+                                <Link href="/signup" className="text-[15px] font-medium bg-[#4ECCA3] text-black px-4 py-3 rounded-[6px] text-center">
+                                    Sign Up
+                                </Link>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
