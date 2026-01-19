@@ -163,22 +163,13 @@ def _sample_news_articles():
         },
     ]
 
-
 def _commodities_to_topics(commodities):
     """Map user commodities to Alpha Vantage NEWS_SENTIMENT valid topics.
-
-    Valid topics include: financial_markets, economy_fiscal, economy_monetary,
-    economy_macro, energy_transportation, finance, life_sciences, manufacturing,
-    retail_wholesale, real_estate, technology, utilities, earnings, mergers_and_acquisitions, ipo.
+    Returns just 1-2 topics to keep API requests simple.
     """
-    defaults = [
-        "financial_markets",
-        "economy_macro",
-        "economy_monetary",
-        "economy_fiscal",
-    ]
     if not commodities:
-        return defaults
+        return ["financial_markets"]  # Just one broad topic
+    
     topics = set()
     for c in commodities:
         u = (c or "").upper()
@@ -188,11 +179,11 @@ def _commodities_to_topics(commodities):
             topics.add("financial_markets")
         elif u in {"WHEAT", "CORN", "SOYBEAN", "SOYBEANS"}:
             topics.add("manufacturing")
+    
     if not topics:
-        topics = set(defaults)
-    # Always include broad market topics for backfill
-    topics.update(defaults)
-    return list(topics)
+        return ["financial_markets"]
+    
+    return list(topics)[:2]  # Max 2 topics
 
 
 def _time_from_param(hours=48):
@@ -1007,6 +998,69 @@ class SimpleQLearningAgent:
 ql_agent = SimpleQLearningAgent()
 
 
+def _fetch_gnews_fallback(commodities: list = None) -> list:
+    """Fetch news from GNews API as fallback when Alpha Vantage fails.
+    GNews has a free tier with 100 requests/day.
+    """
+    try:
+        gnews_key = os.getenv("GNEWS_API_KEY")
+        if not gnews_key:
+            print("[gnews] No GNEWS_API_KEY set, skipping GNews fallback")
+            return []
+        
+        # Build search query from commodities
+        if commodities and len(commodities) > 0:
+            query = " OR ".join(commodities[:3])  # Max 3 terms
+        else:
+            query = "commodities OR oil OR gold OR trading"
+        
+        url = "https://gnews.io/api/v4/search"
+        params = {
+            "q": query,
+            "lang": "en",
+            "country": "us",
+            "max": 20,
+            "apikey": gnews_key,
+        }
+        
+        print(f"[gnews] Fetching news for: {query}")
+        r = requests.get(url, params=params, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        
+        if data.get("errors"):
+            print(f"[gnews] API error: {data.get('errors')}")
+            return []
+        
+        articles = []
+        for item in data.get("articles", []):
+            # Parse published date
+            pub = item.get("publishedAt", "")
+            time_published = ""
+            if pub:
+                try:
+                    dt = datetime.datetime.fromisoformat(pub.replace("Z", "+00:00"))
+                    time_published = dt.strftime("%Y%m%dT%H%M%S")
+                except:
+                    pass
+            
+            articles.append({
+                "title": item.get("title", ""),
+                "summary": item.get("description", ""),
+                "source": item.get("source", {}).get("name", "GNews"),
+                "url": item.get("url", ""),
+                "time_published": time_published,
+                "image_url": item.get("image", ""),
+            })
+        
+        print(f"[gnews] Got {len(articles)} articles")
+        return articles
+        
+    except Exception as e:
+        print(f"[gnews] Error: {e}")
+        return []
+
+
 def _fetch_live_news(commodities, hours=72):
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
     # Simple file cache helpers (defined early so we can use when key is missing)
@@ -1079,21 +1133,29 @@ def _fetch_live_news(commodities, hours=72):
         "apikey": api_key,
     }
     
-    # Check cache FIRST - if cached articles exist and are fresh (<6 hours), use them
+    # Check cache FIRST - if cached articles exist and are reasonably fresh, use them
     cached = _read_cache()
     cache_age_hours = 999
     if cached.get("saved_at"):
         try:
-            from datetime import timezone
-            saved_time = datetime.datetime.fromisoformat(cached["saved_at"].replace("Z", "+00:00"))
-            cache_age_hours = (datetime.datetime.now(timezone.utc) - saved_time).total_seconds() / 3600
+            saved_str = cached["saved_at"]
+            # Handle both with and without timezone
+            if "+" not in saved_str and "Z" not in saved_str:
+                # No timezone - assume local time
+                saved_time = datetime.datetime.fromisoformat(saved_str)
+                now = datetime.datetime.now()
+            else:
+                from datetime import timezone
+                saved_time = datetime.datetime.fromisoformat(saved_str.replace("Z", "+00:00"))
+                now = datetime.datetime.now(timezone.utc)
+            cache_age_hours = (now - saved_time).total_seconds() / 3600
             print(f"[news/cache] Cache age: {cache_age_hours:.1f} hours, articles: {len(cached.get('articles', []))}")
-        except:
-            pass
+        except Exception as e:
+            print(f"[news/cache] Error parsing cache time: {e}")
     
-    # If cache is fresh (< 6 hours) and has articles, use it to save API calls
-    if cache_age_hours < 6 and len(cached.get("articles", [])) >= 5:
-        print(f"[news/cache] Using fresh cache ({cache_age_hours:.1f}h old), {len(cached['articles'])} articles")
+    # Use cache if it has ANY articles and is less than 24 hours old (conserve API quota!)
+    if cache_age_hours < 24 and len(cached.get("articles", [])) > 0:
+        print(f"[news/cache] Using cache ({cache_age_hours:.1f}h old), {len(cached['articles'])} articles - saving API quota")
         _enrich_articles_with_images(cached["articles"])
         _enrich_articles_with_sentiment(cached["articles"])
         return cached
@@ -1124,13 +1186,29 @@ def _fetch_live_news(commodities, hours=72):
         feed = data.get("feed") or []
         articles = []
         for item in feed:
+            # Get built-in image and sentiment from Alpha Vantage
             art = {
                 "title": item.get("title"),
                 "summary": item.get("summary"),
                 "source": item.get("source"),
                 "url": (item.get("url") or item.get("source_url") or ""),
                 "time_published": item.get("time_published"),
+                "image_url": item.get("banner_image"),  # Alpha Vantage provides this!
             }
+            # Use Alpha Vantage's built-in sentiment if available
+            av_sentiment = item.get("overall_sentiment_label")
+            av_score = item.get("overall_sentiment_score")
+            if av_sentiment:
+                # Map Alpha Vantage labels to our format
+                sentiment_map = {
+                    "Bullish": "BULLISH", 
+                    "Somewhat-Bullish": "BULLISH",
+                    "Neutral": "NEUTRAL",
+                    "Somewhat-Bearish": "BEARISH",
+                    "Bearish": "BEARISH"
+                }
+                art["sentiment"] = sentiment_map.get(av_sentiment, "NEUTRAL")
+                art["sentiment_score"] = round(av_score, 3) if av_score else 0.5
             articles.append(art)
         return articles
 
@@ -1153,17 +1231,32 @@ def _fetch_live_news(commodities, hours=72):
                 _write_cache(arts)
                 return {"articles": arts}
 
-        # All topics exhausted or rate limited - use cache
+        # Alpha Vantage exhausted/rate limited - try GNews fallback
+        gnews_arts = _fetch_gnews_fallback(commodities)
+        if gnews_arts:
+            print(f"[news/gnews] Got {len(gnews_arts)} articles from GNews fallback")
+            _enrich_articles_with_images(gnews_arts)
+            _enrich_articles_with_sentiment(gnews_arts)
+            _write_cache(gnews_arts)
+            return {"articles": gnews_arts}
+
+        # All sources exhausted - use cache as last resort
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
-            print(f"[news/cache] Returning cached: {len(cached['articles'])} articles")
+            print(f"[news/cache] All sources exhausted, returning cached: {len(cached['articles'])} articles")
             _enrich_articles_with_images(cached["articles"])
             _enrich_articles_with_sentiment(cached["articles"])
             return cached
         
-        print("[news] No articles available - rate-limited and no cache")
+        print("[news] No articles available from any source")
         return {"articles": []}
     except Exception as e:
         print(f"[news] exception: {e}")
+        # Try GNews on exception too
+        gnews_arts = _fetch_gnews_fallback(commodities)
+        if gnews_arts:
+            _enrich_articles_with_images(gnews_arts)
+            _enrich_articles_with_sentiment(gnews_arts)
+            return {"articles": gnews_arts}
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
             print(f"[news/cache] returning cached articles after exception: {len(cached['articles'])}")
             return cached
@@ -1285,6 +1378,30 @@ def get_news_analysis(hours: int = Query(default=72)):
         return live
     print("[news/analysis] no live articles; returning empty")
     return {"articles": []}
+
+
+@app.post('/api/news/refresh')
+def refresh_news_cache():
+    """Force refresh the news cache - clears cache and fetches fresh articles."""
+    try:
+        # Clear the cache file
+        cache_path = Path(__file__).resolve().parent / "data" / "news_cache.json"
+        if cache_path.exists():
+            cache_path.unlink()
+            print("[news/refresh] Cache cleared")
+        
+        # Fetch fresh news (this will call the API since cache is gone)
+        result = _fetch_live_news([], 72)
+        article_count = len(result.get("articles", []))
+        print(f"[news/refresh] Fetched {article_count} fresh articles")
+        return {
+            "success": True,
+            "message": f"Cache refreshed with {article_count} articles",
+            "articles": result.get("articles", [])
+        }
+    except Exception as e:
+        print(f"[news/refresh] Error: {e}")
+        return {"success": False, "error": str(e)}
 
 
 @app.get('/api/weather/alerts')
