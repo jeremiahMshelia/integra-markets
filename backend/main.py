@@ -1062,7 +1062,12 @@ def _fetch_gnews_fallback(commodities: list = None) -> list:
 
 
 def _fetch_live_news(commodities, hours=72):
-    api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "").strip()  # Strip whitespace!
+    # Debug: Show API key status
+    if api_key:
+        print(f"[news] API key: '{api_key[:4]}...{api_key[-4:]}' len={len(api_key)}")
+    else:
+        print("[news] WARNING: No ALPHA_VANTAGE_API_KEY found!")
     # Simple file cache helpers (defined early so we can use when key is missing)
     def _cache_path():
         p = Path(__file__).resolve().parent / "data"
@@ -1279,6 +1284,51 @@ def read_root():
 @app.api_route('/health', methods=['GET', 'HEAD'])
 def health_check():
     return {"status": "healthy", "supabase_connected": bool(supabase_url and supabase_key)}
+
+
+@app.get('/api/debug/news-test')
+def debug_news_test():
+    """Direct test of Alpha Vantage API - for debugging."""
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "").strip()
+    
+    result = {
+        "api_key_present": bool(api_key),
+        "api_key_length": len(api_key) if api_key else 0,
+        "api_key_preview": f"{api_key[:4]}...{api_key[-4:]}" if api_key and len(api_key) > 8 else "too_short",
+    }
+    
+    if not api_key:
+        result["error"] = "No API key"
+        return result
+    
+    try:
+        params = {
+            "function": "NEWS_SENTIMENT",
+            "topics": "financial_markets",
+            "limit": 5,
+            "apikey": api_key,
+        }
+        r = requests.get("https://www.alphavantage.co/query", params=params, timeout=15)
+        data = r.json()
+        
+        result["http_status"] = r.status_code
+        result["response_keys"] = list(data.keys())
+        
+        if data.get("Note") or data.get("Information") or data.get("Error Message"):
+            result["api_message"] = data.get("Note") or data.get("Information") or data.get("Error Message")
+            result["success"] = False
+        else:
+            feed = data.get("feed", [])
+            result["article_count"] = len(feed)
+            result["success"] = True
+            if feed:
+                result["first_title"] = feed[0].get("title", "")[:60]
+    except Exception as e:
+        result["exception"] = str(e)
+        result["success"] = False
+    
+    return result
+
 
 @app.post('/analyze-sentiment', response_model=SentimentResponse)
 def analyze_sentiment(request: SentimentRequest):
