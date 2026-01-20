@@ -9,12 +9,30 @@ interface NewsItem {
   title: string;
   content?: string;
   summary?: string;
+  fullSummary?: string; // Full untruncated summary for AI overlay
   date?: string;
   source?: string;
   sourceUrl?: string;
   sentiment?: string;
   sentimentScore?: string;
   timeAgo?: string;
+  // Backend preprocessing fields
+  bullish?: number;
+  bearish?: number;
+  neutral?: number;
+  market_impact?: string;
+  trade_ideas?: string[];
+  event_type?: string;
+  severity?: string;
+  keywords?: { word: string; score?: number; sentiment?: string }[];
+  analysis?: {
+    bulls: number;
+    bears: number;
+    neuts: number;
+    keywords: { word: string; score: number }[];
+    impact: string;
+    confidence: number;
+  };
 }
 
 interface NewsCardProps {

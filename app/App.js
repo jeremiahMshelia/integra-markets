@@ -132,7 +132,7 @@ const App = () => {
   const [liveNews, setLiveNews] = useState([]);
   const [allNews, setAllNews] = useState([]);
   const [newsLimit, setNewsLimit] = useState(8);
-  const FEED_CACHE_KEY = '@integra_feed_cache_v2';
+  const FEED_CACHE_KEY = '@integra_feed_cache_v3'; // Bumped to v3 for fullSummary support
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showNotifHelp, setShowNotifHelp] = useState(false);
@@ -325,10 +325,14 @@ const App = () => {
         // Get keywords directly from backend (top-level) - for AI Analysis overlay
         const backendKeywords = a.keywords || serverAnalysis?.keywords || [];
 
+        // Preserve original full summary for overlay
+        const fullSummary = (a.summary || a.description || a.content || '').trim();
+
         return {
           id: String(i + 1),
           title,
           summary,
+          fullSummary, // Full summary for AI Analysis overlay
           source: sourceName,
           sourceUrl,
           timeAgo: formatTimeAgo(a.published || a.time_published),
@@ -337,6 +341,14 @@ const App = () => {
           analysis,
           // Include top-level keywords for AIAnalysisOverlay
           keywords: backendKeywords,
+          // Include backend preprocessing fields for AI Analysis
+          bullish: a.bullish,
+          bearish: a.bearish,
+          neutral: a.neutral,
+          market_impact: a.market_impact,
+          trade_ideas: a.trade_ideas,
+          event_type: a.event_type,
+          severity: a.severity,
         };
       });
 
@@ -1106,12 +1118,21 @@ const App = () => {
             newsData={{
               title: selectedArticle.title,
               summary: selectedArticle.summary || selectedArticle.content || '',
+              fullSummary: selectedArticle.fullSummary, // Full untruncated summary
               source: selectedArticle.source || 'Unknown',
               timeAgo: selectedArticle.timeAgo || selectedArticle.date || '2 hours ago',
               sentiment: selectedArticle.sentiment || 'NEUTRAL',
               sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
               analysis: selectedArticle.analysis,
               keywords: selectedArticle.keywords || selectedArticle.analysis?.keywords || [],
+              // Backend preprocessing fields
+              bullish: selectedArticle.bullish,
+              bearish: selectedArticle.bearish,
+              neutral: selectedArticle.neutral,
+              market_impact: selectedArticle.market_impact,
+              trade_ideas: selectedArticle.trade_ideas,
+              event_type: selectedArticle.event_type,
+              severity: selectedArticle.severity,
             }}
           />
         )}
@@ -1220,7 +1241,7 @@ const App = () => {
 
         <FlatList
           data={getFilteredNews()}
-          keyExtractor={(item) => item.id?.toString()}
+          keyExtractor={(item, index) => `${item.url || item.title || ''}-${index}`}
           renderItem={({ item }) => (
             <NewsCard item={item} onAIClick={handleArticlePress} />
           )}
@@ -1266,13 +1287,21 @@ const App = () => {
           newsData={{
             title: selectedArticle.title,
             summary: selectedArticle.summary || selectedArticle.content || '',
+            fullSummary: selectedArticle.fullSummary, // Full untruncated summary
             source: selectedArticle.source || 'Unknown',
             timeAgo: selectedArticle.timeAgo || selectedArticle.date || '2 hours ago',
             sentiment: selectedArticle.sentiment || 'NEUTRAL',
             sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
             analysis: selectedArticle.analysis,
-            // Include keywords from backend for Key Sentiment Drivers
             keywords: selectedArticle.keywords || selectedArticle.analysis?.keywords || [],
+            // Backend preprocessing fields
+            bullish: selectedArticle.bullish,
+            bearish: selectedArticle.bearish,
+            neutral: selectedArticle.neutral,
+            market_impact: selectedArticle.market_impact,
+            trade_ideas: selectedArticle.trade_ideas,
+            event_type: selectedArticle.event_type,
+            severity: selectedArticle.severity,
           }}
           isVisible={showAIAnalysis}
           onClose={() => {

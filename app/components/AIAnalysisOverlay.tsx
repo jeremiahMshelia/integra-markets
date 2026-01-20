@@ -10,6 +10,7 @@ interface NewsData {
     title?: string;
     headline?: string;  // TodayDashboard uses headline
     summary: string;
+    fullSummary?: string; // Full untruncated summary for overlay
     source: string;
     timeAgo?: string;
     sentiment: string;
@@ -504,7 +505,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                     return ideas;
                 };
                 // If precomputed analysis is available, use it to ensure exact match with the card
-                const fullText = `${newsData.title}. ${newsData.summary || ''}`.trim();
+                const fullText = `${newsData.title}. ${newsData.fullSummary || newsData.summary || ''}`.trim();
                 const text = fullText;
                 const guessCommodity = (t: string): string | null => {
                     const s = t.toLowerCase();
@@ -602,7 +603,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                         : generateTradeIdeas(bulls, bears, commodity);
 
                     setAnalysis({
-                        summary: newsData.summary,
+                        summary: newsData.fullSummary || newsData.summary,
                         finBertSentiment: { bullish: bulls, bearish: bears, neutral: neuts },
                         keyDrivers: drivers,
                         marketImpact: { level, confidence: conf },
@@ -623,6 +624,11 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                 const level = newsData.sentimentScore > 0.7 ? 'HIGH' : newsData.sentimentScore > 0.4 ? 'MEDIUM' : 'LOW';
                 const conf = newsData.sentimentScore || 0.5;
                 const insights: string[] = [];
+
+                // Add market impact from backend FIRST (if available)
+                if (newsData.market_impact) {
+                    insights.push(newsData.market_impact);
+                }
 
                 // Generate meaningful insights based on the analysis
                 const dominant = Math.max(bulls, bears, neuts);
@@ -651,11 +657,6 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                     insights.push('Global harvest reports and weather patterns impact prices');
                 }
 
-                // Add market impact from backend if available
-                if (newsData.market_impact) {
-                    insights.push(newsData.market_impact);
-                }
-
                 if (drivers.length > 0) {
                     const topDrivers = drivers.slice(0, 2).map(d => d.text).join(', ');
                     insights.push(`Key factors: ${topDrivers}`);
@@ -667,7 +668,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                     : generateTradeIdeas(bulls, bears, commodity);
 
                 setAnalysis({
-                    summary: newsData.summary,
+                    summary: newsData.fullSummary || newsData.summary,
                     finBertSentiment: { bullish: bulls, bearish: bears, neutral: neuts },
                     keyDrivers: drivers,
                     marketImpact: { level, confidence: conf },
@@ -701,7 +702,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                 }
 
                 setAnalysis({
-                    summary: newsData.summary,
+                    summary: newsData.fullSummary || newsData.summary,
                     finBertSentiment: { bullish: fallbackBulls, bearish: fallbackBears, neutral: fallbackNeutral },
                     keyDrivers: [],
                     marketImpact: { level: conf > 0.7 ? 'MEDIUM' : 'LOW', confidence: conf },
@@ -742,7 +743,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     };
 
     const analysisData = analysis || {
-        summary: newsData.summary,
+        summary: newsData.fullSummary || newsData.summary,
         finBertSentiment: {
             bullish: (newsData.sentiment?.toUpperCase() === 'BULLISH' ? 60 : 20),
             bearish: (newsData.sentiment?.toUpperCase() === 'BEARISH' ? 60 : 20),
