@@ -16,6 +16,14 @@ interface NewsItem {
     sentiment_score?: number;
     image_url?: string;
     keywords?: Array<{ word: string; sentiment?: string; score?: number }>;
+    // Backend preprocessing data
+    bullish?: number;
+    bearish?: number;
+    neutral?: number;
+    market_impact?: string;
+    trade_ideas?: string[];
+    event_type?: string;
+    severity?: string;
 }
 
 interface AIAnalysisModalProps {
@@ -67,9 +75,19 @@ const extractKeyDrivers = (article: NewsItem): string[] => {
     return found.length > 0 ? found : ['Market Activity'];
 };
 
-const calculateSentiment = (sentiment: string, score: number) => {
-    const sentimentType = sentiment?.toUpperCase() || 'NEUTRAL';
-    const confidence = Math.min(Math.max(score || 0.5, 0), 1);
+const calculateSentiment = (article: NewsItem) => {
+    // Use backend percentages if available
+    if (typeof article.bullish === 'number' && typeof article.bearish === 'number') {
+        return {
+            bullish: article.bullish,
+            bearish: article.bearish,
+            neutral: article.neutral || (100 - article.bullish - article.bearish)
+        };
+    }
+
+    // Fallback: calculate from sentiment label and score
+    const sentimentType = article.sentiment?.toUpperCase() || 'NEUTRAL';
+    const confidence = Math.min(Math.max(article.sentiment_score || 0.5, 0), 1);
 
     if (sentimentType === 'BULLISH') {
         const bullish = Math.round(confidence * 100);
@@ -80,7 +98,7 @@ const calculateSentiment = (sentiment: string, score: number) => {
         const remaining = 100 - bearish;
         return { bullish: Math.round(remaining * 0.3), bearish, neutral: Math.round(remaining * 0.7) };
     } else {
-        return { bullish: 0, bearish: 0, neutral: 100 };
+        return { bullish: 33, bearish: 33, neutral: 34 };
     }
 };
 
@@ -256,12 +274,21 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
 
     if (!article) return null;
 
-    const sentimentProbs = calculateSentiment(article.sentiment || 'neutral', article.sentiment_score || 0.5);
+    const sentimentProbs = calculateSentiment(article);
     const keyDrivers = extractKeyDrivers(article);
     const confidence = (article.sentiment_score || 0.5).toFixed(2);
     const commodity = detectCommodity(article.title + ' ' + (article.summary || ''));
+
+    // Add market_impact to insights if available
     const traderInsights = generateTraderInsights(sentimentProbs, keyDrivers);
-    const tradeIdeas = generateTradeIdeas(sentimentProbs, commodity);
+    if (article.market_impact) {
+        traderInsights.unshift(article.market_impact);
+    }
+
+    // Use backend trade_ideas if available, otherwise generate
+    const tradeIdeas = article.trade_ideas && article.trade_ideas.length > 0
+        ? article.trade_ideas
+        : generateTradeIdeas(sentimentProbs, commodity);
 
     // Display poll percentages (use AI sentiment if no votes yet)
     const displayBullish = pollData.total > 0 ? pollData.bullishPercent : sentimentProbs.bullish;

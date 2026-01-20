@@ -14,6 +14,14 @@ interface NewsData {
     timeAgo?: string;
     sentiment: string;
     sentimentScore: number;
+    // Backend preprocessing data
+    bullish?: number;
+    bearish?: number;
+    neutral?: number;
+    market_impact?: string;
+    trade_ideas?: string[];
+    event_type?: string;
+    severity?: string;
     // Backend keywords from API
     keywords?: { word: string; score?: number; sentiment?: string }[];
     analysis?: {
@@ -509,10 +517,20 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                 };
                 const commodity = guessCommodity(text);
 
-                // Use web-style sentiment calculation for consistent display
-                const calculateSentimentFromScore = (sentiment: string, score: number) => {
-                    const sentimentType = (sentiment || 'NEUTRAL').toUpperCase();
-                    const confidence = Math.min(Math.max(score || 0.5, 0), 1);
+                // Use backend percentages if available, otherwise calculate from score
+                const getSentimentPercentages = () => {
+                    // First check if backend provided percentages directly
+                    if (typeof newsData.bullish === 'number' && typeof newsData.bearish === 'number') {
+                        return {
+                            bullish: newsData.bullish,
+                            bearish: newsData.bearish,
+                            neutral: newsData.neutral || (100 - newsData.bullish - newsData.bearish)
+                        };
+                    }
+
+                    // Fallback: calculate from sentiment label and score
+                    const sentimentType = (newsData.sentiment || 'NEUTRAL').toUpperCase();
+                    const confidence = Math.min(Math.max(newsData.sentimentScore || 0.5, 0), 1);
 
                     if (sentimentType === 'BULLISH') {
                         const bullish = Math.round(confidence * 100);
@@ -526,6 +544,8 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                         return { bullish: 33, bearish: 33, neutral: 34 };
                     }
                 };
+
+                const webSentiment = getSentimentPercentages();
 
                 // Use backend keywords directly (matching web behavior)
                 const getDirectKeywords = (): { text: string; score: number }[] => {
@@ -546,8 +566,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                     return [];
                 };
 
-                // Get sentiment from backend or calculate
-                const webSentiment = calculateSentimentFromScore(newsData.sentiment, newsData.sentimentScore);
+                // Get direct keywords from backend
                 const directDrivers = getDirectKeywords();
 
                 // If we have backend/pre-computed data, use it
@@ -574,7 +593,13 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                     else if (bears === dominant && bears > 40) insights.push('Bearish sentiment dominates; exercise caution on long positions');
                     else if (neuts === dominant && neuts > 50) insights.push('Market sentiment is neutral/mixed');
                     else insights.push('Sentiment is balanced across different perspectives');
+                    if (newsData.market_impact) insights.push(newsData.market_impact);
                     if (drivers.length > 0) insights.push(`Key factors: ${drivers.slice(0, 2).map(d => d.text).join(', ')}`);
+
+                    // Use backend trade_ideas if available
+                    const tradeIdeas = newsData.trade_ideas && newsData.trade_ideas.length > 0
+                        ? newsData.trade_ideas
+                        : generateTradeIdeas(bulls, bears, commodity);
 
                     setAnalysis({
                         summary: newsData.summary,
@@ -582,7 +607,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                         keyDrivers: drivers,
                         marketImpact: { level, confidence: conf },
                         traderInsights: insights,
-                        tradeIdeas: generateTradeIdeas(bulls, bears, commodity),
+                        tradeIdeas: tradeIdeas,
                         totalVotes: Math.floor(Math.random() * 500) + 500, // Simulated total votes
                     });
                     return; // Skip network call to keep numbers identical to the card
@@ -626,17 +651,28 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                     insights.push('Global harvest reports and weather patterns impact prices');
                 }
 
+                // Add market impact from backend if available
+                if (newsData.market_impact) {
+                    insights.push(newsData.market_impact);
+                }
+
                 if (drivers.length > 0) {
                     const topDrivers = drivers.slice(0, 2).map(d => d.text).join(', ');
                     insights.push(`Key factors: ${topDrivers}`);
                 }
+
+                // Use backend trade_ideas if available, otherwise generate
+                const tradeIdeas = newsData.trade_ideas && newsData.trade_ideas.length > 0
+                    ? newsData.trade_ideas
+                    : generateTradeIdeas(bulls, bears, commodity);
+
                 setAnalysis({
                     summary: newsData.summary,
                     finBertSentiment: { bullish: bulls, bearish: bears, neutral: neuts },
                     keyDrivers: drivers,
                     marketImpact: { level, confidence: conf },
                     traderInsights: insights,
-                    tradeIdeas: generateTradeIdeas(bulls, bears, commodity),
+                    tradeIdeas: tradeIdeas,
                     totalVotes: Math.floor(Math.random() * 500) + 500, // Simulated total votes
                 });
             } catch (e) {

@@ -584,6 +584,164 @@ def _extract_keywords_nltk(text: str, topn: int = 2):
     except Exception:
         return []
 
+
+# ----- PREPROCESSING-BASED SENTIMENT (Commodity-Aware) -----
+# Market impact keywords based on commodity trading patterns
+_MARKET_IMPACT_KEYWORDS = {
+    "bullish": [
+        "shortage", "tight supply", "low inventory", "strong demand", "robust consumption",
+        "production cut", "supply disruption", "stockpile drawdown", "deficit", "surge",
+        "rally", "soar", "jump", "gain", "rise", "climb", "higher", "bullish",
+        "outperform", "beat", "exceed", "upgrade"
+    ],
+    "bearish": [
+        "oversupply", "surplus", "weak demand", "high inventory", "stockpile build",
+        "production increase", "demand destruction", "economic slowdown", "glut",
+        "fell", "dropped", "declined", "lower", "crash", "plunge", "tumble",
+        "bearish", "miss", "downgrade", "concern", "risk"
+    ],
+    "neutral": [
+        "stable", "unchanged", "steady", "balanced", "normal", "expected", "planned",
+        "flat", "hold", "maintain", "range-bound"
+    ]
+}
+
+# Event types that typically affect commodity prices
+_EVENT_TYPES = {
+    "supply_shock": [
+        "production cut", "strike", "shutdown", "outage", "maintenance", "accident",
+        "explosion", "fire", "force majeure", "disruption", "facility closure"
+    ],
+    "geopolitical_tension": [
+        "sanctions", "embargo", "trade war", "conflict", "invasion", "military",
+        "diplomatic crisis", "blockade", "tensions", "war", "banned", "restricted"
+    ],
+    "weather_event": [
+        "drought", "flood", "hurricane", "typhoon", "freeze", "heat wave",
+        "monsoon", "El Niño", "La Niña", "severe weather"
+    ],
+    "infrastructure_disruption": [
+        "pipeline", "terminal shutdown", "refinery", "port closure",
+        "shipping disruption", "logistics", "transportation"
+    ]
+}
+
+# Severity indicators
+_HIGH_SEVERITY = ["war", "sanctions", "embargo", "indefinite", "shutdown", "force majeure", "emergency", "crisis"]
+_MEDIUM_SEVERITY = ["disruption", "concern", "tension", "delay", "maintenance", "outage", "strike"]
+
+
+def _preprocess_sentiment(text: str) -> dict:
+    """
+    Commodity-aware sentiment analysis using preprocessing.
+    Returns: {"sentiment": "BULLISH"/"BEARISH"/"NEUTRAL", "sentiment_score": 0.0-1.0, "event_type": str, "severity": str}
+    """
+    if not text or not text.strip():
+        return {
+            "sentiment": "NEUTRAL", "sentiment_score": 0.5, 
+            "event_type": "market_movement", "severity": "low",
+            "bullish": 33, "bearish": 33, "neutral": 34,
+            "market_impact": "Neutral market conditions",
+            "trade_ideas": ["Monitor for clearer directional signals"]
+        }
+    
+    text_lower = text.lower()
+    
+    # 1. Assess market impact
+    bullish_score = sum(1 for kw in _MARKET_IMPACT_KEYWORDS["bullish"] if kw in text_lower)
+    bearish_score = sum(1 for kw in _MARKET_IMPACT_KEYWORDS["bearish"] if kw in text_lower)
+    neutral_score = sum(1 for kw in _MARKET_IMPACT_KEYWORDS["neutral"] if kw in text_lower)
+    
+    # 2. Detect event type (adds context)
+    event_type = "market_movement"
+    for etype, keywords in _EVENT_TYPES.items():
+        if any(kw in text_lower for kw in keywords):
+            event_type = etype
+            # Supply shocks and geopolitical events tend to be bullish for commodities
+            if etype in ["supply_shock", "geopolitical_tension", "infrastructure_disruption"]:
+                bullish_score += 2
+            break
+    
+    # 3. Determine severity
+    severity = "low"
+    if any(term in text_lower for term in _HIGH_SEVERITY):
+        severity = "high"
+    elif any(term in text_lower for term in _MEDIUM_SEVERITY):
+        severity = "medium"
+    
+    # 4. Calculate final sentiment
+    total = bullish_score + bearish_score + neutral_score
+    if total == 0:
+        sentiment = "NEUTRAL"
+        confidence = 0.5
+        bulls_pct, bears_pct, neut_pct = 33, 33, 34
+    elif bullish_score > bearish_score:
+        sentiment = "BULLISH"
+        base_conf = min(0.95, 0.6 + (bullish_score - bearish_score) * 0.05)
+        confidence = base_conf + (0.1 if severity == "high" else 0.05 if severity == "medium" else 0)
+        # Calculate percentages
+        bulls_pct = min(85, int(confidence * 100))
+        remaining = 100 - bulls_pct
+        bears_pct = int(remaining * 0.3)
+        neut_pct = remaining - bears_pct
+    elif bearish_score > bullish_score:
+        sentiment = "BEARISH"
+        base_conf = min(0.95, 0.6 + (bearish_score - bullish_score) * 0.05)
+        confidence = base_conf + (0.1 if severity == "high" else 0.05 if severity == "medium" else 0)
+        bears_pct = min(85, int(confidence * 100))
+        remaining = 100 - bears_pct
+        bulls_pct = int(remaining * 0.3)
+        neut_pct = remaining - bulls_pct
+    else:
+        sentiment = "NEUTRAL"
+        confidence = 0.5 + neutral_score * 0.05
+        bulls_pct, bears_pct, neut_pct = 33, 33, 34
+    
+    confidence = min(0.98, max(0.4, confidence))
+    
+    # 5. Generate market impact explanation
+    event_explanations = {
+        "supply_shock": "Supply disruption typically supports higher prices",
+        "geopolitical_tension": "Geopolitical risk adds uncertainty, often bullish for safe havens",
+        "weather_event": "Weather impact on production could affect supply",
+        "infrastructure_disruption": "Infrastructure issues may limit supply flow",
+        "market_movement": "Standard market price action"
+    }
+    market_impact = event_explanations.get(event_type, "Market conditions evolving")
+    if severity == "high":
+        market_impact = f"High impact: {market_impact}"
+    elif severity == "medium":
+        market_impact = f"Moderate: {market_impact}"
+    
+    # 6. Generate trade ideas based on event + sentiment
+    trade_ideas = []
+    if sentiment == "BULLISH":
+        if event_type == "supply_shock":
+            trade_ideas = ["Consider long positions on pullbacks", "Monitor supply data for confirmation"]
+        elif event_type == "geopolitical_tension":
+            trade_ideas = ["Safe haven assets may benefit", "Watch for volatility spikes"]
+        else:
+            trade_ideas = ["Look for momentum continuation", "Set stops below recent support"]
+    elif sentiment == "BEARISH":
+        if event_type in ["supply_shock", "infrastructure_disruption"]:
+            trade_ideas = ["Bearish but supply risks remain", "Consider hedging downside"]
+        else:
+            trade_ideas = ["Consider reducing exposure on rallies", "Monitor support levels"]
+    else:
+        trade_ideas = ["Wait for clearer signals", "Range-bound strategies may work"]
+    
+    return {
+        "sentiment": sentiment,
+        "sentiment_score": round(confidence, 3),
+        "event_type": event_type,
+        "severity": severity,
+        "bullish": bulls_pct,
+        "bearish": bears_pct,
+        "neutral": neut_pct,
+        "market_impact": market_impact,
+        "trade_ideas": trade_ideas
+    }
+
 def _concept_drivers(text: str, maxn: int = 2):
     """Generate 1–2 clean, human-friendly drivers by pattern matching common finance scenarios."""
     if not text:
@@ -743,14 +901,15 @@ def _enrich_articles_with_images(articles: list, max_articles: int = 12) -> None
 # ----- SENTIMENT ENRICHMENT FOR ARTICLES -----
 def _enrich_articles_with_sentiment(articles: list, max_articles: int = 20) -> None:
     """
-    Enrich articles with sentiment analysis, drivers, and keywords.
+    Enrich articles with sentiment analysis using local preprocessing.
+    Uses commodity-aware event detection for accurate financial sentiment.
     Modifies list in place.
     """
     if not articles:
         return
     
     for i, art in enumerate(articles[:max_articles]):
-        # Skip if already has sentiment
+        # Skip if already has sentiment from Alpha Vantage
         if art.get("sentiment") and art.get("sentiment_score"):
             continue
         
@@ -760,36 +919,38 @@ def _enrich_articles_with_sentiment(articles: list, max_articles: int = 20) -> N
             continue
         
         try:
-            # Try FinBERT/GROQ first
-            fin_result = _hf_finbert_infer(text[:500])
+            # Use preprocessing-based sentiment (local, no API)
+            result = _preprocess_sentiment(text)
             
-            if fin_result and fin_result.get("label"):
-                label = fin_result["label"].upper()
-                confidence = fin_result.get("confidence", 0.5)
-                
-                # Map to BULLISH/BEARISH/NEUTRAL
-                sentiment_map = {"POSITIVE": "BULLISH", "NEGATIVE": "BEARISH", "NEUTRAL": "NEUTRAL"}
-                art["sentiment"] = sentiment_map.get(label, label)
-                art["sentiment_score"] = round(confidence, 3)
-            else:
-                # Fallback to heuristic
-                heur = _advanced_heuristic_sentiment(text)
-                art["sentiment"] = {"positive": "BULLISH", "negative": "BEARISH"}.get(heur["sentiment"], "NEUTRAL")
-                art["sentiment_score"] = round(heur["confidence"], 3)
+            art["sentiment"] = result["sentiment"]
+            art["sentiment_score"] = result["sentiment_score"]
+            art["event_type"] = result.get("event_type")
+            art["severity"] = result.get("severity")
             
-            # Add drivers/keywords
+            # Add sentiment bar percentages
+            art["bullish"] = result.get("bullish", 33)
+            art["bearish"] = result.get("bearish", 33)
+            art["neutral"] = result.get("neutral", 34)
+            
+            # Add market impact and trade ideas
+            art["market_impact"] = result.get("market_impact", "")
+            art["trade_ideas"] = result.get("trade_ideas", [])
+            
+            # Add drivers/keywords (kept as is)
             drivers = _concept_drivers(text, maxn=2)
             if drivers:
                 art["keywords"] = drivers
             
         except Exception as e:
             print(f"[sentiment] Error enriching article {i}: {e}")
-            # Set defaults
             art["sentiment"] = "NEUTRAL"
             art["sentiment_score"] = 0.5
+            art["bullish"] = 33
+            art["bearish"] = 33
+            art["neutral"] = 34
     
     enriched = sum(1 for a in articles[:max_articles] if a.get("sentiment"))
-    print(f"[sentiment] Enriched {enriched}/{min(max_articles, len(articles))} articles with sentiment")
+    print(f"[sentiment] Enriched {enriched}/{min(max_articles, len(articles))} articles with preprocessing")
 
 
 # ----- Q-LEARNING ALERT RECOMMENDATION SYSTEM -----
@@ -1153,7 +1314,7 @@ def _fetch_live_news(commodities, hours=72):
             print(f"[news/cache] Error parsing cache time: {e}")
     
     # Use cache if it has ANY articles and is less than 24 hours old (conserve API quota!)
-    if cache_age_hours < 24 and len(cached.get("articles", [])) > 0:
+    if cache_age_hours < 12 and len(cached.get("articles", [])) > 0:
         print(f"[news/cache] Using cache ({cache_age_hours:.1f}h old), {len(cached['articles'])} articles - saving API quota")
         _enrich_articles_with_images(cached["articles"])
         _enrich_articles_with_sentiment(cached["articles"])
@@ -1185,7 +1346,7 @@ def _fetch_live_news(commodities, hours=72):
         feed = data.get("feed") or []
         articles = []
         for item in feed:
-            # Get built-in image and sentiment from Alpha Vantage
+            # Get built-in image from Alpha Vantage (sentiment will come from preprocessing)
             art = {
                 "title": item.get("title"),
                 "summary": item.get("summary"),
@@ -1194,20 +1355,7 @@ def _fetch_live_news(commodities, hours=72):
                 "time_published": item.get("time_published"),
                 "image_url": item.get("banner_image"),  # Alpha Vantage provides this!
             }
-            # Use Alpha Vantage's built-in sentiment if available
-            av_sentiment = item.get("overall_sentiment_label")
-            av_score = item.get("overall_sentiment_score")
-            if av_sentiment:
-                # Map Alpha Vantage labels to our format
-                sentiment_map = {
-                    "Bullish": "BULLISH", 
-                    "Somewhat-Bullish": "BULLISH",
-                    "Neutral": "NEUTRAL",
-                    "Somewhat-Bearish": "BEARISH",
-                    "Bearish": "BEARISH"
-                }
-                art["sentiment"] = sentiment_map.get(av_sentiment, "NEUTRAL")
-                art["sentiment_score"] = round(av_score, 3) if av_score else 0.5
+            # Sentiment will be added by _enrich_articles_with_sentiment using our preprocessing
             articles.append(art)
         return articles
 
