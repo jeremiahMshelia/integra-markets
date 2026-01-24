@@ -20,7 +20,7 @@ interface UserProfile {
     role?: string;
     avatar_url?: string;
     market_focus?: string[];
-    experience?: string;
+    experience_level?: string; // Use correct Supabase column name
 }
 
 interface ProfileSidebarProps {
@@ -43,6 +43,7 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [avatarUrl, setAvatarUrl] = useState<string>('');
     const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+    const [commoditiesCount, setCommoditiesCount] = useState<number>(0);
     const [isUploading, setIsUploading] = useState(false);
     const [showAllBookmarks, setShowAllBookmarks] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +52,7 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
         if (isOpen) {
             loadProfile();
             loadBookmarks();
+            loadAlertPreferences();
         }
     }, [isOpen]);
 
@@ -73,6 +75,26 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
             }
         } catch (error) {
             console.error('Error loading profile:', error);
+        }
+    };
+
+    const loadAlertPreferences = async () => {
+        try {
+            const supabase = createClient();
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) return;
+
+            const { data } = await supabase
+                .from('alert_preferences')
+                .select('commodities')
+                .eq('user_id', authUser.id)
+                .single();
+
+            if (data?.commodities) {
+                setCommoditiesCount(data.commodities.length);
+            }
+        } catch (e) {
+            console.error('Error loading alert preferences:', e);
         }
     };
 
@@ -193,8 +215,8 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-3 gap-4 text-center pt-4 border-t border-[#333]">
-                                    <div><p className="text-white font-semibold text-lg">{profile?.market_focus?.length || 3}</p><p className="text-xs text-zinc-500">Market Focus</p></div>
-                                    <div><p className="text-white font-semibold text-lg">{profile?.experience || '3-5'}</p><p className="text-xs text-zinc-500">Experience</p></div>
+                                    <div><p className="text-white font-semibold text-lg">{commoditiesCount}</p><p className="text-xs text-zinc-500">Commodities</p></div>
+                                    <div><p className="text-white font-semibold text-lg">{profile?.experience_level || '3-5'}</p><p className="text-xs text-zinc-500">Experience</p></div>
                                     <div><p className="text-white font-semibold text-lg">{bookmarks.length}</p><p className="text-xs text-zinc-500">Bookmarks</p></div>
                                 </div>
                             </div>

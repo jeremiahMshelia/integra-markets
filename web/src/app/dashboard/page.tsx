@@ -256,14 +256,22 @@ export default function Dashboard() {
         <div className="min-h-screen bg-[#121212]">
             <DashboardHeader userEmail={user?.email} onProfileClick={() => setIsProfileOpen(true)} />
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-                {/* Page Title & Controls */}
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white mb-1">Today</h1>
-                        <p className="text-zinc-400 text-sm">Your AI-curated market intelligence feed</p>
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                {/* Page Title & Controls - Stacked on mobile */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8">
+                    {/* Title Section */}
+                    <div className="mb-4 sm:mb-0 sm:flex sm:items-center sm:justify-between">
+                        <div className="mb-4 sm:mb-0">
+                            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Today</h1>
+                            <p className="text-zinc-400 text-sm">Your AI-curated market intelligence feed</p>
+                        </div>
+                        {/* Filter Tabs - Hidden on mobile, shown on desktop */}
+                        <div className="hidden sm:flex items-center gap-3">
+                            <FilterTabs tabs={filterTabs} activeTab={activeFilter} onTabChange={setActiveFilter} />
+                        </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    {/* Filter Tabs - Full width row on mobile */}
+                    <div className="sm:hidden">
                         <FilterTabs tabs={filterTabs} activeTab={activeFilter} onTabChange={setActiveFilter} />
                     </div>
                 </motion.div>
@@ -278,10 +286,10 @@ export default function Dashboard() {
                 )}
 
                 {/* News Feed Grid System */}
-                <div className="space-y-8">
-                    {/* Featured Article (First Item) */}
+                <div className="space-y-6 sm:space-y-8">
+                    {/* Featured Article - Only featured on desktop, regular on mobile */}
                     {displayedArticles.length > 0 && (
-                        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}>
+                        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }} className="hidden sm:block">
                             <NewsCard
                                 featured={true}
                                 item={displayedArticles[0]}
@@ -292,35 +300,50 @@ export default function Dashboard() {
                         </motion.div>
                     )}
 
-                    {/* Grid for remaining articles (2 Columns) */}
-                    {displayedArticles.length > 1 && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {displayedArticles.slice(1).map((article, index) => (
-                                <motion.div
-                                    key={article.url + index}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: index * 0.05 }}
-                                >
-                                    <NewsCard
-                                        item={article}
-                                        onAIClick={handleAIClick}
-                                        isBookmarked={bookmarkedUrls.has(article.url || article.title)}
-                                        onBookmarkToggle={handleBookmarkToggle}
-                                    />
-                                </motion.div>
-                            ))}
-                        </div>
-                    )}
+                    {/* All cards stacked on mobile (including first), grid on desktop */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                        {/* On mobile: show ALL articles. On desktop: skip first (featured) */}
+                        {displayedArticles.map((article, index) => (
+                            <motion.div
+                                key={article.url + index}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                className={index === 0 ? 'sm:hidden' : ''}
+                            >
+                                <NewsCard
+                                    item={article}
+                                    onAIClick={handleAIClick}
+                                    isBookmarked={bookmarkedUrls.has(article.url || article.title)}
+                                    onBookmarkToggle={handleBookmarkToggle}
+                                />
+                            </motion.div>
+                        ))}
+                    </div>
                 </div>
 
                 {hasMore && (
                     <div className="text-center py-12">
-                        <button onClick={handleLoadMore} disabled={loadingMore} className="group relative px-8 py-3 bg-[#1C1C1E] border border-[#333] rounded-full overflow-hidden hover:border-[#4ECCA3]/50 transition-colors disabled:opacity-50">
+                        <button
+                            onClick={handleLoadMore}
+                            disabled={loadingMore}
+                            className={`group relative px-8 py-3 bg-[#1C1C1E] border rounded-full overflow-hidden transition-all ${loadingMore
+                                    ? 'border-[#4ECCA3] bg-[#4ECCA3]/10'
+                                    : 'border-[#333] hover:border-[#4ECCA3]/50'
+                                }`}
+                        >
                             <span className="relative z-10 flex items-center gap-2 text-white font-medium">
-                                {loadingMore ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> :
-                                    (<><span>Load More Stories</span><span className="text-zinc-500 text-xs">({filteredArticles.length - displayCount} remaining)</span></>)
-                                }
+                                {loadingMore ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-[#4ECCA3] border-t-transparent rounded-full animate-spin" />
+                                        <span className="text-[#4ECCA3]">Loading...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>Load More Stories</span>
+                                        <span className="text-zinc-500 text-xs">({filteredArticles.length - displayCount} remaining)</span>
+                                    </>
+                                )}
                             </span>
                         </button>
                     </div>

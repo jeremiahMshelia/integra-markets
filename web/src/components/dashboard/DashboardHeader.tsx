@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { User } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase';
 
 interface DashboardHeaderProps {
     userEmail?: string;
@@ -10,6 +11,38 @@ interface DashboardHeaderProps {
 }
 
 export default function DashboardHeader({ userEmail, onProfileClick }: DashboardHeaderProps) {
+    const [username, setUsername] = useState<string>('');
+    const [avatarUrl, setAvatarUrl] = useState<string>('');
+
+    useEffect(() => {
+        loadUserProfile();
+    }, []);
+
+    const loadUserProfile = async () => {
+        try {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            // Set username from email first
+            setUsername(user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'there');
+
+            // Try to get profile for avatar and username
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('username, avatar_url')
+                .eq('id', user.id)
+                .single();
+
+            if (profile) {
+                if (profile.username) setUsername(profile.username);
+                if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
+            }
+        } catch (error) {
+            console.error('Error loading profile:', error);
+        }
+    };
+
     return (
         <header className="sticky top-0 z-50 bg-[#121212]/95 backdrop-blur-md border-b border-[#2a2a2a]">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -24,18 +57,23 @@ export default function DashboardHeader({ userEmail, onProfileClick }: Dashboard
 
                 {/* Right Actions */}
                 <div className="flex items-center gap-4">
-
-                    {/* User Email (Desktop) */}
-                    <span className="hidden md:block text-sm text-zinc-500 mr-2">
-                        {userEmail}
+                    {/* Greeting (Desktop) */}
+                    <span className="hidden md:block text-sm text-zinc-400">
+                        Hi, <span className="text-white font-medium ml-0.5">{username}</span>
                     </span>
 
-                    {/* Profile Button */}
+                    {/* Profile Button with Avatar */}
                     <button
                         onClick={onProfileClick}
-                        className="w-10 h-10 rounded-full bg-[#2a2a2a] hover:bg-[#3a3a3a] flex items-center justify-center transition-colors"
+                        className="w-8 h-8 rounded-full bg-[#4ECCA3] ring-2 ring-[#4ECCA3]/40 hover:ring-[#4ECCA3]/70 flex items-center justify-center transition-all overflow-hidden cursor-pointer"
                     >
-                        <User size={20} className="text-zinc-400" />
+                        {avatarUrl ? (
+                            <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                            <span className="text-[#121212] font-semibold text-xs">
+                                {username.charAt(0).toUpperCase()}
+                            </span>
+                        )}
                     </button>
                 </div>
             </div>

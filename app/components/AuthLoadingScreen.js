@@ -176,16 +176,19 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     const isReturningUser = onboardingCompleted === 'true';
 
                     // Also check Supabase profile for onboarding status
-                    let hasSupabaseProfile = false;
+                    // Only skip if user has actual onboarding fields (role OR experience), not just full_name
+                    let hasCompletedOnboarding = false;
                     try {
                         const { supabaseService } = require('../services/supabaseService');
                         const profile = await supabaseService.getProfile(result.user?.id);
-                        hasSupabaseProfile = profile && (profile.role || profile.experience_level || profile.full_name);
+                        // Only consider onboarding complete if role OR experience_level is set
+                        // full_name alone doesn't count as completing onboarding
+                        hasCompletedOnboarding = profile && (profile.role || profile.experience_level);
                     } catch (e) {
                         console.log('Could not check Supabase profile:', e);
                     }
 
-                    const shouldSkipOnboarding = isReturningUser || hasSupabaseProfile;
+                    const shouldSkipOnboarding = isReturningUser || hasCompletedOnboarding;
 
                     const userData = {
                         id: result.user?.id || Date.now().toString(),

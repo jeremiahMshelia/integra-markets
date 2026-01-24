@@ -29,9 +29,9 @@ export default function FilterTabs({ tabs, activeTab, onTabChange }: FilterTabsP
                     <button
                         key={tab}
                         onClick={() => onTabChange(tab)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${isActive
-                                ? 'bg-white text-black'
-                                : 'bg-[#2a2a2a] text-zinc-400 hover:bg-[#3a3a3a]'
+                        className={`flex items-center justify-center gap-1 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors ${isActive
+                            ? 'bg-[#4ECCA3] text-[#121212]'
+                            : 'bg-[#2a2a2a] text-zinc-400 hover:bg-[#3a3a3a]'
                             }`}
                     >
                         {getTabIcon(tab, isActive)}

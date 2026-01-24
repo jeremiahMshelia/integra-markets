@@ -2,8 +2,26 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase';
 
 export default function About() {
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+    useEffect(() => {
+        checkAuth();
+    }, []);
+
+    const checkAuth = async () => {
+        try {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            setIsLoggedIn(!!user);
+        } catch (e) {
+            setIsLoggedIn(false);
+        }
+    };
+
     return (
         <section id="about" className="py-32 bg-gradient-to-b from-[#0a0a0a] to-black relative overflow-hidden">
             <div className="max-w-3xl mx-auto px-6 relative z-10">
@@ -50,10 +68,10 @@ export default function About() {
 
                 <div className="mt-20 text-center">
                     <Link
-                        href="/signup"
+                        href={isLoggedIn ? "/dashboard" : "/signup"}
                         className="inline-flex items-center justify-center h-14 px-10 bg-[#4ECCA3] hover:bg-[#45b393] text-black font-medium text-[16px] rounded-[8px] transition-all"
                     >
-                        Start Trading Smarter
+                        {isLoggedIn ? "Go to Dashboard" : "Start Trading Smarter"}
                     </Link>
                 </div>
             </div>

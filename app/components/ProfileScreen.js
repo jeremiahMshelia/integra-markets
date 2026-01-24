@@ -61,12 +61,14 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
   const [profilePhoto, setProfilePhoto] = useState(userProfile?.profilePhoto || null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [photoKey, setPhotoKey] = useState(Date.now()); // For cache busting
+  const [commoditiesCount, setCommoditiesCount] = useState(0);
 
   const { bookmarks, removeBookmark } = useBookmarks();
 
   // Load profile from Supabase on mount
   useEffect(() => {
     loadProfile();
+    loadAlertPreferences();
   }, []);
 
   const loadProfile = async () => {
@@ -77,6 +79,17 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
       }
     } catch (error) {
       console.log('Error loading profile:', error);
+    }
+  };
+
+  const loadAlertPreferences = async () => {
+    try {
+      const prefs = await supabaseService.getAlertPreferences();
+      if (prefs?.commodities) {
+        setCommoditiesCount(prefs.commodities.length);
+      }
+    } catch (error) {
+      console.log('Error loading alert preferences:', error);
     }
   };
 
@@ -247,20 +260,18 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
             )}
 
             <View style={styles.profileStats}>
-              <TouchableOpacity style={styles.profileStat} onPress={() => onNavigateToSettings?.('EditMarketFocus')}>
+              <View style={styles.profileStat}>
                 <Text style={styles.profileStatValue}>
-                  {defaultUserProfile.marketFocus?.length || 0}
+                  {commoditiesCount}
                 </Text>
-                <Text style={styles.profileStatLabel}>Market Focus</Text>
-                <MaterialIcons name="edit" size={12} color={colors.accentPositive} style={{ marginTop: 4 }} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.profileStat} onPress={() => onNavigateToSettings?.('EditExperience')}>
+                <Text style={styles.profileStatLabel}>Commodities</Text>
+              </View>
+              <View style={styles.profileStat}>
                 <Text style={styles.profileStatValue}>
                   {defaultUserProfile.experience || '—'}
                 </Text>
                 <Text style={styles.profileStatLabel}>Experience</Text>
-                <MaterialIcons name="edit" size={12} color={colors.accentPositive} style={{ marginTop: 4 }} />
-              </TouchableOpacity>
+              </View>
               <View style={styles.profileStat}>
                 <Text style={styles.profileStatValue}>
                   {bookmarks.length}

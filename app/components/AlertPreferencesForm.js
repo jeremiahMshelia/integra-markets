@@ -25,7 +25,7 @@ const colors = {
   divider: '#333333',
 };
 
-const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) => {
+const AlertPreferencesForm = ({ onComplete, onSkip, onClose, showSkipOption = false, isEditMode = false }) => {
   // Step-based wizard (1: Commodities, 2: Regions, 3: Currencies, 4: Websites, 5: Settings)
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 5;
@@ -72,8 +72,10 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     setSelectedCommodities(prev => prev.filter(item => item !== commodity));
   };
 
-  const addCommodity = (commodity) => {
-    if (!selectedCommodities.includes(commodity)) {
+  const toggleCommodity = (commodity) => {
+    if (selectedCommodities.includes(commodity)) {
+      setSelectedCommodities(prev => prev.filter(item => item !== commodity));
+    } else {
       setSelectedCommodities(prev => [...prev, commodity]);
     }
   };
@@ -90,8 +92,10 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     setSelectedRegions(prev => prev.filter(item => item !== region));
   };
 
-  const addRegion = (region) => {
-    if (!selectedRegions.includes(region)) {
+  const toggleRegion = (region) => {
+    if (selectedRegions.includes(region)) {
+      setSelectedRegions(prev => prev.filter(item => item !== region));
+    } else {
       setSelectedRegions(prev => [...prev, region]);
     }
   };
@@ -108,8 +112,10 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     setSelectedCurrencies(prev => prev.filter(item => item !== currency));
   };
 
-  const addCurrency = (currency) => {
-    if (!selectedCurrencies.includes(currency)) {
+  const toggleCurrency = (currency) => {
+    if (selectedCurrencies.includes(currency)) {
+      setSelectedCurrencies(prev => prev.filter(item => item !== currency));
+    } else {
       setSelectedCurrencies(prev => [...prev, currency]);
     }
   };
@@ -218,7 +224,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
             <View key={index} style={styles.commodityTag}>
               <Text style={styles.commodityTagText}>{commodity}</Text>
               <TouchableOpacity onPress={() => removeCommodity(commodity)}>
-                <MaterialIcons name="close" size={16} color={colors.accentData} />
+                <MaterialIcons name="close" size={16} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
           ))}
@@ -251,7 +257,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
               styles.suggestedOption,
               selectedCommodities.includes(commodity) && styles.selectedSuggestedOption
             ]}
-            onPress={() => addCommodity(commodity)}
+            onPress={() => toggleCommodity(commodity)}
           >
             <Text style={[
               styles.suggestedOptionText,
@@ -308,7 +314,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
               styles.suggestedOption,
               selectedRegions.includes(region) && styles.selectedSuggestedOption
             ]}
-            onPress={() => addRegion(region)}
+            onPress={() => toggleRegion(region)}
           >
             <Text style={[
               styles.suggestedOptionText,
@@ -365,7 +371,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
               styles.suggestedOption,
               selectedCurrencies.includes(currency) && styles.selectedSuggestedOption
             ]}
-            onPress={() => addCurrency(currency)}
+            onPress={() => toggleCurrency(currency)}
           >
             <Text style={[
               styles.suggestedOptionText,
@@ -611,6 +617,10 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
         {currentStep > 1 ? (
           <TouchableOpacity onPress={handlePreviousStep}>
             <MaterialIcons name="arrow-back" size={24} color={colors.accentData} />
+          </TouchableOpacity>
+        ) : isEditMode && onClose ? (
+          <TouchableOpacity onPress={onClose}>
+            <MaterialIcons name="close" size={24} color={colors.accentData} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 24 }} />

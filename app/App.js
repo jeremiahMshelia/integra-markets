@@ -15,6 +15,7 @@ import {
   Platform,
   DevSettings,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -121,6 +122,7 @@ const App = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
+  const [isEditingAlerts, setIsEditingAlerts] = useState(false); // true when editing from Alerts screen
   const [activeNav, setActiveNav] = useState('Today');
   const [activeFilter, setActiveFilter] = useState('All');
   const [userData, setUserData] = useState(null);
@@ -138,6 +140,7 @@ const App = () => {
   const [showNotifHelp, setShowNotifHelp] = useState(false);
   const [alertPreferences, setAlertPreferences] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Load alert preferences
   const loadAlertPreferences = async () => {
@@ -920,20 +923,28 @@ const App = () => {
   };
 
   const handleLoadMore = async () => {
-    const newLimit = Math.min(newsLimit + 8, allNews.length);
-    // Analyze the next batch before showing
-    const analyzed = await analyzeBatch(allNews, newsLimit, newLimit);
-    // Merge analyzed items back into allNews
-    setAllNews(prev => {
-      const merged = [...prev];
-      for (let i = newsLimit, j = 0; i < newLimit; i++, j++) merged[i] = analyzed[j];
-      return merged;
-    });
-    setNewsLimit(newLimit);
-    setLiveNews(prev => {
-      const next = [...prev, ...analyzed];
-      return next;
-    });
+    if (loadingMore) return; // Prevent double-tap
+    setLoadingMore(true);
+    try {
+      const newLimit = Math.min(newsLimit + 8, allNews.length);
+      // Analyze the next batch before showing
+      const analyzed = await analyzeBatch(allNews, newsLimit, newLimit);
+      // Merge analyzed items back into allNews
+      setAllNews(prev => {
+        const merged = [...prev];
+        for (let i = newsLimit, j = 0; i < newLimit; i++, j++) merged[i] = analyzed[j];
+        return merged;
+      });
+      setNewsLimit(newLimit);
+      setLiveNews(prev => {
+        const next = [...prev, ...analyzed];
+        return next;
+      });
+    } catch (error) {
+      console.error('Error loading more:', error);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const getFilterChipColor = (filter) => {
@@ -1036,9 +1047,11 @@ const App = () => {
   if (showAlertPreferences) {
     return (
       <AlertPreferencesForm
-        onComplete={handleAlertPreferencesComplete}
-        onSkip={handleAlertPreferencesComplete}
+        onComplete={() => { handleAlertPreferencesComplete(); setIsEditingAlerts(false); }}
+        onSkip={() => { handleAlertPreferencesComplete(); setIsEditingAlerts(false); }}
+        onClose={() => { setShowAlertPreferences(false); setIsEditingAlerts(false); }}
         showSkipOption={true}
+        isEditMode={isEditingAlerts}
       />
     );
   }
@@ -1144,7 +1157,7 @@ const App = () => {
   if (activeNav === 'Alerts') {
     return (
       <View style={styles.container}>
-        <AlertsScreen onNavigateToAlertPreferences={() => setShowAlertPreferences(true)} />
+        <AlertsScreen onNavigateToAlertPreferences={() => { setIsEditingAlerts(true); setShowAlertPreferences(true); }} />
         {renderBottomNav()}
       </View>
     );
@@ -1260,8 +1273,19 @@ const App = () => {
           ListFooterComponent={() => (
             <View style={styles.endOfFeed}>
               {allNews.length > liveNews.length ? (
-                <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
-                  <Text style={styles.loadMoreText}>Load More</Text>
+                <TouchableOpacity
+                  style={[styles.loadMoreButton, loadingMore && styles.loadMoreButtonLoading]}
+                  onPress={handleLoadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <View style={styles.loadMoreLoadingContainer}>
+                      <ActivityIndicator size="small" color="#4ECCA3" />
+                      <Text style={[styles.loadMoreText, { color: '#4ECCA3', marginLeft: 8 }]}>Loading...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.loadMoreText}>Load More</Text>
+                  )}
                 </TouchableOpacity>
               ) : (
                 <>
@@ -1601,10 +1625,22 @@ const styles = StyleSheet.create({
   },
   loadMoreButton: {
     backgroundColor: colors.accentPositive,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
     marginTop: 10,
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  loadMoreButtonLoading: {
+    backgroundColor: 'rgba(78, 204, 163, 0.15)',
+    borderWidth: 1,
+    borderColor: '#4ECCA3',
+  },
+  loadMoreLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadMoreText: {
     color: colors.bgPrimary,
