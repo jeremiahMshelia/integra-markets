@@ -1296,29 +1296,46 @@ def _fetch_live_news(commodities, hours=72):
     # Check cache FIRST - if cached articles exist and are reasonably fresh, use them
     cached = _read_cache()
     cache_age_hours = 999
+    cache_is_fresh = False
+    
     if cached.get("saved_at"):
         try:
             saved_str = cached["saved_at"]
-            # Handle both with and without timezone
+            from datetime import timezone
+            
+            # Parse saved time to UTC
             if "+" not in saved_str and "Z" not in saved_str:
-                # No timezone - assume local time
-                saved_time = datetime.datetime.fromisoformat(saved_str)
-                now = datetime.datetime.now()
+                saved_time = datetime.datetime.fromisoformat(saved_str).replace(tzinfo=timezone.utc)
             else:
-                from datetime import timezone
                 saved_time = datetime.datetime.fromisoformat(saved_str.replace("Z", "+00:00"))
-                now = datetime.datetime.now(timezone.utc)
-            cache_age_hours = (now - saved_time).total_seconds() / 3600
-            print(f"[news/cache] Cache age: {cache_age_hours:.1f} hours, articles: {len(cached.get('articles', []))}")
+            
+            now_utc = datetime.datetime.now(timezone.utc)
+            cache_age_hours = (now_utc - saved_time).total_seconds() / 3600
+            
+            # Calculate today's 8:30 AM NY time (EST = UTC-5, EDT = UTC-4)
+            # Use 13:30 UTC (8:30 AM EST) as the daily refresh time
+            todays_refresh = now_utc.replace(hour=13, minute=30, second=0, microsecond=0)
+            
+            # If it's before 8:30 AM NY today, use yesterday's refresh time
+            if now_utc < todays_refresh:
+                todays_refresh = todays_refresh - datetime.timedelta(days=1)
+            
+            # Cache is fresh if it was saved AFTER the most recent 8:30 AM NY
+            cache_is_fresh = saved_time >= todays_refresh
+            
+            print(f"[news/cache] Cache age: {cache_age_hours:.1f}h, saved: {saved_str}, fresh: {cache_is_fresh}")
+            print(f"[news/cache] Daily refresh time (UTC): {todays_refresh.isoformat()}")
         except Exception as e:
             print(f"[news/cache] Error parsing cache time: {e}")
     
-    # Use cache if it has ANY articles and is less than 24 hours old (conserve API quota!)
-    if cache_age_hours < 12 and len(cached.get("articles", [])) > 0:
-        print(f"[news/cache] Using cache ({cache_age_hours:.1f}h old), {len(cached['articles'])} articles - saving API quota")
+    # Use cache if it was saved after today's 8:30 AM NY refresh time
+    if cache_is_fresh and len(cached.get("articles", [])) > 0:
+        print(f"[news/cache] Using fresh cache, {len(cached['articles'])} articles")
         _enrich_articles_with_images(cached["articles"])
         _enrich_articles_with_sentiment(cached["articles"])
         return cached
+    else:
+        print(f"[news/cache] Cache expired - fetching fresh news")
     
     # Only try 3 topic variants max (instead of 9) to conserve API quota
     topic_variants = []
@@ -1387,12 +1404,22 @@ def _fetch_live_news(commodities, hours=72):
             _write_cache(gnews_arts)
             return {"articles": gnews_arts}
 
-        # All sources exhausted - use cache as last resort
+        # All sources exhausted - use cache as last resort BUT ONLY if reasonably fresh
+        # DON'T return stale cache older than 24 hours!
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
-            print(f"[news/cache] All sources exhausted, returning cached: {len(cached['articles'])} articles")
-            _enrich_articles_with_images(cached["articles"])
-            _enrich_articles_with_sentiment(cached["articles"])
-            return cached
+            if cache_age_hours < 24:
+                print(f"[news/cache] All sources exhausted, returning cached: {len(cached['articles'])} articles ({cache_age_hours:.1f}h old)")
+                _enrich_articles_with_images(cached["articles"])
+                _enrich_articles_with_sentiment(cached["articles"])
+                return cached
+            else:
+                print(f"[news/cache] Cache too old ({cache_age_hours:.1f}h > 24h), clearing stale cache")
+                # Clear the stale cache file so next request starts fresh
+                try:
+                    _cache_path().unlink()
+                    print("[news/cache] Stale cache deleted")
+                except Exception as e:
+                    print(f"[news/cache] Could not delete cache: {e}")
         
         print("[news] No articles available from any source")
         return {"articles": []}
@@ -1404,8 +1431,8 @@ def _fetch_live_news(commodities, hours=72):
             _enrich_articles_with_images(gnews_arts)
             _enrich_articles_with_sentiment(gnews_arts)
             return {"articles": gnews_arts}
-        if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
-            print(f"[news/cache] returning cached articles after exception: {len(cached['articles'])}")
+        if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0 and cache_age_hours < 24:
+            print(f"[news/cache] returning cached articles after exception: {len(cached['articles'])} ({cache_age_hours:.1f}h old)")
             return cached
         return {"articles": []}
 
