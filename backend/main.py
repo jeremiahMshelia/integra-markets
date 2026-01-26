@@ -128,6 +128,47 @@ def _now_iso() -> str:
     return datetime.datetime.now().isoformat()
 
 
+@app.get('/api/debug/status')
+def debug_status():
+    """Debug endpoint to check API key and cache status."""
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "").strip()
+    cache_path = Path(__file__).resolve().parent / "data" / "news_cache.json"
+    
+    cache_info = {"exists": cache_path.exists()}
+    if cache_path.exists():
+        try:
+            with open(cache_path, "r") as f:
+                cache_data = json.load(f)
+            cache_info["saved_at"] = cache_data.get("saved_at", "unknown")
+            cache_info["article_count"] = len(cache_data.get("articles", []))
+        except Exception as e:
+            cache_info["error"] = str(e)
+    
+    # Try a quick API test
+    api_test = {"status": "not_tested"}
+    if api_key:
+        try:
+            resp = requests.get(
+                f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&topics=financial_markets&apikey={api_key}&limit=1",
+                timeout=10
+            )
+            data = resp.json()
+            if "feed" in data:
+                api_test = {"status": "ok", "articles_returned": len(data["feed"])}
+            elif "Note" in data:
+                api_test = {"status": "rate_limited", "message": data["Note"]}
+            else:
+                api_test = {"status": "error", "response": str(data)[:200]}
+        except Exception as e:
+            api_test = {"status": "exception", "error": str(e)}
+    
+    return {
+        "api_key_set": bool(api_key),
+        "api_key_preview": api_key[:8] + "..." if api_key else None,
+        "cache": cache_info,
+        "api_test": api_test
+    }
+
 def _sample_news_articles():
     now = _now_iso()
     return [
@@ -1355,10 +1396,22 @@ def _fetch_live_news(commodities, hours=72):
         # Check for rate limit BEFORE processing
         note = data.get("Note") or data.get("Information") or data.get("Error Message")
         if note:
-            print("[alpha_vantage] warn:", note[:100])
-            # Return None to signal rate limit - don't try more topics
-            if "rate limit" in note.lower() or "thank you for using" in note.lower() or "requests" in note.lower():
+            note_lower = note.lower()
+            print("[alpha_vantage] warn:", note[:150])
+            # Only treat as rate limit if it's an ACTUAL rate limit error, not just info
+            # The message "standard API rate limit is 25 requests" is INFO, not error
+            # Actual rate limit messages say "exceeded" or "call frequency" or lack feed
+            is_rate_limit_error = (
+                "exceeded" in note_lower or 
+                "call frequency" in note_lower or
+                "please consider" in note_lower or
+                ("thank you for using" in note_lower and "feed" not in data)
+            )
+            if is_rate_limit_error:
+                print("[alpha_vantage] Rate limit EXCEEDED - stopping")
                 return None  # Signal rate limit
+            else:
+                print("[alpha_vantage] Info message only, continuing...")
         
         feed = data.get("feed") or []
         articles = []
