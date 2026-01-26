@@ -148,9 +148,43 @@ export default function SignupPage() {
                                 placeholder="••••••••"
                                 className="w-full bg-[#111] border border-white/10 rounded-lg py-2.5 px-3.5 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#4ecca3]/50 transition-all"
                                 required
-                                minLength={6}
+                                minLength={8}
                             />
-                            <p className="text-[#555] text-xs mt-1">Min. 6 characters</p>
+                            {/* Password Strength Indicator */}
+                            {password && (
+                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                    <div className={`flex items-center gap-1.5 text-xs transition-colors ${password.length >= 8 ? 'text-[#4ecca3]' : 'text-[#444]'}`}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            {password.length >= 8 ? <path d="M20 6L9 17l-5-5" /> : <circle cx="12" cy="12" r="10" />}
+                                        </svg>
+                                        8+ characters
+                                    </div>
+                                    <div className={`flex items-center gap-1.5 text-xs transition-colors ${/[a-z]/.test(password) ? 'text-[#4ecca3]' : 'text-[#444]'}`}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            {/[a-z]/.test(password) ? <path d="M20 6L9 17l-5-5" /> : <circle cx="12" cy="12" r="10" />}
+                                        </svg>
+                                        Lowercase
+                                    </div>
+                                    <div className={`flex items-center gap-1.5 text-xs transition-colors ${/[A-Z]/.test(password) ? 'text-[#4ecca3]' : 'text-[#444]'}`}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            {/[A-Z]/.test(password) ? <path d="M20 6L9 17l-5-5" /> : <circle cx="12" cy="12" r="10" />}
+                                        </svg>
+                                        Uppercase
+                                    </div>
+                                    <div className={`flex items-center gap-1.5 text-xs transition-colors ${/[0-9]/.test(password) ? 'text-[#4ecca3]' : 'text-[#444]'}`}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            {/[0-9]/.test(password) ? <path d="M20 6L9 17l-5-5" /> : <circle cx="12" cy="12" r="10" />}
+                                        </svg>
+                                        Number
+                                    </div>
+                                    <div className={`flex items-center gap-1.5 text-xs transition-colors ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password) ? 'text-[#4ecca3]' : 'text-[#444]'}`}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            {/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password) ? <path d="M20 6L9 17l-5-5" /> : <circle cx="12" cy="12" r="10" />}
+                                        </svg>
+                                        Special char
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <button

@@ -541,6 +541,48 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                 placeholderTextColor={colors.textSecondary}
                                 secureTextEntry
                             />
+                            {/* Password Strength Indicator - Only show on signup */}
+                            {isSignUp && password.length > 0 && (
+                                <View style={styles.passwordCriteria}>
+                                    <View style={styles.criteriaRow}>
+                                        <View style={[styles.criteriaItem, password.length >= 8 && styles.criteriaMet]}>
+                                            <Text style={[styles.criteriaIcon, password.length >= 8 && styles.criteriaIconMet]}>
+                                                {password.length >= 8 ? '✓' : '○'}
+                                            </Text>
+                                            <Text style={[styles.criteriaText, password.length >= 8 && styles.criteriaTextMet]}>8+ chars</Text>
+                                        </View>
+                                        <View style={[styles.criteriaItem, /[a-z]/.test(password) && styles.criteriaMet]}>
+                                            <Text style={[styles.criteriaIcon, /[a-z]/.test(password) && styles.criteriaIconMet]}>
+                                                {/[a-z]/.test(password) ? '✓' : '○'}
+                                            </Text>
+                                            <Text style={[styles.criteriaText, /[a-z]/.test(password) && styles.criteriaTextMet]}>Lowercase</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.criteriaRow}>
+                                        <View style={[styles.criteriaItem, /[A-Z]/.test(password) && styles.criteriaMet]}>
+                                            <Text style={[styles.criteriaIcon, /[A-Z]/.test(password) && styles.criteriaIconMet]}>
+                                                {/[A-Z]/.test(password) ? '✓' : '○'}
+                                            </Text>
+                                            <Text style={[styles.criteriaText, /[A-Z]/.test(password) && styles.criteriaTextMet]}>Uppercase</Text>
+                                        </View>
+                                        <View style={[styles.criteriaItem, /[0-9]/.test(password) && styles.criteriaMet]}>
+                                            <Text style={[styles.criteriaIcon, /[0-9]/.test(password) && styles.criteriaIconMet]}>
+                                                {/[0-9]/.test(password) ? '✓' : '○'}
+                                            </Text>
+                                            <Text style={[styles.criteriaText, /[0-9]/.test(password) && styles.criteriaTextMet]}>Number</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.criteriaRow}>
+                                        <View style={[styles.criteriaItem, /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password) && styles.criteriaMet]}>
+                                            <Text style={[styles.criteriaIcon, /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password) && styles.criteriaIconMet]}>
+                                                {/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password) ? '✓' : '○'}
+                                            </Text>
+                                            <Text style={[styles.criteriaText, /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password) && styles.criteriaTextMet]}>Special char</Text>
+                                        </View>
+                                        <View style={styles.criteriaItem} />
+                                    </View>
+                                </View>
+                            )}
                         </View>
 
                         {isSignUp && (
@@ -842,6 +884,38 @@ const styles = StyleSheet.create({
     switchModeText: {
         color: colors.accentData,
         fontSize: 16,
+    },
+
+    // Password Strength Indicator
+    passwordCriteria: {
+        marginTop: 12,
+    },
+    criteriaRow: {
+        flexDirection: 'row',
+        marginBottom: 6,
+    },
+    criteriaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        gap: 6,
+    },
+    criteriaMet: {
+        // Container style when met (optional)
+    },
+    criteriaIcon: {
+        fontSize: 12,
+        color: colors.textSecondary,
+    },
+    criteriaIconMet: {
+        color: colors.accentPositive,
+    },
+    criteriaText: {
+        fontSize: 12,
+        color: colors.textSecondary,
+    },
+    criteriaTextMet: {
+        color: colors.accentPositive,
     },
 
     // Loading Overlay
