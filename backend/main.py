@@ -1199,68 +1199,6 @@ class SimpleQLearningAgent:
 ql_agent = SimpleQLearningAgent()
 
 
-def _fetch_gnews_fallback(commodities: list = None) -> list:
-    """Fetch news from GNews API as fallback when Alpha Vantage fails.
-    GNews has a free tier with 100 requests/day.
-    """
-    try:
-        gnews_key = os.getenv("GNEWS_API_KEY")
-        if not gnews_key:
-            print("[gnews] No GNEWS_API_KEY set, skipping GNews fallback")
-            return []
-        
-        # Build search query from commodities
-        if commodities and len(commodities) > 0:
-            query = " OR ".join(commodities[:3])  # Max 3 terms
-        else:
-            query = "commodities OR oil OR gold OR trading"
-        
-        url = "https://gnews.io/api/v4/search"
-        params = {
-            "q": query,
-            "lang": "en",
-            "country": "us",
-            "max": 20,
-            "apikey": gnews_key,
-        }
-        
-        print(f"[gnews] Fetching news for: {query}")
-        r = requests.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        
-        if data.get("errors"):
-            print(f"[gnews] API error: {data.get('errors')}")
-            return []
-        
-        articles = []
-        for item in data.get("articles", []):
-            # Parse published date
-            pub = item.get("publishedAt", "")
-            time_published = ""
-            if pub:
-                try:
-                    dt = datetime.datetime.fromisoformat(pub.replace("Z", "+00:00"))
-                    time_published = dt.strftime("%Y%m%dT%H%M%S")
-                except:
-                    pass
-            
-            articles.append({
-                "title": item.get("title", ""),
-                "summary": item.get("description", ""),
-                "source": item.get("source", {}).get("name", "GNews"),
-                "url": item.get("url", ""),
-                "time_published": time_published,
-                "image_url": item.get("image", ""),
-            })
-        
-        print(f"[gnews] Got {len(articles)} articles")
-        return articles
-        
-    except Exception as e:
-        print(f"[gnews] Error: {e}")
-        return []
-
 
 def _fetch_live_news(commodities, hours=72):
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "").strip()
@@ -1448,14 +1386,7 @@ def _fetch_live_news(commodities, hours=72):
                 _write_cache(arts)
                 return {"articles": arts}
 
-        # Alpha Vantage exhausted/rate limited - try GNews fallback
-        gnews_arts = _fetch_gnews_fallback(commodities)
-        if gnews_arts:
-            print(f"[news/gnews] Got {len(gnews_arts)} articles from GNews fallback")
-            _enrich_articles_with_images(gnews_arts)
-            _enrich_articles_with_sentiment(gnews_arts)
-            _write_cache(gnews_arts)
-            return {"articles": gnews_arts}
+        # Alpha Vantage exhausted - fall back to cache
 
         # All sources exhausted - use cache as last resort BUT ONLY if reasonably fresh
         # DON'T return stale cache older than 24 hours!
@@ -1478,12 +1409,7 @@ def _fetch_live_news(commodities, hours=72):
         return {"articles": []}
     except Exception as e:
         print(f"[news] exception: {e}")
-        # Try GNews on exception too
-        gnews_arts = _fetch_gnews_fallback(commodities)
-        if gnews_arts:
-            _enrich_articles_with_images(gnews_arts)
-            _enrich_articles_with_sentiment(gnews_arts)
-            return {"articles": gnews_arts}
+        # Try cache on exception
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0 and cache_age_hours < 24:
             print(f"[news/cache] returning cached articles after exception: {len(cached['articles'])} ({cache_age_hours:.1f}h old)")
             return cached
