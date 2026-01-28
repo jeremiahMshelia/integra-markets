@@ -288,7 +288,7 @@ export default function Dashboard() {
                     <div className="mb-4 sm:mb-0 sm:flex sm:items-center sm:justify-between">
                         <div className="mb-4 sm:mb-0">
                             <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Today</h1>
-                            <p className="text-zinc-400 text-sm">Your AI-curated market intelligence feed</p>
+                            <p className="text-zinc-400 text-sm">Your commodities market intelligence feed</p>
                         </div>
                         {/* Filter Tabs - Hidden on mobile, shown on desktop */}
                         <div className="hidden sm:flex items-center gap-3">
