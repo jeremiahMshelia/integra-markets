@@ -20,7 +20,8 @@ interface UserProfile {
     role?: string;
     avatar_url?: string;
     market_focus?: string[];
-    experience_level?: string; // Use correct Supabase column name
+    experience_level?: string;
+    bio?: string;
 }
 
 interface ProfileSidebarProps {
@@ -43,16 +44,17 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [avatarUrl, setAvatarUrl] = useState<string>('');
     const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
-    const [commoditiesCount, setCommoditiesCount] = useState<number>(0);
+    const [commoditiesCount, setCommoditiesCount] = useState<number | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showAllBookmarks, setShowAllBookmarks] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (isOpen) {
-            loadProfile();
-            loadBookmarks();
-            loadAlertPreferences();
+            setIsLoading(true);
+            Promise.all([loadProfile(), loadBookmarks(), loadAlertPreferences()])
+                .finally(() => setIsLoading(false));
         }
     }, [isOpen]);
 
@@ -84,17 +86,46 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
             const { data: { user: authUser } } = await supabase.auth.getUser();
             if (!authUser) return;
 
+            // Try to get commodities from alert_preferences first
             const { data } = await supabase
                 .from('alert_preferences')
                 .select('commodities')
                 .eq('user_id', authUser.id)
                 .single();
 
-            if (data?.commodities) {
+            if (data?.commodities && data.commodities.length > 0) {
                 setCommoditiesCount(data.commodities.length);
+            } else {
+                // Fallback to market_focus from profiles
+                const { data: profileData } = await supabase
+                    .from('profiles')
+                    .select('market_focus')
+                    .eq('id', authUser.id)
+                    .single();
+
+                if (profileData?.market_focus && Array.isArray(profileData.market_focus)) {
+                    setCommoditiesCount(profileData.market_focus.length);
+                }
             }
         } catch (e) {
-            console.error('Error loading alert preferences:', e);
+            // Fallback to profile if alert_preferences doesn't exist
+            try {
+                const supabase = createClient();
+                const { data: { user: authUser } } = await supabase.auth.getUser();
+                if (!authUser) return;
+
+                const { data: profileData } = await supabase
+                    .from('profiles')
+                    .select('market_focus')
+                    .eq('id', authUser.id)
+                    .single();
+
+                if (profileData?.market_focus && Array.isArray(profileData.market_focus)) {
+                    setCommoditiesCount(profileData.market_focus.length);
+                }
+            } catch {
+                console.error('Error loading preferences');
+            }
         }
     };
 
@@ -169,9 +200,9 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
         }
     };
 
-    // Use username from profile like mobile ("pipsss")
-    const displayName = profile?.username || user?.email?.split('@')[0] || 'User';
-    const displayRole = profile?.role ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1) : 'Analyst';
+    // Use username from profile like mobile
+    const displayName = profile?.username || user?.email?.split('@')[0] || '';
+    const displayRole = profile?.role ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1) : '';
 
     return (
         <AnimatePresence>
@@ -197,10 +228,11 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
                             <div className="bg-[#1E1E1E] border border-[#333] rounded-2xl p-5">
                                 <div className="flex items-center gap-4 mb-4">
                                     <div className="relative">
-                                        <button onClick={handleAvatarClick} disabled={isUploading} className="w-16 h-16 rounded-full bg-[#4ECCA3] overflow-hidden flex items-center justify-center relative group">
+                                        <button onClick={handleAvatarClick} disabled={isUploading || isLoading} className="w-16 h-16 rounded-full bg-[#4ECCA3] overflow-hidden flex items-center justify-center relative group">
                                             {isUploading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                : avatarUrl ? <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                                                    : <span className="text-[#121212] text-2xl font-semibold">{displayName.charAt(0).toUpperCase()}</span>}
+                                                : isLoading ? <div className="w-full h-full bg-[#333] animate-pulse" />
+                                                    : avatarUrl ? <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                                        : <span className="text-[#121212] text-2xl font-semibold">{displayName.charAt(0).toUpperCase() || '?'}</span>}
                                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={20} className="text-white" /></div>
                                         </button>
                                         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
@@ -208,16 +240,50 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="#121212"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" /></svg>
                                         </div>
                                     </div>
-                                    <div>
-                                        <p className="text-white font-semibold text-lg">{displayName}</p>
-                                        <p className="text-sm text-zinc-500">{user?.email}</p>
-                                        <p className="text-sm text-[#4ECCA3] font-medium mt-1">{displayRole}</p>
+                                    <div className="flex-1">
+                                        {isLoading ? (
+                                            <>
+                                                <div className="h-5 w-32 bg-[#333] rounded animate-pulse mb-2" />
+                                                <div className="h-4 w-48 bg-[#333] rounded animate-pulse mb-2" />
+                                                <div className="h-4 w-20 bg-[#333] rounded animate-pulse" />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-white font-semibold text-lg">{displayName || 'Loading...'}</p>
+                                                <p className="text-sm text-zinc-500">{user?.email}</p>
+                                                {displayRole && <p className="text-sm text-[#4ECCA3] font-medium mt-1">{displayRole}</p>}
+                                            </>
+                                        )}
                                     </div>
                                 </div>
+                                {!isLoading && profile?.bio && (
+                                    <p className="text-zinc-400 text-sm mb-4">{profile.bio}</p>
+                                )}
                                 <div className="grid grid-cols-3 gap-4 text-center pt-4 border-t border-[#333]">
-                                    <div><p className="text-white font-semibold text-lg">{commoditiesCount}</p><p className="text-xs text-zinc-500">Commodities</p></div>
-                                    <div><p className="text-white font-semibold text-lg">{profile?.experience_level || '3-5'}</p><p className="text-xs text-zinc-500">Experience</p></div>
-                                    <div><p className="text-white font-semibold text-lg">{bookmarks.length}</p><p className="text-xs text-zinc-500">Bookmarks</p></div>
+                                    <div>
+                                        {isLoading ? (
+                                            <div className="h-5 w-8 bg-[#333] rounded animate-pulse mx-auto mb-1" />
+                                        ) : (
+                                            <p className="text-white font-semibold text-lg">{commoditiesCount ?? 0}</p>
+                                        )}
+                                        <p className="text-xs text-zinc-500">Commodities</p>
+                                    </div>
+                                    <div>
+                                        {isLoading ? (
+                                            <div className="h-5 w-10 bg-[#333] rounded animate-pulse mx-auto mb-1" />
+                                        ) : (
+                                            <p className="text-white font-semibold text-lg">{profile?.experience_level || '-'}</p>
+                                        )}
+                                        <p className="text-xs text-zinc-500">Experience</p>
+                                    </div>
+                                    <div>
+                                        {isLoading ? (
+                                            <div className="h-5 w-8 bg-[#333] rounded animate-pulse mx-auto mb-1" />
+                                        ) : (
+                                            <p className="text-white font-semibold text-lg">{bookmarks.length}</p>
+                                        )}
+                                        <p className="text-xs text-zinc-500">Bookmarks</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

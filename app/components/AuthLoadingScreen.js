@@ -171,24 +171,19 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                 const result = await authService.signInWithEmail(email.trim(), password);
 
                 if (result.success) {
-                    // Check if this is a returning user who has completed onboarding
-                    const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
-                    const isReturningUser = onboardingCompleted === 'true';
-
-                    // Also check Supabase profile for onboarding status
-                    // Only skip if user has actual onboarding fields (role OR experience), not just full_name
+                    // Check Supabase profile for onboarding status
+                    // Username is required during onboarding, so if it exists, user has completed onboarding
+                    // IMPORTANT: Only check Supabase, not AsyncStorage - AsyncStorage may have stale data from other accounts
                     let hasCompletedOnboarding = false;
                     try {
                         const { supabaseService } = require('../services/supabaseService');
                         const profile = await supabaseService.getProfile(result.user?.id);
-                        // Only consider onboarding complete if role OR experience_level is set
-                        // full_name alone doesn't count as completing onboarding
-                        hasCompletedOnboarding = profile && (profile.role || profile.experience_level);
+                        // User is considered onboarded if username is set
+                        hasCompletedOnboarding = profile && profile.username;
+                        console.log('[AuthLoadingScreen] Profile check - username:', profile?.username, 'hasCompletedOnboarding:', hasCompletedOnboarding);
                     } catch (e) {
                         console.log('Could not check Supabase profile:', e);
                     }
-
-                    const shouldSkipOnboarding = isReturningUser || hasCompletedOnboarding;
 
                     const userData = {
                         id: result.user?.id || Date.now().toString(),
@@ -196,8 +191,8 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                         fullName: result.user?.fullName || email.split('@')[0],
                         username: email.split('@')[0],
                         authMethod: 'email',
-                        isNewUser: !shouldSkipOnboarding,
-                        skipOnboarding: shouldSkipOnboarding,
+                        isNewUser: !hasCompletedOnboarding,
+                        skipOnboarding: hasCompletedOnboarding,
                     };
                     onAuthComplete(userData);
                 } else {
@@ -255,33 +250,33 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
         setIsLoading(true);
 
         try {
-            // Check if onboarding has been completed before
-            const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
-            const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
-            const existingUserData = await AsyncStorage.getItem('user_data');
-
-            console.log('Google Auth - Storage check:', {
-                onboardingCompleted,
-                alertsCompleted,
-                hasUserData: !!existingUserData
-            });
-
-            const isReturningUser = onboardingCompleted === 'true';
-
             // Attempt to use the authService for proper Google OAuth
             const result = await authService.signInWithGoogle();
 
             setIsLoading(false);
 
             if (result.success && result.user) {
+                // Check Supabase profile for onboarding status
+                // Username is required during onboarding, so if it exists, user has completed onboarding
+                // IMPORTANT: Only check Supabase, not AsyncStorage - AsyncStorage may have stale data
+                let hasCompletedOnboarding = false;
+                try {
+                    const { supabaseService } = require('../services/supabaseService');
+                    const profile = await supabaseService.getProfile(result.user.id);
+                    hasCompletedOnboarding = profile && profile.username;
+                    console.log('[AuthLoadingScreen] Google Profile check - username:', profile?.username, 'hasCompletedOnboarding:', hasCompletedOnboarding);
+                } catch (e) {
+                    console.log('Could not check Supabase profile:', e);
+                }
+
                 const userData = {
                     id: result.user.id,
                     email: result.user.email || 'user@gmail.com',
                     fullName: result.user.full_name || result.user.fullName || 'Google User',
                     username: result.user.email ? result.user.email.split('@')[0] : 'googleuser',
                     authMethod: 'google',
-                    isNewUser: !isReturningUser,
-                    skipOnboarding: isReturningUser
+                    isNewUser: !hasCompletedOnboarding,
+                    skipOnboarding: hasCompletedOnboarding
                 };
 
                 console.log('Google Auth Success - User data:', {

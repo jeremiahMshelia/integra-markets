@@ -92,8 +92,7 @@ export const BookmarkProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           url: bookmarkData.url,
           source: bookmarkData.source,
           sentiment: bookmarkData.sentiment,
-          sentiment_score: bookmarkData.sentimentScore,
-          summary: bookmarkData.summary
+          sentiment_score: bookmarkData.sentimentScore
         })
         .select()
         .single();
@@ -107,7 +106,7 @@ export const BookmarkProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const newBookmark: Bookmark = {
           id: data.id,
           title: data.title,
-          summary: data.summary || bookmarkData.summary,
+          summary: bookmarkData.summary || '',
           source: data.source,
           sentiment: data.sentiment,
           sentimentScore: data.sentiment_score,

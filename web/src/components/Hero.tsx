@@ -75,7 +75,7 @@ export default function Hero() {
                         </h1>
 
                         <p className="text-[15px] sm:text-[17px] md:text-[18px] text-zinc-400 font-light leading-relaxed mb-8 md:mb-10 max-w-lg">
-                            AI powered sentiment analysis and predictive insights across oil, gas, agriculture, and metals.
+                            Advanced sentiment analysis and predictive insights across oil, gas, agriculture, and metals.
                             <br />
                             <span className="text-[#4ECCA3] block mt-3 md:mt-4 font-normal">Get the edge before the markets move.</span>
                         </p>

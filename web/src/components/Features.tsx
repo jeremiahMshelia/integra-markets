@@ -47,13 +47,13 @@ export default function Features() {
                     className="text-center mb-24"
                 >
                     <h2 className="text-[40px] md:text-[56px] font-[100] mb-6 text-white tracking-tight leading-tight">
-                        Not Just AI. <span className="bg-gradient-to-r from-[#4ECCA3] to-[#45b393] bg-clip-text text-transparent font-light">Market Intelligence</span>
+                        Built for <span className="bg-gradient-to-r from-[#4ECCA3] to-[#45b393] bg-clip-text text-transparent font-light">Market Intelligence</span>
                     </h2>
                     <p className="text-[20px] text-zinc-400 font-light">
-                        — built for traders, by traders.
+                        Designed for traders, by traders.
                     </p>
                     <p className="mt-4 text-[16px] text-zinc-500 max-w-2xl mx-auto font-light leading-relaxed">
-                        Real market expertise combined with cutting edge AI for commodity trading insights that actually work.
+                        Real market expertise combined with cutting edge technology for commodity trading insights that actually work.
                     </p>
                 </motion.div>
 

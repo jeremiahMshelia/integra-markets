@@ -59,7 +59,7 @@ const About = ({ onBack }) => {
         <Text style={styles.sectionContent}>
           Integra Markets is a commodity intelligence platform built for traders who need
           to stay ahead of the market. We aggregate news from hundreds of sources, analyze
-          sentiment, and deliver the insights that matter—directly to your device.
+          sentiment, and deliver the insights that matter, directly to your device.
         </Text>
         <Text style={styles.sectionContent}>
           Whether you're tracking crude oil movements, monitoring agricultural exports,
@@ -91,13 +91,13 @@ const About = ({ onBack }) => {
 
         <Text style={styles.sectionTitle}>Built For Traders</Text>
         <Text style={styles.sectionContent}>
-          Integra was born from the real-world pain points of commodity traders—designed
-          to cut through complex, fast-moving market data and turn it into clear,
+          Integra was born from the real world pain points of commodity traders, designed
+          to cut through complex, fast moving market data and turn it into clear,
           actionable insight.
         </Text>
         <Text style={styles.sectionContent}>
           Volatility is everywhere. Data is fragmented. Integra brings structure to
-          chaos—so you can trade with confidence.
+          chaos so you can trade with confidence.
         </Text>
 
         <Text style={styles.sectionTitle}>Support & Contact</Text>

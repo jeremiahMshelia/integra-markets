@@ -74,6 +74,10 @@ export default function Dashboard() {
             let newsData = { articles: [] };
             const cacheBuster = `?t=${Date.now()}`;
 
+            // Create AbortController for timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
             try {
                 console.log('Fetching news with commodities:', commodities);
                 // Try POST /api/news/latest first (same as mobile)
@@ -81,6 +85,7 @@ export default function Dashboard() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ commodities: commodities, hours: 24 }),
+                    signal: controller.signal,
                 });
 
                 if (response.ok) {
@@ -88,15 +93,30 @@ export default function Dashboard() {
                     console.log('Got news from POST /news/latest:', newsData.articles?.[0]);
                 }
             } catch (e) {
-                console.log('POST /news/latest failed, trying GET /news/analysis');
+                if ((e as Error).name === 'AbortError') {
+                    console.log('Request timed out');
+                } else {
+                    console.log('POST /news/latest failed, trying GET /news/analysis');
+                }
+            } finally {
+                clearTimeout(timeoutId);
             }
 
             // Fallback to GET /api/news/analysis
             if (!newsData.articles || newsData.articles.length === 0) {
-                const response = await fetch(`${apiUrl}/api/news/analysis?hours=24&t=${Date.now()}`);
-                if (response.ok) {
-                    newsData = await response.json();
-                    console.log('Got news from GET /news/analysis:', newsData.articles?.[0]);
+                const controller2 = new AbortController();
+                const timeoutId2 = setTimeout(() => controller2.abort(), 30000);
+
+                try {
+                    const response = await fetch(`${apiUrl}/api/news/analysis?hours=24&t=${Date.now()}`, {
+                        signal: controller2.signal,
+                    });
+                    if (response.ok) {
+                        newsData = await response.json();
+                        console.log('Got news from GET /news/analysis:', newsData.articles?.[0]);
+                    }
+                } finally {
+                    clearTimeout(timeoutId2);
                 }
             }
 
@@ -115,9 +135,13 @@ export default function Dashboard() {
 
             // Display articles - images come from backend, no client-side fetching
             setArticles(normalizedArticles);
+
+            if (normalizedArticles.length === 0) {
+                setError('No news articles found. The server may be starting up - please try again in a moment.');
+            }
         } catch (err) {
             console.error('Error fetching news:', err);
-            setError('Failed to load news. Please try again.');
+            setError('Failed to load news. The server may be starting up - please try again.');
         } finally {
             setLoading(false);
         }
@@ -244,9 +268,10 @@ export default function Dashboard() {
     if (loading) {
         return (
             <div className="min-h-screen bg-[#121212] flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
+                <div className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
                     <div className="w-10 h-10 border-2 border-[#4ECCA3] border-t-transparent rounded-full animate-spin" />
-                    <p className="text-zinc-400 text-sm">Loading news feed...</p>
+                    <p className="text-white text-sm font-medium">Loading news feed...</p>
+                    <p className="text-zinc-500 text-xs">This may take a moment if the server is waking up</p>
                 </div>
             </div>
         );
@@ -328,8 +353,8 @@ export default function Dashboard() {
                             onClick={handleLoadMore}
                             disabled={loadingMore}
                             className={`group relative px-8 py-3 bg-[#1C1C1E] border rounded-full overflow-hidden transition-all ${loadingMore
-                                    ? 'border-[#4ECCA3] bg-[#4ECCA3]/10'
-                                    : 'border-[#333] hover:border-[#4ECCA3]/50'
+                                ? 'border-[#4ECCA3] bg-[#4ECCA3]/10'
+                                : 'border-[#333] hover:border-[#4ECCA3]/50'
                                 }`}
                         >
                             <span className="relative z-10 flex items-center gap-2 text-white font-medium">

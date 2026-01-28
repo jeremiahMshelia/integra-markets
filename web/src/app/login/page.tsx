@@ -19,12 +19,27 @@ export default function LoginPage() {
 
         try {
             const supabase = createClient();
-            const { error } = await supabase.auth.signInWithPassword({
+            const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password,
             });
 
             if (error) throw error;
+
+            // Check if user has completed onboarding (username is required during onboarding)
+            if (data.user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('username')
+                    .eq('id', data.user.id)
+                    .single();
+
+                if (!profile?.username) {
+                    window.location.href = '/onboarding';
+                    return;
+                }
+            }
+
             window.location.href = '/dashboard';
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to sign in');

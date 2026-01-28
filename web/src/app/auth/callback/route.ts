@@ -33,9 +33,24 @@ export async function GET(request: NextRequest) {
             }
         );
 
-        await supabase.auth.exchangeCodeForSession(code);
+        const { data: { session } } = await supabase.auth.exchangeCodeForSession(code);
+
+        // Check if user has completed onboarding (username is required during onboarding)
+        if (session?.user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('username')
+                .eq('id', session.user.id)
+                .single();
+
+            // If username not set, redirect to onboarding
+            if (!profile?.username) {
+                return NextResponse.redirect(`${origin}/onboarding`);
+            }
+        }
     }
 
     // URL to redirect to after sign in process completes
     return NextResponse.redirect(`${origin}/dashboard`);
 }
+

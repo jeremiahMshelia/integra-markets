@@ -590,6 +590,9 @@ const App = () => {
         }
 
         setUserData(parsedUserData);
+
+        // Even if we have user data, verify onboarding is actually complete via Supabase username
+        // This prevents stale AsyncStorage from bypassing onboarding for new accounts
       } else if (onboardingCompleted === 'true') {
         // No stored user data but onboarding was completed - check Supabase session
         try {
@@ -615,9 +618,37 @@ const App = () => {
 
             setUserData(restoredUserData);
             await AsyncStorage.setItem('user_data', JSON.stringify(restoredUserData));
+
+            // IMPORTANT: If profile has no username, user needs onboarding even if AsyncStorage says otherwise
+            if (!profile?.username) {
+              console.log('[App] Profile has no username, needs onboarding');
+              setShowOnboarding(true);
+              return;
+            }
           }
         } catch (e) {
           console.log('[App] Could not restore from Supabase session:', e);
+        }
+      }
+
+      // Check via Supabase if onboarding is really complete before skipping
+      if (onboardingCompleted === 'true') {
+        try {
+          const { supabaseService } = require('./services/supabaseService');
+          const { data: { session } } = await supabaseService.supabase.auth.getSession();
+
+          if (session?.user) {
+            const profile = await supabaseService.getProfile(session.user.id);
+
+            // If profile doesn't have username, need onboarding regardless of AsyncStorage
+            if (!profile?.username) {
+              console.log('[App] Username not set in Supabase, showing onboarding');
+              setShowAuth(true);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('[App] Could not verify onboarding via Supabase:', e);
         }
       }
 
@@ -779,8 +810,11 @@ const App = () => {
   const handleAlertPreferencesComplete = async (preferences) => {
     try {
       await AsyncStorage.setItem('alerts_completed', 'true');
-      await AsyncStorage.setItem('alert_preferences', JSON.stringify(preferences));
-      setAlertPreferences(preferences); // Update local state
+      // Only save preferences if they exist
+      if (preferences) {
+        await AsyncStorage.setItem('alert_preferences', JSON.stringify(preferences));
+        setAlertPreferences(preferences); // Update local state
+      }
       setShowAlertPreferences(false);
       // Reload news with new preferences
       console.log('[News] Alert preferences updated, reloading news...');

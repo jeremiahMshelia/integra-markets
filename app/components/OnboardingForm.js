@@ -73,18 +73,18 @@ const WelcomeCard = ({ onNext }) => (
             <Logo variant="full" size="large" style={styles.logoImage} />
             <Text style={styles.welcomeTitle}>Welcome to Integra Markets</Text>
             <Text style={styles.welcomeSubtitle}>
-                The AI-powered platform for commodity trading insights and prediction markets
+                The commodity trading intelligence platform for market insights and analysis
             </Text>
         </View>
 
         <View style={styles.featuresList}>
             <View style={styles.featureItem}>
                 <MaterialIcons name="auto-awesome" size={24} color={colors.accentPositive} />
-                <Text style={styles.featureText}>AI-powered market analysis</Text>
+                <Text style={styles.featureText}>Advanced market analysis</Text>
             </View>
             <View style={styles.featureItem}>
                 <MaterialCommunityIcons name="chart-line" size={24} color={colors.accentData} />
-                <Text style={styles.featureText}>Real-time news and sentiment</Text>
+                <Text style={styles.featureText}>Real time news and sentiment</Text>
             </View>
         </View>
 

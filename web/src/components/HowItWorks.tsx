@@ -47,7 +47,7 @@ export default function HowItWorks() {
                         </div>
                         <div>
                             <p className="text-[18px] text-zinc-400 leading-relaxed font-light">
-                                <span className="text-white font-normal">FinBERT</span> is a financial domain AI model that reads longer articles and understands how sentiment impacts markets and trading.
+                                <span className="text-white font-normal">FinBERT</span> is a financial domain language model that reads longer articles and understands how sentiment impacts markets and trading.
                             </p>
                         </div>
                     </motion.div>

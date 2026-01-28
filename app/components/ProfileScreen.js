@@ -84,12 +84,25 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
 
   const loadAlertPreferences = async () => {
     try {
+      console.log('[ProfileScreen] Loading alert preferences...');
       const prefs = await supabaseService.getAlertPreferences();
-      if (prefs?.commodities) {
+      console.log('[ProfileScreen] Alert prefs received:', prefs);
+
+      if (prefs?.commodities && prefs.commodities.length > 0) {
+        console.log('[ProfileScreen] Setting commodities count from alert_preferences:', prefs.commodities.length);
         setCommoditiesCount(prefs.commodities.length);
+      } else {
+        // Fallback to market_focus from profile
+        console.log('[ProfileScreen] No commodities in alert_preferences, trying profile.market_focus');
+        const profile = await supabaseService.getProfile();
+        console.log('[ProfileScreen] Profile market_focus:', profile?.market_focus);
+        if (profile?.market_focus && Array.isArray(profile.market_focus)) {
+          console.log('[ProfileScreen] Setting commodities count from market_focus:', profile.market_focus.length);
+          setCommoditiesCount(profile.market_focus.length);
+        }
       }
     } catch (error) {
-      console.log('Error loading alert preferences:', error);
+      console.log('[ProfileScreen] Error loading alert preferences:', error);
     }
   };
 

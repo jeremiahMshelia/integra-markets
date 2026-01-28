@@ -4,9 +4,9 @@ import { GeistMono } from 'geist/font/mono';
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Integra Markets - AI-Powered Commodity Trading Intelligence",
-  description: "Get real-time AI sentiment analysis, trade ideas, and market insights for commodities. Track oil, gold, natural gas, and agricultural markets with intelligent alerts.",
-  keywords: ["commodity trading", "oil prices", "gold trading", "AI sentiment analysis", "market intelligence", "natural gas", "commodities", "trading platform"],
+  title: "Integra Markets | Commodity Trading Intelligence",
+  description: "Real time sentiment analysis, trade ideas, and market insights for commodities. Track oil, gold, natural gas, and agricultural markets with intelligent alerts.",
+  keywords: ["commodity trading", "oil prices", "gold trading", "sentiment analysis", "market intelligence", "natural gas", "commodities", "trading platform"],
   authors: [{ name: "Integra Markets" }],
   creator: "Integra Markets",
   publisher: "Integra Markets",
@@ -21,8 +21,8 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "https://integramarkets.app",
     siteName: "Integra Markets",
-    title: "Integra Markets - AI-Powered Commodity Trading Intelligence",
-    description: "Get real-time AI sentiment analysis, trade ideas, and market insights for commodities. Track oil, gold, natural gas, and agricultural markets.",
+    title: "Integra Markets | Commodity Trading Intelligence",
+    description: "Real time sentiment analysis, trade ideas, and market insights for commodities. Track oil, gold, natural gas, and agricultural markets.",
     images: [
       {
         url: "/NewLogoInt.png.png",
@@ -34,8 +34,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Integra Markets - AI-Powered Commodity Trading Intelligence",
-    description: "Real-time AI sentiment analysis and trade ideas for commodity traders.",
+    title: "Integra Markets | Commodity Trading Intelligence",
+    description: "Real time sentiment analysis and trade ideas for commodity traders.",
     images: ["/NewLogoInt.png.png"],
   },
   viewport: "width=device-width, initial-scale=1",
