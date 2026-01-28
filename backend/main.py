@@ -1338,12 +1338,13 @@ def _fetch_live_news(commodities, hours=72):
             print("[alpha_vantage] warn:", note[:150])
             # Only treat as rate limit if it's an ACTUAL rate limit error, not just info
             # The message "standard API rate limit is 25 requests" is INFO, not error
-            # Actual rate limit messages say "exceeded" or "call frequency" or lack feed
+            # "please consider spreading out" with data is just a reminder, NOT an error
+            # Only treat as error if there's no feed data
+            has_feed = "feed" in data and len(data.get("feed", [])) > 0
             is_rate_limit_error = (
                 "exceeded" in note_lower or 
                 "call frequency" in note_lower or
-                "please consider" in note_lower or
-                ("thank you for using" in note_lower and "feed" not in data)
+                ("thank you for using" in note_lower and not has_feed)
             )
             if is_rate_limit_error:
                 print("[alpha_vantage] Rate limit EXCEEDED - stopping")
