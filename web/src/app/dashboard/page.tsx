@@ -36,6 +36,21 @@ export default function Dashboard() {
                 window.location.href = '/login';
                 return;
             }
+
+            // Check if user has completed onboarding
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('username')
+                .eq('id', user.id)
+                .single();
+
+            // If no profile or no username, redirect to onboarding
+            if (!profile?.username) {
+                console.log('[Dashboard] User has not completed onboarding, redirecting...');
+                window.location.href = '/onboarding';
+                return;
+            }
+
             setUser({
                 email: user.email,
                 name: user.user_metadata?.full_name || user.email?.split('@')[0],
