@@ -1370,17 +1370,28 @@ def _fetch_live_news(commodities, hours=72):
 
     try:
         # Try each topic variant until we get articles OR hit rate limit
-        for tv in topic_variants:
+        for idx, tv in enumerate(topic_variants):
+            # Add delay between API calls to avoid rate limit (5 requests/min = 12 sec between calls)
+            if idx > 0:
+                import time
+                print("[news/av] Waiting 15s to avoid rate limit...")
+                time.sleep(15)
+            
             params = dict(base_params)
             params["topics"] = tv
             print(f"[news/av] trying topics='{tv}'")
             arts = _call_and_parse(params)
             
-            # If rate limited (None), stop immediately - don't burn more requests
+            # If rate limited (None), wait and retry once
             if arts is None:
-                print("[news/av] Rate limited - stopping API calls, using cache")
-                break
-                
+                print("[news/av] Rate limited - waiting 20s and retrying...")
+                import time
+                time.sleep(20)
+                arts = _call_and_parse(params)
+                if arts is None:
+                    print("[news/av] Still rate limited - stopping API calls, using cache")
+                    break
+                    
             if arts:
                 _enrich_articles_with_images(arts)
                 _enrich_articles_with_sentiment(arts)
