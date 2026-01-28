@@ -54,10 +54,12 @@ export default function LoginPage() {
 
         try {
             const supabase = createClient();
+            // Use consistent URL to avoid www vs non-www issues
+            const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: `${window.location.origin}/auth/callback`,
+                    redirectTo: `${siteUrl}/auth/callback`,
                 },
             });
 
