@@ -184,18 +184,74 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
         bullishPercent: 0, bearishPercent: 0, neutralPercent: 0
     });
     const [loadingVote, setLoadingVote] = useState(false);
+    const [showTour, setShowTour] = useState(false);
+    const [tourStep, setTourStep] = useState(0);
+
+    // Tour steps (no emojis)
+    const tourSteps = [
+        {
+            title: 'Welcome to Integra Analysis',
+            content: 'This AI-powered analysis helps you understand market sentiment and make informed trading decisions. Let\'s walk through the key features.'
+        },
+        {
+            title: 'Summary',
+            content: 'The Summary section provides an AI-generated synopsis highlighting the key points from the article, saving you time while ensuring you don\'t miss important details.'
+        },
+        {
+            title: 'Sentiment Analysis',
+            content: 'Our FinBERT model analyzes the text to determine bullish, bearish, or neutral sentiment with confidence scores. Higher percentages indicate stronger conviction.'
+        },
+        {
+            title: 'Key Sentiment Drivers',
+            content: 'These are the most significant keywords and factors identified by our NLP engine that are driving the sentiment for this article.'
+        },
+        {
+            title: 'Market Impact & Trade Ideas',
+            content: 'We assess the potential price impact based on historical patterns and provide actionable trade ideas for your consideration.'
+        },
+        {
+            title: 'Community Sentiment Poll',
+            content: 'Vote on how you feel about the story and see how other verified traders in our community are viewing the same news. Great for gauging market consensus!'
+        }
+    ];
+
+    const handleTourNext = () => {
+        if (tourStep < tourSteps.length - 1) {
+            setTourStep(tourStep + 1);
+        } else {
+            setShowTour(false);
+            setTourStep(0);
+        }
+    };
+
+    const handleTourSkip = () => {
+        setShowTour(false);
+        setTourStep(0);
+    };
 
     // Generate article ID from title
     const getArticleId = (title: string) => {
         return title.replace(/\s+/g, '-').toLowerCase().slice(0, 50);
     };
 
+    // Reset poll state when article changes
+    useEffect(() => {
+        if (article) {
+            // Reset to initial state before fetching new data
+            setUserVote(null);
+            setPollData({
+                bullish: 0, bearish: 0, neutral: 0, total: 0,
+                bullishPercent: 0, bearishPercent: 0, neutralPercent: 0
+            });
+        }
+    }, [article?.title]);
+
     // Fetch poll data when modal opens
     useEffect(() => {
         if (isOpen && article) {
             fetchPollData();
         }
-    }, [isOpen, article]);
+    }, [isOpen, article?.title]);
 
     const fetchPollData = async () => {
         if (!article?.title) return;
@@ -290,10 +346,10 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
         ? article.trade_ideas
         : generateTradeIdeas(sentimentProbs, commodity);
 
-    // Display poll percentages (use AI sentiment if no votes yet)
-    const displayBullish = pollData.total > 0 ? pollData.bullishPercent : sentimentProbs.bullish;
-    const displayBearish = pollData.total > 0 ? pollData.bearishPercent : sentimentProbs.bearish;
-    const displayNeutral = pollData.total > 0 ? pollData.neutralPercent : sentimentProbs.neutral;
+    // Display poll percentages (only show actual votes, no defaults)
+    const displayBullish = pollData.bullishPercent;
+    const displayBearish = pollData.bearishPercent;
+    const displayNeutral = pollData.neutralPercent;
 
     const handleCopy = async () => {
         const text = `${article.title}\n\n${article.summary}\n\nSentiment: ${article.sentiment} (${confidence})\nSource: ${article.source}`;
@@ -324,7 +380,9 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                             <div className="sticky top-0 bg-[#1C1C1E] flex items-center justify-between px-4 py-3 border-b border-[#2a2a2a] z-10">
                                 <div className="flex items-center gap-2">
                                     <h2 className="text-lg font-semibold text-white">Integra Analysis</h2>
-                                    <Info size={16} className="text-zinc-500" />
+                                    <button onClick={() => { setTourStep(0); setShowTour(true); }}>
+                                        <Info size={16} className="text-zinc-500 hover:text-zinc-300 transition-colors" />
+                                    </button>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <button onClick={handleCopy} className="p-2 hover:bg-white/5 rounded-lg">
@@ -380,7 +438,6 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                     </div>
                                 </div>
 
-                                {/* Key Drivers */}
                                 <div>
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="w-1 h-4 bg-[#4a9eff] rounded-full" />
@@ -388,7 +445,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {keyDrivers.map((driver, idx) => (
-                                            <span key={idx} className="px-3 py-1.5 bg-[#2a2a2a] text-white text-[12px] rounded-lg border border-[#3a3a3a]">{driver}</span>
+                                            <span key={idx} className="px-3 py-1.5 bg-[#EAB308] text-black text-[12px] rounded-lg font-medium">{driver}</span>
                                         ))}
                                     </div>
                                 </div>
@@ -442,11 +499,12 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                     </div>
                                 </div>
 
-                                {/* Sentiment Poll */}
                                 <div className="bg-[#121212] rounded-xl p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <h4 className="text-white font-semibold text-sm">SENTIMENT POLL</h4>
-                                        <Info size={16} className="text-zinc-500" />
+                                        <button onClick={() => { setTourStep(5); setShowTour(true); }}>
+                                            <Info size={16} className="text-zinc-500 hover:text-zinc-300 transition-colors" />
+                                        </button>
                                     </div>
                                     <p className="text-zinc-400 text-sm mb-4">How do you feel about this story?</p>
 
@@ -481,26 +539,29 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                     ) : (
                                         // Poll results
                                         <div className="space-y-4">
-                                            {/* Market Sentiment Dial */}
+                                            {/* Market Sentiment - Show only winning sentiment */}
                                             <div className="bg-[#1C1C1E] rounded-xl p-4 text-center">
                                                 <p className="text-zinc-500 text-xs mb-2 tracking-wider">MARKET SENTIMENT</p>
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full bg-[#4ECCA3]" />
-                                                    <div className="w-8 h-0.5 bg-zinc-700" />
-                                                    <div className="w-3 h-3 rounded-full bg-[#EAB308]" />
-                                                    <div className="w-8 h-0.5 bg-zinc-700" />
-                                                    <div className="w-3 h-3 rounded-full bg-[#F05454]" />
-                                                    <span className="ml-2 text-white text-sm font-medium">
-                                                        {displayBullish > displayBearish ? 'BULLISH' : displayBearish > displayBullish ? 'BEARISH' : 'NEUTRAL'}
-                                                    </span>
-                                                </div>
+                                                {(() => {
+                                                    const winner = displayBullish > displayBearish && displayBullish > displayNeutral
+                                                        ? { label: 'BULLISH', color: '#4ECCA3' }
+                                                        : displayBearish > displayBullish && displayBearish > displayNeutral
+                                                            ? { label: 'BEARISH', color: '#F05454' }
+                                                            : { label: 'NEUTRAL', color: '#EAB308' };
+                                                    return (
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: winner.color }} />
+                                                            <span className="text-white text-sm font-medium">{winner.label}</span>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
 
                                             {/* Vote Results */}
                                             {[
-                                                { key: 'BULLISH', label: 'Bullish', emoji: '🐂', value: displayBullish, color: '#4ECCA3' },
-                                                { key: 'NEUTRAL', label: 'Neutral', emoji: '😐', value: displayNeutral, color: '#EAB308' },
-                                                { key: 'BEARISH', label: 'Bearish', emoji: '🐻', value: displayBearish, color: '#F05454' },
+                                                { key: 'BULLISH', label: 'Bullish', value: displayBullish, color: '#4ECCA3' },
+                                                { key: 'NEUTRAL', label: 'Neutral', value: displayNeutral, color: '#EAB308' },
+                                                { key: 'BEARISH', label: 'Bearish', value: displayBearish, color: '#F05454' },
                                             ].map((opt) => (
                                                 <div
                                                     key={opt.key}
@@ -509,7 +570,6 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                                 >
                                                     <div className="flex items-center justify-between mb-2">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="text-lg">{opt.emoji}</span>
                                                             <span className="text-sm font-medium" style={{ color: opt.color }}>{opt.label}</span>
                                                             {userVote === opt.key && (
                                                                 <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-white">YOUR VOTE</span>
@@ -526,7 +586,6 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                             {/* Who is voting */}
                                             <div className="bg-[#1C1C1E] rounded-xl p-4">
                                                 <div className="flex items-center gap-2 mb-3">
-                                                    <span className="text-lg">👥</span>
                                                     <span className="text-white text-sm font-medium">Who is voting?</span>
                                                 </div>
                                                 <div className="space-y-2 text-sm text-zinc-400">
@@ -538,8 +597,8 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                                         { role: 'Risk managers', pct: 0.07 },
                                                     ].map((voter, idx) => (
                                                         <div key={idx} className="flex justify-between">
-                                                            <span>• {voter.role}:</span>
-                                                            <span className="text-white">{Math.ceil(pollData.total * voter.pct)}</span>
+                                                            <span><span className="text-[#4ECCA3]">•</span> {voter.role}:</span>
+                                                            <span className="text-[#4ECCA3]">{Math.ceil(pollData.total * voter.pct)}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -554,6 +613,69 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                 </div>
                             </div>
                         </div>
+
+                        {/* Tour Modal */}
+                        <AnimatePresence>
+                            {showTour && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="absolute inset-0 bg-black/80 flex items-center justify-center p-6 z-20"
+                                    onClick={() => setShowTour(false)}
+                                >
+                                    <motion.div
+                                        initial={{ scale: 0.9, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        exit={{ scale: 0.9, opacity: 0 }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="bg-[#1C1C1E] rounded-2xl p-6 max-w-sm w-full border border-[#2a2a2a]"
+                                    >
+                                        {/* Progress dots - fancy like mobile */}
+                                        <div className="flex items-center justify-center gap-1 mb-4">
+                                            {tourSteps.map((_, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className={`h-2 rounded-full transition-all duration-300 ${idx === tourStep
+                                                        ? 'w-6 bg-[#4ECCA3]'
+                                                        : idx < tourStep
+                                                            ? 'w-2 bg-[#4ECCA3]'
+                                                            : 'w-2 bg-zinc-600'
+                                                        }`}
+                                                />
+                                            ))}
+                                        </div>
+                                        <p className="text-zinc-500 text-sm text-center mb-6">
+                                            {tourStep + 1} of {tourSteps.length}
+                                        </p>
+
+                                        <h3 className="text-white text-xl font-bold text-center mb-3">
+                                            {tourSteps[tourStep].title}
+                                        </h3>
+                                        <p className="text-zinc-400 text-sm text-center leading-relaxed mb-6">
+                                            {tourSteps[tourStep].content}
+                                        </p>
+
+                                        {/* Skip and Next buttons */}
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={handleTourSkip}
+                                                className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-white font-medium transition-colors"
+                                            >
+                                                Skip
+                                            </button>
+                                            <button
+                                                onClick={handleTourNext}
+                                                className="flex-1 py-3 bg-[#4ECCA3] hover:bg-[#3dbb94] rounded-xl text-black font-medium transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                {tourStep < tourSteps.length - 1 ? 'Next' : 'Done'}
+                                                {tourStep < tourSteps.length - 1 && <span>→</span>}
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </motion.div>
                 </>
             )}

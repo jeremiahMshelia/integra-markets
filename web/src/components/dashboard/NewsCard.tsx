@@ -153,100 +153,21 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
 
     // Deterministic placeholder based on title length
     const placeholderBg = PLACEHOLDERS[(item.title?.length || 0) % PLACEHOLDERS.length];
-
-    if (featured) {
-        const sourceLogo = getSourceLogo(item.url);
-
-        return (
-            <article
-                onClick={openUrl}
-                className="group relative w-full h-[400px] rounded-3xl overflow-hidden cursor-pointer border border-[#333] hover:border-[#4ECCA3]/50 transition-all duration-300 mb-8"
-            >
-                {/* Background Image */}
-                <div className="absolute inset-0 z-0">
-                    {imageUrl && !imageError ? (
-                        <img
-                            src={imageUrl}
-                            alt={item.title}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                            onError={() => setImageError(true)}
-                        />
-                    ) : (
-                        <div className="w-full h-full relative" style={{ background: placeholderBg }}>
-                            {/* Show source logo when no image */}
-                            {sourceLogo && !logoError && (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <img
-                                        src={sourceLogo}
-                                        alt={item.source}
-                                        className="w-24 h-24 object-contain opacity-30"
-                                        onError={() => setLogoError(true)}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-[#121212]/80 to-transparent" />
-                </div>
-
-                {/* Content Content - Bottom Align */}
-                <div className="absolute bottom-0 left-0 right-0 p-8 z-10">
-                    {/* Sentiment Badge */}
-                    <div className="inline-flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 mb-4">
-                        {isDefault ? <Sparkles size={16} color={displayColor} /> : getSentimentIcon(sentiment)}
-                        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: displayColor }}>
-                            {sentiment} {isDefault ? '' : score}
-                        </span>
-                    </div>
-
-                    <h2 className="text-3xl md:text-4xl font-bold text-white mb-3 leading-tight text-shadow-sm">
-                        {item.title}
-                    </h2>
-
-                    <p className="text-zinc-300 text-lg mb-6 line-clamp-2 max-w-3xl">
-                        {item.summary}
-                    </p>
-
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 text-sm text-zinc-400">
-                            <span className="flex items-center gap-1.5">
-                                <span className="w-4 h-4 rounded-full bg-zinc-700 flex items-center justify-center text-[8px] text-white">
-                                    {item.source?.charAt(0)}
-                                </span>
-                                {item.source}
-                            </span>
-                            <span className="w-1 h-1 rounded-full bg-zinc-600" />
-                            <span className="flex items-center gap-1">
-                                <Clock size={14} />
-                                {timeStr}
-                            </span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <button onClick={handleBookmark} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-colors text-white">
-                                <Bookmark size={18} className={bookmarked ? 'fill-white' : ''} />
-                            </button>
-                            <button onClick={handleAIClickLocal} className="flex items-center gap-2 px-4 py-2.5 bg-[#4a9eff] hover:bg-[#3b82f6] text-white rounded-full font-medium transition-colors">
-                                <Sparkles size={16} />
-                                <span>AI Analysis</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </article>
-        );
-    }
-
-    // STANDARD GRID CARD (Perplexity Style)
     const sourceLogo = getSourceLogo(item.url);
+
+    // Card layout - same for featured and standard, just different sizes
+    const cardHeight = featured ? 'min-h-[500px]' : 'min-h-[400px]';
+    const titleSize = featured ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl';
+    const summaryLines = featured ? 'line-clamp-4' : 'line-clamp-3';
+    const imageHeight = featured ? 'h-64 sm:h-72' : 'h-52 sm:h-56';
 
     return (
         <article
-            onClick={openUrl}
-            className="group flex flex-col h-full bg-[#1C1C1E] rounded-2xl border border-[#2A2A2E] overflow-hidden cursor-pointer hover:border-[#4ECCA3]/40 hover:shadow-lg hover:shadow-[#4ECCA3]/5 transition-all duration-300"
+            onClick={handleAIClickLocal}
+            className={`group flex flex-col bg-[#1C1C1E] rounded-2xl border border-[#2A2A2E] overflow-hidden cursor-pointer hover:border-[#4ECCA3]/40 hover:shadow-lg hover:shadow-[#4ECCA3]/5 transition-all duration-300 ${featured ? 'mb-6' : ''}`}
         >
-            {/* Image Area */}
-            <div className="relative h-48 w-full overflow-hidden bg-zinc-800">
+            {/* Image Area with Sentiment Badge Overlay */}
+            <div className={`relative ${imageHeight} w-full overflow-hidden bg-zinc-800`}>
                 {imageUrl && !imageError ? (
                     <img
                         src={imageUrl}
@@ -256,7 +177,6 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center relative" style={{ background: placeholderBg }}>
-                        {/* Show source logo when no image */}
                         {sourceLogo && !logoError ? (
                             <img
                                 src={sourceLogo}
@@ -270,54 +190,69 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                     </div>
                 )}
 
-                {/* Floating Actions on Image */}
-                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <button onClick={handleShare} className="p-2 bg-black/50 hover:bg-black/70 rounded-full backdrop-blur-sm text-white transition-colors">
-                        <Share2 size={16} />
-                    </button>
-                    <button onClick={handleBookmark} className="p-2 bg-black/50 hover:bg-black/70 rounded-full backdrop-blur-sm text-white transition-colors">
-                        <Bookmark size={16} className={bookmarked ? 'fill-white' : ''} />
-                    </button>
-                </div>
-
-                {/* Sentiment Badge Overlay */}
+                {/* Sentiment Badge Overlay on Image */}
                 <div className="absolute bottom-3 left-3">
-                    <div className="inline-flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/5">
+                    <div className="inline-flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
                         {isDefault ? <Sparkles size={14} color={displayColor} /> : getSentimentIcon(sentiment)}
-                        <span className="text-[10px] font-bold uppercase" style={{ color: displayColor }}>
+                        <span className="text-xs font-bold uppercase" style={{ color: displayColor }}>
                             {sentiment} {isDefault ? '' : score}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* Content Area */}
+            {/* Content Area - Matches Mobile Layout */}
             <div className="flex flex-col flex-1 p-5">
-                <div className="flex items-center gap-2 mb-3 text-xs text-zinc-500">
-                    <span className="font-medium text-zinc-300">{item.source}</span>
-                    <span>•</span>
-                    <span>{timeStr}</span>
+                {/* Top Row: Bookmark & Integra Icon (right aligned) */}
+                <div className="flex items-center justify-end gap-2 mb-3">
+                    <button
+                        onClick={handleBookmark}
+                        className="p-1.5 text-zinc-400 hover:text-white transition-colors"
+                    >
+                        <Bookmark size={18} className={bookmarked ? 'fill-white text-white' : ''} />
+                    </button>
+                    <button
+                        onClick={handleAIClickLocal}
+                        className="p-1.5 text-[#4a9eff] hover:text-[#60a5fa] transition-colors"
+                        title="Integra Analysis"
+                    >
+                        <Sparkles size={18} />
+                    </button>
                 </div>
 
-                <h3 className="text-lg font-bold text-white mb-2 leading-snug line-clamp-2 group-hover:text-[#4ECCA3] transition-colors">
+                {/* Title */}
+                <h3 className={`${titleSize} font-bold text-white mb-3 leading-snug group-hover:text-[#4ECCA3] transition-colors`}>
                     {item.title}
                 </h3>
 
-                <p className="text-sm text-zinc-400 leading-relaxed line-clamp-2 mb-4 flex-1">
+                {/* Summary */}
+                <p className={`text-sm text-zinc-400 leading-relaxed ${summaryLines} mb-4 flex-1`}>
                     {item.summary || 'No summary available.'}
                 </p>
 
-                {/* Bottom Action */}
-                <div className="pt-4 border-t border-[#2A2A2E] flex items-center justify-between mt-auto">
-                    <button
-                        onClick={handleAIClickLocal}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-[#4a9eff] hover:text-[#60a5fa] transition-colors"
-                    >
-                        <Sparkles size={14} />
-                        INTEGRA ANALYSIS
-                    </button>
+                {/* Bottom Row: Source Link + Time (left) + Share Button (right) */}
+                <div className="flex items-center justify-between pt-4 border-t border-[#2A2A2E] mt-auto">
+                    <div className="flex items-center gap-4 text-sm">
+                        <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 text-[#4a9eff] hover:underline font-medium"
+                        >
+                            {item.source}
+                            <ExternalLink size={12} />
+                        </a>
+                        <span className="text-zinc-500">{timeStr}</span>
+                    </div>
 
-                    <ExternalLink size={14} className="text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                    {/* Share Button */}
+                    <button
+                        onClick={handleShare}
+                        className="p-2 text-zinc-500 hover:text-white transition-colors"
+                    >
+                        <Share2 size={18} />
+                    </button>
                 </div>
             </div>
         </article>

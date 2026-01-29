@@ -59,15 +59,21 @@ export const dashboardApi = {
         }
       }
 
+      // Log first article to debug image_url
+      const newsArray = Array.isArray(newsData?.articles)
+        ? newsData.articles
+        : Array.isArray(newsData)
+          ? newsData
+          : [];
+      if (newsArray.length > 0) {
+        console.log('[api] First article has image_url:', !!newsArray[0]?.image_url, newsArray[0]?.image_url?.slice?.(0, 50));
+      }
+
       return {
         sentiment: marketSentiment,
         movers: topMovers,
         weather: weatherAlerts,
-        news: Array.isArray(newsData?.articles)
-          ? newsData.articles
-          : Array.isArray(newsData)
-            ? newsData
-            : [],
+        news: newsArray,
       };
     } catch (error) {
       console.error('Error loading dashboard data:', error);

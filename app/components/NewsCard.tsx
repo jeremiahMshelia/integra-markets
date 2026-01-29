@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SingleStar } from './CustomStarIcon';
 import { useBookmarks } from '../providers/BookmarkProvider';
+import * as Haptics from 'expo-haptics';
 
 interface NewsItem {
   id?: number;
@@ -16,6 +17,7 @@ interface NewsItem {
   sentiment?: string;
   sentimentScore?: string;
   timeAgo?: string;
+  image_url?: string; // Image URL for the card
   // Backend preprocessing fields
   bullish?: number;
   bearish?: number;
@@ -43,6 +45,30 @@ interface NewsCardProps {
 export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   const { addBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
   const isCurrentlyBookmarked = isBookmarked(item.title);
+
+  // Debug log for image_url
+  console.log('[NewsCard] Title:', item.title?.slice(0, 30), 'image_url:', item.image_url?.slice(0, 50));
+
+  // Handle regular press with light haptic feedback
+  const handlePress = () => {
+    // Fire haptic without awaiting (so it doesn't block on simulator)
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {
+      // Haptics not available (simulator)
+    }
+    onAIClick(item);
+  };
+
+  // Handle long press with heavy haptic feedback
+  const handleLongPress = () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } catch (e) {
+      // Haptics not available (simulator)
+    }
+    onAIClick(item);
+  };
 
   const handleBookmarkToggle = async () => {
     try {
@@ -246,65 +272,95 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   };
 
   return (
-    <View style={styles.card}>
-      {/* Header with sentiment and action buttons */}
-      <View style={styles.header}>
-        {item.sentiment && (
-          <View style={styles.sentimentBadge}>
-            <View style={styles.sentimentIconContainer}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      delayLongPress={400}
+      activeOpacity={0.85}
+    >
+      {/* Image Section - if image_url exists */}
+      {item.image_url && (
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: item.image_url }}
+            style={styles.cardImage}
+            resizeMode="cover"
+          />
+          {/* Sentiment badge at bottom-left with dark transparent background */}
+          {item.sentiment && (
+            <View style={styles.imageSentimentBadge}>
               {renderSentimentIcon(item.sentiment)}
+              <Text style={[styles.imageSentimentText, { color: getSentimentColor(item.sentiment) }]}>
+                {item.sentiment.toUpperCase()}
+              </Text>
             </View>
-            <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
-              {item.sentiment.toUpperCase()}
-            </Text>
-            <Text style={[styles.sentimentScore, { color: getSentimentColor(item.sentiment) }]}>
-              {item.sentimentScore || '0.50'}
-            </Text>
+          )}
+        </View>
+      )}
+
+      {/* Content Section */}
+      <View style={styles.contentSection}>
+        {/* Header with sentiment - only if no image */}
+        {!item.image_url && item.sentiment && (
+          <View style={styles.header}>
+            <View style={styles.sentimentBadge}>
+              <View style={styles.sentimentIconContainer}>
+                {renderSentimentIcon(item.sentiment)}
+              </View>
+              <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
+                {item.sentiment.toUpperCase()}
+              </Text>
+              <Text style={[styles.sentimentScore, { color: getSentimentColor(item.sentiment) }]}>
+                {item.sentimentScore || '0.50'}
+              </Text>
+            </View>
           </View>
         )}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity onPress={handleBookmarkToggle} style={styles.bookmarkButton}>
-            <Feather
-              name={isCurrentlyBookmarked ? "bookmark" : "bookmark"}
-              size={18}
-              color={isCurrentlyBookmarked ? "#FFD700" : "#666666"}
-              fill={isCurrentlyBookmarked ? "#FFD700" : "none"}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => onAIClick(item)} style={styles.starButton}>
-            <SingleStar size={35} color="#4a9eff" />
-          </TouchableOpacity>
-        </View>
-      </View>
 
-      {/* Main title */}
-      <Text style={styles.title}>{item.title}</Text>
-
-      {/* Description */}
-      <Text style={styles.description}>
-        {item.summary || item.content || 'More details would go here...'}
-      </Text>
-
-      {/* Footer with source and share */}
-      <View style={styles.footer}>
-        <View style={styles.sourceContainer}>
-          {item.source && (
-            <TouchableOpacity onPress={handleSourcePress} style={styles.sourceButton}>
-              <Text style={[styles.sourceText, item.sourceUrl && item.sourceUrl !== '#' ? styles.sourceTextLink : null]}>
-                {item.source}
-              </Text>
-              {item.sourceUrl && item.sourceUrl !== '#' && (
-                <Feather name="external-link" size={14} color="#4a9eff" style={styles.linkIcon} />
-              )}
+        {/* Title row with action buttons on the right */}
+        <View style={styles.titleRow}>
+          <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
+          <View style={styles.titleActionButtons}>
+            <TouchableOpacity onPress={handleBookmarkToggle} style={styles.bookmarkButton}>
+              <Feather
+                name="bookmark"
+                size={18}
+                color={isCurrentlyBookmarked ? "#FFD700" : "#666666"}
+              />
             </TouchableOpacity>
-          )}
-          <Text style={styles.timeAgo}>{item.timeAgo || item.date || '4 hours ago'}</Text>
+            <TouchableOpacity onPress={() => onAIClick(item)} style={styles.starButton}>
+              <SingleStar size={28} color="#4a9eff" />
+            </TouchableOpacity>
+          </View>
         </View>
-        <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
-          <Feather name="share-2" size={16} color="#666666" />
-        </TouchableOpacity>
+
+        {/* Description */}
+        <Text style={styles.description} numberOfLines={item.image_url ? 2 : 3}>
+          {item.summary || item.content || 'More details would go here...'}
+        </Text>
+
+        {/* Footer with source and share */}
+        <View style={styles.footer}>
+          <View style={styles.sourceContainer}>
+            {item.source && (
+              <TouchableOpacity onPress={handleSourcePress} style={styles.sourceButton}>
+                <Text style={[styles.sourceText, item.sourceUrl && item.sourceUrl !== '#' ? styles.sourceTextLink : null]}>
+                  {item.source}
+                </Text>
+                {item.sourceUrl && item.sourceUrl !== '#' && (
+                  <Feather name="external-link" size={14} color="#4a9eff" style={styles.linkIcon} />
+                )}
+              </TouchableOpacity>
+            )}
+            <Text style={styles.timeAgo}>{item.timeAgo || item.date || '4 hours ago'}</Text>
+          </View>
+          <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
+            <Feather name="share-2" size={16} color="#666666" />
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -321,12 +377,51 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#1C1C1E',
     borderRadius: 16,
-    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#2A2A2E',
     shadowColor: 'rgba(0, 0, 0, 0.2)',
     shadowRadius: 4,
+    overflow: 'hidden',
+  },
+  imageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 180,
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imageSentimentBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  imageSentimentText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  contentSection: {
+    padding: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  titleActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    flexShrink: 0,
   },
   header: {
     flexDirection: 'row',
@@ -377,9 +472,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
-    marginTop: 6,
-    marginBottom: 8,
-    lineHeight: 26,
+    lineHeight: 22,
+    flex: 1,
   },
   description: {
     fontSize: 14,

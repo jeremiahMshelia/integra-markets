@@ -352,6 +352,8 @@ const App = () => {
           trade_ideas: a.trade_ideas,
           event_type: a.event_type,
           severity: a.severity,
+          // Image URL for card display
+          image_url: a.image_url,
         };
       });
 

@@ -68,36 +68,30 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     const [tourStep, setTourStep] = useState(0);
     const TOUR_STORAGE_KEY = '@integra_analysis_tour_completed';
 
-    // Tour guide content
+    // Tour guide content (no emojis)
     const tourSteps = [
         {
             title: 'Welcome to Integra Analysis',
-            icon: '🤖',
             content: 'This AI-powered analysis helps you understand market sentiment and make informed trading decisions. Let\'s walk through the key features.'
         },
         {
             title: 'Summary',
-            icon: '📝',
             content: 'The Summary section provides an AI-generated synopsis highlighting the key points from the article, saving you time while ensuring you don\'t miss important details.'
         },
         {
             title: 'Sentiment Analysis',
-            icon: '📊',
             content: 'Our FinBERT model analyzes the text to determine bullish, bearish, or neutral sentiment with confidence scores. Higher percentages indicate stronger conviction.'
         },
         {
             title: 'Key Sentiment Drivers',
-            icon: '🔑',
             content: 'These are the most significant keywords and factors identified by our NLP engine that are driving the sentiment for this article.'
         },
         {
             title: 'Market Impact & Trade Ideas',
-            icon: '📈',
             content: 'We assess the potential price impact based on historical patterns and provide actionable trade ideas for your consideration.'
         },
         {
             title: 'Community Sentiment Poll',
-            icon: '👥',
             content: 'Vote on how you feel about the story and see how other verified traders in our community are viewing the same news. Great for gauging market consensus!'
         }
     ];
@@ -977,39 +971,43 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                     </View>
                                 ) : (
                                     <View style={styles.pollResults}>
-                                        {/* Market Sentiment Dial */}
+                                        {/* Market Sentiment - Show only winning sentiment */}
                                         <View style={styles.sentimentDialContainer}>
                                             <Text style={styles.dialLabel}>MARKET SENTIMENT</Text>
-                                            <View style={styles.dialRow}>
-                                                <View style={[styles.dialDot, { backgroundColor: '#4ECCA3' }]} />
-                                                <View style={styles.dialLine} />
-                                                <View style={[styles.dialDot, { backgroundColor: '#EAB308' }]} />
-                                                <View style={styles.dialLine} />
-                                                <View style={[styles.dialDot, { backgroundColor: '#F05454' }]} />
-                                                <Text style={styles.dialPointer}>
-                                                    {displayBullish > displayBearish
-                                                        ? '← BULLISH'
-                                                        : displayBearish > displayBullish
-                                                            ? 'BEARISH →'
-                                                            : 'NEUTRAL'}
-                                                </Text>
-                                            </View>
+                                            {(() => {
+                                                const winner = displayBullish > displayBearish && displayBullish > displayNeutral
+                                                    ? { label: 'BULLISH', color: '#4ECCA3' }
+                                                    : displayBearish > displayBullish && displayBearish > displayNeutral
+                                                        ? { label: 'BEARISH', color: '#F05454' }
+                                                        : { label: 'NEUTRAL', color: '#EAB308' };
+                                                return (
+                                                    <View style={styles.dialRow}>
+                                                        <View style={[styles.dialDot, { backgroundColor: winner.color }]} />
+                                                        <Text style={[styles.dialPointer, { color: '#fff' }]}>{winner.label}</Text>
+                                                    </View>
+                                                );
+                                            })()}
                                         </View>
 
-                                        {/* Results with emojis */}
+                                        {/* Results - border color matches sentiment when selected */}
                                         {[
-                                            { key: 'BULLISH' as const, label: 'Bullish', emoji: '🐂', value: Math.round(displayBullish), color: '#4ECCA3' },
-                                            { key: 'NEUTRAL' as const, label: 'Neutral', emoji: '😐', value: Math.round(displayNeutral), color: '#EAB308' },
-                                            { key: 'BEARISH' as const, label: 'Bearish', emoji: '🐻', value: Math.round(displayBearish), color: '#F05454' },
+                                            { key: 'BULLISH' as const, label: 'Bullish', value: Math.round(displayBullish), color: '#4ECCA3' },
+                                            { key: 'NEUTRAL' as const, label: 'Neutral', value: Math.round(displayNeutral), color: '#EAB308' },
+                                            { key: 'BEARISH' as const, label: 'Bearish', value: Math.round(displayBearish), color: '#F05454' },
                                         ].map((option) => (
-                                            <View key={option.key} style={[styles.pollResultRow, userVote === option.key && styles.pollResultSelected]}>
+                                            <View
+                                                key={option.key}
+                                                style={[
+                                                    styles.pollResultRow,
+                                                    userVote === option.key && { borderColor: option.color, borderWidth: 2 }
+                                                ]}
+                                            >
                                                 <View style={styles.pollResultLabelRow}>
-                                                    <Text style={styles.emojiLabel}>{option.emoji}</Text>
                                                     <Text style={[styles.pollResultLabel, { color: option.color }]}>{option.label}</Text>
-                                                    <Text style={[styles.pollResultLabel, { color: option.color, marginLeft: 4 }]}>— {option.value}%</Text>
                                                     {userVote === option.key && (
-                                                        <Text style={styles.pollResultBadge}>Your vote</Text>
+                                                        <Text style={[styles.pollResultBadge, { marginLeft: 8 }]}>YOUR VOTE</Text>
                                                     )}
+                                                    <Text style={[styles.pollResultLabel, { color: option.color, marginLeft: 'auto' }]}>— {option.value}%</Text>
                                                 </View>
                                                 <View style={styles.pollResultBar}>
                                                     <View style={[styles.pollResultFill, { width: `${option.value}%`, backgroundColor: option.color }]} />
@@ -1020,7 +1018,6 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                         {/* Who is voting? Section - Based on real total */}
                                         <View style={styles.whoIsVotingSection}>
                                             <View style={styles.whoIsVotingHeader}>
-                                                <Text style={styles.whoIsVotingEmoji}>👥</Text>
                                                 <Text style={styles.whoIsVotingTitle}>Who is voting?</Text>
                                             </View>
                                             {[
@@ -1036,21 +1033,6 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                                     <Text style={styles.voterCount}>{voter.count}</Text>
                                                 </View>
                                             ))}
-                                        </View>
-
-                                        {/* Interpretation Section */}
-                                        <View style={styles.interpretationSection}>
-                                            <View style={styles.interpretationHeader}>
-                                                <Text style={styles.interpretationEmoji}>🧠</Text>
-                                                <Text style={styles.interpretationTitle}>Interpretation</Text>
-                                            </View>
-                                            <Text style={styles.interpretationText}>
-                                                {displayBullish > displayBearish + 10
-                                                    ? 'Sentiment strongly favors bullish positioning. Traders expect positive price action.'
-                                                    : displayBearish > displayBullish + 10
-                                                        ? 'Bearish sentiment dominates. Exercise caution on long positions.'
-                                                        : 'Sentiment leans bullish but indecisive. Expect consolidation until major catalysts.'}
-                                            </Text>
                                         </View>
 
                                         {/* Total Votes Display */}
@@ -1092,9 +1074,6 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
 
                         {/* Step counter */}
                         <Text style={styles.tourStepCounter}>{tourStep + 1} of {tourSteps.length}</Text>
-
-                        {/* Icon */}
-                        <Text style={styles.tourIcon}>{tourSteps[tourStep]?.icon}</Text>
 
                         {/* Title */}
                         <Text style={styles.tourTitle}>{tourSteps[tourStep]?.title}</Text>

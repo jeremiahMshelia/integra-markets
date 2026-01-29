@@ -297,21 +297,15 @@ export default function Dashboard() {
             <DashboardHeader userEmail={user?.email} onProfileClick={() => setIsProfileOpen(true)} />
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-                {/* Page Title & Controls - Stacked on mobile */}
+                {/* Page Title & Controls */}
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8">
-                    {/* Title Section */}
-                    <div className="mb-4 sm:mb-0 sm:flex sm:items-center sm:justify-between">
-                        <div className="mb-4 sm:mb-0">
-                            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Today</h1>
-                            <p className="text-zinc-400 text-sm">Your commodities market intelligence feed</p>
-                        </div>
-                        {/* Filter Tabs - Hidden on mobile, shown on desktop */}
-                        <div className="hidden sm:flex items-center gap-3">
-                            <FilterTabs tabs={filterTabs} activeTab={activeFilter} onTabChange={setActiveFilter} />
-                        </div>
+                    {/* Title Section - Always left aligned */}
+                    <div className="mb-4">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Today</h1>
+                        <p className="text-zinc-400 text-sm">Your commodities market intelligence feed</p>
                     </div>
-                    {/* Filter Tabs - Full width row on mobile */}
-                    <div className="sm:hidden">
+                    {/* Filter Tabs - Centered */}
+                    <div className="flex justify-center">
                         <FilterTabs tabs={filterTabs} activeTab={activeFilter} onTabChange={setActiveFilter} />
                     </div>
                 </motion.div>

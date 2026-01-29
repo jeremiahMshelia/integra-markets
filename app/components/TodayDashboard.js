@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, FlatList, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Share, Alert } from 'react-native';
+import { View, Text, ScrollView, FlatList, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Share, Alert, Image } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { dashboardApi, sentimentApi, marketDataApi } from '../services/api';
 import IntegraIcon from './IntegraIcon';
@@ -47,6 +48,7 @@ const TodayDashboard = ({ agentActive }) => {
           // Pass keywords directly for AI Analysis
           keywords: article.keywords || [],
         }));
+        console.log('[TodayDashboard] First article image_url:', mappedNews[0]?.image_url);
         setNewsData(mappedNews);
       } else {
         // Fallback to sample data if no backend news
@@ -450,6 +452,12 @@ const TodayDashboard = ({ agentActive }) => {
       setAiOverlayVisible(true);
     };
 
+    // Handle long press with haptic feedback
+    const handleLongPress = async () => {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      openAIOverlay(item);
+    };
+
     const handleShare = async () => {
       try {
         const shareContent = {
@@ -473,49 +481,102 @@ const TodayDashboard = ({ agentActive }) => {
     };
 
     return (
-      <View key={item.id} style={styles.newsCard}>
-        <View style={styles.cardHeader}>
-          <View style={styles.sentimentContainer}>
-            <MaterialIcons
-              name={getSentimentIcon(item.sentiment)}
-              size={16}
-              color={getSentimentColor(item.sentiment)}
+      <TouchableOpacity
+        key={item.id}
+        style={styles.newsCard}
+        onLongPress={handleLongPress}
+        delayLongPress={400}
+        activeOpacity={0.9}
+      >
+        {/* Image Section - if image_url exists */}
+        {item.image_url && (
+          <View style={styles.cardImageContainer}>
+            <Image
+              source={{ uri: item.image_url }}
+              style={styles.cardImage}
+              resizeMode="cover"
             />
-            <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
-              {item.sentiment}
-            </Text>
-            <Text style={styles.sentimentScore}>{item.sentimentScore}</Text>
+            {/* Sentiment badge on top of image */}
+            <View style={[styles.imageSentimentBadge, { backgroundColor: getSentimentColor(item.sentiment) }]}>
+              <MaterialIcons
+                name={getSentimentIcon(item.sentiment)}
+                size={12}
+                color="#000"
+              />
+              <Text style={styles.imageSentimentText}>
+                {item.sentiment}
+              </Text>
+            </View>
           </View>
-          <View style={styles.cardHeaderRight}>
-            <TouchableOpacity
-              style={styles.aiButton}
-              onPress={() => openAIOverlay(item)}
-            >
-              <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.moreButton}
-              onPress={() => Alert.alert('More Options', 'Additional article options will be available in the next update')}
-            >
-              <MaterialIcons name="more-horiz" size={20} color="#A0A0A0" />
-            </TouchableOpacity>
+        )}
+
+        {/* Content Section */}
+        <View style={styles.cardContent}>
+          {/* Header - only show if no image */}
+          {!item.image_url && (
+            <View style={styles.cardHeader}>
+              <View style={styles.sentimentContainer}>
+                <MaterialIcons
+                  name={getSentimentIcon(item.sentiment)}
+                  size={16}
+                  color={getSentimentColor(item.sentiment)}
+                />
+                <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
+                  {item.sentiment}
+                </Text>
+                <Text style={styles.sentimentScore}>{item.sentimentScore}</Text>
+              </View>
+              <View style={styles.cardHeaderRight}>
+                <TouchableOpacity
+                  style={styles.aiButton}
+                  onPress={() => openAIOverlay(item)}
+                >
+                  <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.moreButton}
+                  onPress={() => Alert.alert('More Options', 'Additional article options will be available in the next update')}
+                >
+                  <MaterialIcons name="more-horiz" size={20} color="#A0A0A0" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Header for cards with images - different layout */}
+          {item.image_url && (
+            <View style={styles.imageCardHeader}>
+              <TouchableOpacity
+                style={styles.aiButton}
+                onPress={() => openAIOverlay(item)}
+              >
+                <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.moreButton}
+                onPress={() => Alert.alert('More Options', 'Additional article options will be available in the next update')}
+              >
+                <MaterialIcons name="more-horiz" size={20} color="#A0A0A0" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Text style={styles.newsHeadline}>{item.headline}</Text>
+          <Text style={styles.newsSummary} numberOfLines={item.image_url ? 2 : 3}>{item.summary}</Text>
+          <View style={styles.cardFooter}>
+            <View style={styles.sourceInfo}>
+              <Text style={styles.sourceText}>{item.source}</Text>
+              <MaterialIcons name="link" size={12} color="#30A5FF" style={styles.linkIcon} />
+            </View>
+            <View style={styles.cardActions}>
+              <Text style={styles.timeAgo}>{item.timeAgo}</Text>
+              <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+                <MaterialIcons name="share" size={16} color="#A0A0A0" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-        <Text style={styles.newsHeadline}>{item.headline}</Text>
-        <Text style={styles.newsSummary} numberOfLines={2}>{item.summary}</Text>
-        <View style={styles.cardFooter}>
-          <View style={styles.sourceInfo}>
-            <Text style={styles.sourceText}>{item.source}</Text>
-            <MaterialIcons name="link" size={12} color="#30A5FF" style={styles.linkIcon} />
-          </View>
-          <View style={styles.cardActions}>
-            <Text style={styles.timeAgo}>{item.timeAgo}</Text>
-            <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-              <MaterialIcons name="share" size={16} color="#A0A0A0" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -785,9 +846,44 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 12,
     borderRadius: 12,
-    padding: 16,
     borderWidth: 1,
     borderColor: '#333333',
+    overflow: 'hidden',
+  },
+  cardImageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 160,
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imageSentimentBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    gap: 4,
+  },
+  imageSentimentText: {
+    color: '#000',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  cardContent: {
+    padding: 16,
+  },
+  imageCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   cardHeader: {
     flexDirection: 'row',
