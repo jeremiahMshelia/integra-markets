@@ -231,6 +231,53 @@ def _time_from_param(hours=48):
     return dt.strftime("%Y%m%dT%H%M")
 
 
+def _fetch_finnhub_news():
+    """Fetch news from Finnhub as a backup source."""
+    finnhub_key = os.getenv("FINNHUB_API_KEY", "").strip()
+    if not finnhub_key:
+        print("[finnhub] No API key configured")
+        return []
+    
+    try:
+        # Finnhub general news endpoint
+        url = f"https://finnhub.io/api/v1/news?category=general&token={finnhub_key}"
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        
+        if not isinstance(data, list):
+            print(f"[finnhub] Unexpected response format: {type(data)}")
+            return []
+        
+        articles = []
+        for item in data[:50]:  # Limit to 50 articles
+            # Convert Finnhub format to our format
+            # Finnhub datetime is Unix timestamp
+            timestamp = item.get("datetime", 0)
+            if timestamp:
+                dt = datetime.datetime.utcfromtimestamp(timestamp)
+                time_published = dt.strftime("%Y%m%dT%H%M%S")
+            else:
+                time_published = ""
+            
+            art = {
+                "title": item.get("headline", ""),
+                "summary": item.get("summary", ""),
+                "source": item.get("source", ""),
+                "url": item.get("url", ""),
+                "time_published": time_published,
+                "image_url": item.get("image", ""),
+            }
+            if art["title"]:
+                articles.append(art)
+        
+        print(f"[finnhub] Fetched {len(articles)} articles")
+        return articles
+    except Exception as e:
+        print(f"[finnhub] Error fetching news: {e}")
+        return []
+
+
 def _alpha_label_to_sentiment(label):
     if not label:
         return "NEUTRAL"
@@ -1398,9 +1445,17 @@ def _fetch_live_news(commodities, hours=72):
                 _write_cache(arts)
                 return {"articles": arts}
 
-        # Alpha Vantage exhausted - fall back to cache
+        # Alpha Vantage exhausted - try Finnhub as fallback
+        print("[news] Alpha Vantage exhausted, trying Finnhub fallback...")
+        finnhub_articles = _fetch_finnhub_news()
+        if finnhub_articles:
+            print(f"[news/finnhub] Got {len(finnhub_articles)} articles from Finnhub")
+            _enrich_articles_with_images(finnhub_articles)
+            _enrich_articles_with_sentiment(finnhub_articles)
+            _write_cache(finnhub_articles)
+            return {"articles": finnhub_articles}
 
-        # All sources exhausted - use cache as last resort BUT ONLY if reasonably fresh
+        # All API sources exhausted - use cache as last resort BUT ONLY if reasonably fresh
         # DON'T return stale cache older than 24 hours!
         if isinstance(cached.get("articles"), list) and len(cached["articles"]) > 0:
             if cache_age_hours < 24:
