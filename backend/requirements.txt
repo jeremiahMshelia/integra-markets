@@ -1,19 +1,49 @@
+# Core Web Framework
 fastapi==0.104.1
 uvicorn==0.24.0
-supabase==2.3.4
-httpx==0.25.2
-gotrue==2.4.2
-transformers==4.35.0
-torch==2.6.0
-nltk==3.8.1
-python-multipart==0.0.6
-python-jose[cryptography]==3.3.0
-pandas==2.2.2
-numpy==1.26.4
-scikit-learn==1.3.2
-requests==2.31.0
-python-dotenv==1.0.0
 pydantic==2.5.0
+python-multipart==0.0.6
+
+# Database & Auth  
+supabase==2.0.0  # Downgraded to fix httpx client proxy issue
+python-jose[cryptography]==3.3.0
+
+# HTTP & Web Scraping
+aiohttp==3.9.1
+requests==2.31.0
+aiodns==3.1.1
+pycares==4.4.0
+httpx>=0.24.0,<0.25.0  # Match supabase 2.0.0 requirement
 beautifulsoup4==4.12.2
-lxml==5.1.0
 feedparser==6.0.10
+
+# Cryptography for Kalshi API
+cryptography==41.0.7  # For Kalshi API signature generation
+
+# NLP & ML
+nltk==3.8.1  # Includes VADER sentiment analyzer
+numpy==1.24.3  # Required for NLTK and data processing
+torch==2.2.0  # Required for enhanced sentiment analysis
+textblob==0.17.1  # For sentiment analysis and NLP
+
+# AI Services
+groq==0.9.0  # For Groq AI service
+
+# Push Notifications
+exponent-server-sdk==2.0.0  # For mobile push notifications
+
+# Database ORM
+tortoise-orm==0.20.0
+aerich==0.7.2  # For database migrations
+aiosqlite==0.17.0  # Required by tortoise-orm for sqlite backend (compatible with <0.18.0)
+
+# Utilities
+python-dotenv==1.0.0
+
+# Search
+duckduckgo-search==3.8.5  # Compatible with httpx<0.25
+
+# Optional Article Processing (not currently active but imported)
+newspaper3k==0.2.8  # For article extraction
+sumy==0.11.0  # For text summarization
+lxml==4.9.3  # Required by newspaper3k
