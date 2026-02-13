@@ -10,9 +10,11 @@ import {
   Switch,
   Modal,
   Linking,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import {
   ensurePushEnabled,
   openSystemSettings,
@@ -25,6 +27,7 @@ import {
 import { dashboardApi, alertsApi } from '../services/api';
 import { supabaseService } from '../services/supabaseService';
 import HollowCircularIcon from './HollowCircularIcon';
+import EditAlertsModal from './EditAlertsModal';
 
 // Color Palette
 const colors = {
@@ -143,6 +146,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
 
   useEffect(() => {
     loadDataAndAlerts();
@@ -159,12 +163,37 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
   const loadDataAndAlerts = async () => {
     setLoading(true);
     try {
-      // Load preferences first
-      const savedPreferences = await AsyncStorage.getItem('alert_preferences');
+      // Load preferences from Supabase (Source of Truth)
       let preferences = alertPreferences;
-      if (savedPreferences) {
-        preferences = JSON.parse(savedPreferences);
+      const dbPrefs = await supabaseService.getAlertPreferences();
+
+      if (dbPrefs) {
+        // Normalize DB snake_case to state camelCase
+        preferences = {
+          commodities: dbPrefs.commodities || [],
+          regions: dbPrefs.regions || [],
+          currencies: dbPrefs.currencies || [],
+          keywords: dbPrefs.keywords || [],
+          websiteURLs: dbPrefs.website_urls || [],
+          alertFrequency: dbPrefs.alert_frequency || 'Real-time',
+          alertThreshold: dbPrefs.alert_threshold || 'Medium',
+          pushNotifications: dbPrefs.push_enabled !== false,
+          emailAlerts: dbPrefs.email_enabled || false,
+        };
+        // Cache locally
+        await AsyncStorage.setItem('alert_preferences', JSON.stringify(preferences));
         setAlertPreferences(preferences);
+        // Sync individual toggle states from DB
+        setEmailAlerts(preferences.emailAlerts || false);
+      } else {
+        // Fallback to local storage if DB fails or returns null
+        const savedPreferences = await AsyncStorage.getItem('alert_preferences');
+        if (savedPreferences) {
+          preferences = JSON.parse(savedPreferences);
+          setAlertPreferences(preferences);
+          // Sync individual toggle states from local storage
+          setEmailAlerts(preferences.emailAlerts || false);
+        }
       }
 
       // Fetch real news from dashboard
@@ -172,14 +201,36 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
         'Crude Oil': 'OIL',
         'Natural Gas': 'NAT GAS',
         'Gold': 'GOLD',
+        'Silver': 'SILVER',
         'Wheat': 'WHEAT',
+        'Corn': 'CORN',
+        'Copper': 'COPPER',
       };
-      const commodities = preferences.commodities?.map(c => commodityMap[c] || c.toUpperCase()) || [];
-      const queryComms = commodities.length > 0 ? [...new Set(commodities)] : ['OIL', 'GOLD', 'WHEAT', 'NAT GAS'];
 
-      console.log('[AlertsScreen] Fetching news for:', queryComms);
-      const data = await dashboardApi.getTodayDashboard(queryComms);
-      const articles = Array.isArray(data?.news) ? data.news : [];
+      let queryComms = null;
+
+      const mappedComms = preferences.commodities?.map(c => commodityMap[c] || c.toUpperCase()) || [];
+
+      if (mappedComms.length > 0) {
+        queryComms = [...new Set(mappedComms)];
+      } else if (
+        preferences.regions?.length > 0 ||
+        preferences.currencies?.length > 0 ||
+        preferences.keywords?.length > 0 ||
+        preferences.websiteURLs?.length > 0
+      ) {
+        // Fetch broad news to filter locally if user has non-commodity preferences
+        queryComms = [];
+      }
+
+      let articles = [];
+      if (queryComms !== null) {
+        console.log('[AlertsScreen] Fetching news for:', queryComms);
+        const data = await dashboardApi.getTodayDashboard(queryComms);
+        articles = Array.isArray(data?.news) ? data.news : [];
+      } else {
+        console.log('[AlertsScreen] No preferences set, skipping fetch');
+      }
 
       // Convert articles to alerts and filter by preferences
       const newsAlerts = articles
@@ -189,10 +240,30 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
           // Format time - handle various date formats
           const published = article.published || article.time_published || article.pubDate;
           let timeAgo = 'recently';
+          let validPublishedDate = null;
+
           if (published) {
             try {
-              const pubDate = new Date(published);
+              let pubDate;
+              // Handle Unix timestamps (seconds)
+              if (typeof published === 'number' && published < 1e12) {
+                pubDate = new Date(published * 1000);
+              } else if (typeof published === 'string' && published.length >= 14 && !published.includes('-') && !published.includes(':') && /^\d{8}T?\d{6}/.test(published)) {
+                // Handle Compact ISO: YYYYMMDDTHHMMSS or YYYYMMDDHHMMSS
+                const clean = published.replace('T', '');
+                const y = clean.substring(0, 4);
+                const m = clean.substring(4, 6);
+                const d = clean.substring(6, 8);
+                const h = clean.substring(8, 10);
+                const min = clean.substring(10, 12);
+                const s = clean.substring(12, 14);
+                pubDate = new Date(`${y}-${m}-${d}T${h}:${min}:${s}Z`);
+              } else {
+                pubDate = new Date(published);
+              }
+
               if (!isNaN(pubDate.getTime())) {
+                validPublishedDate = pubDate.toISOString();
                 const diff = Date.now() - pubDate.getTime();
                 const mins = Math.floor(diff / 60000);
                 if (mins < 0) {
@@ -240,13 +311,13 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
             title: article.title || article.headline || 'News Update',
             message: article.summary || article.description || '',
             source: article.source || 'Unknown',
-            sourceUrl: article.source_url || article.sourceUrl,
+            sourceUrl: article.url || article.source_url || article.sourceUrl,
             type: 'news',
             sentiment,
             matchedTags,
             score,
             matched,
-            createdAt: published || new Date().toISOString(),
+            createdAt: validPublishedDate || new Date().toISOString(),
             timeAgo,
             read: false,
             severity: score > 15 ? 'high' : score > 5 ? 'medium' : 'low',
@@ -261,7 +332,14 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
             preferences.currencies?.length > 0 ||
             preferences.keywords?.length > 0 ||
             preferences.websiteURLs?.length > 0);
-          return !hasPrefs || a.matched;
+
+          // Strict 24h Filter
+          const created = new Date(a.createdAt).getTime();
+          const diff = Date.now() - created;
+          const isRecent = diff < 24 * 60 * 60 * 1000;
+
+          // Only show matched articles if user has preferences AND recent
+          return hasPrefs && a.matched && isRecent;
         })
         .sort((a, b) => b.score - a.score)
         .slice(0, 15);
@@ -368,13 +446,21 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
     // Open article if it has a URL
     if (alert.sourceUrl) {
       try {
-        await Linking.openURL(alert.sourceUrl);
+        const supported = await Linking.canOpenURL(alert.sourceUrl);
+        if (supported) {
+          await Linking.openURL(alert.sourceUrl);
+        } else {
+          Alert.alert('Error', 'Cannot open this link: ' + alert.sourceUrl);
+        }
       } catch (err) {
         console.log('Could not open URL:', alert.sourceUrl);
+        Alert.alert('Error', 'Could not open link.');
       }
     } else if (onArticlePress) {
       // If we have an onArticlePress handler, use it
       onArticlePress(alert);
+    } else {
+      Alert.alert('No Article', 'This alert does not have a linked article.');
     }
   };
 
@@ -404,6 +490,16 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
             await saveNotificationSettings({ ...s, pushNotifications: true });
             const token = await getStoredPushToken();
             if (!token) await registerForPushNotificationsAsync({ silent: true });
+            // Persist to Supabase
+            try {
+              const userId = await supabaseService.getCurrentUserId();
+              if (userId) {
+                await supabaseService.supabase
+                  .from('alert_preferences')
+                  .update({ push_enabled: true })
+                  .eq('user_id', userId);
+              }
+            } catch (e) { console.log('[Alerts] Failed to sync push setting to DB:', e); }
           } else {
             openSystemSettings();
           }
@@ -411,10 +507,30 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
           setPushAlerts(false);
           const s = await getNotificationSettings();
           await saveNotificationSettings({ ...s, pushNotifications: false });
+          // Persist to Supabase
+          try {
+            const userId = await supabaseService.getCurrentUserId();
+            if (userId) {
+              await supabaseService.supabase
+                .from('alert_preferences')
+                .update({ push_enabled: false })
+                .eq('user_id', userId);
+            }
+          } catch (e) { console.log('[Alerts] Failed to sync push setting to DB:', e); }
         }
         break;
       case 'email':
         setEmailAlerts(value);
+        // Persist to Supabase
+        try {
+          const userId = await supabaseService.getCurrentUserId();
+          if (userId) {
+            await supabaseService.supabase
+              .from('alert_preferences')
+              .update({ email_enabled: value })
+              .eq('user_id', userId);
+          }
+        } catch (e) { console.log('[Alerts] Failed to sync email setting to DB:', e); }
         break;
       case 'price':
         setPriceAlerts(value);
@@ -424,6 +540,8 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
         break;
     }
   };
+
+
 
   const renderPreferenceItem = (label, items, emptyMessage) => {
     if (!preferencesLoaded) {
@@ -506,7 +624,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
 
           <TouchableOpacity
             style={styles.editPreferencesButton}
-            onPress={onNavigateToAlertPreferences}
+            onPress={() => setEditModalVisible(true)}
           >
             <Text style={styles.editPreferencesText}>Edit Alert Preferences</Text>
           </TouchableOpacity>
@@ -678,6 +796,12 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
           </View>
         </View>
       </Modal>
+      <EditAlertsModal
+        visible={editModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        initialPreferences={alertPreferences}
+        onSave={() => loadDataAndAlerts()}
+      />
     </SafeAreaView>
   );
 };

@@ -36,13 +36,15 @@ except ImportError:
 try:
     from api.news import router as news_router
     news_available = True
-except ImportError:
+except ImportError as e:
+    print(f"Error importing api.news: {e}")
     news_available = False
 
 try:
     from api.kalshi import router as kalshi_router
     kalshi_available = True
-except ImportError:
+except ImportError as e:
+    print(f"Error importing api.kalshi: {e}")
     kalshi_available = False
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
@@ -57,14 +59,15 @@ async def shutdown_event():
     await close_db()
 
 # Mount routers conditionally
+# Mount routers conditionally
 if notifications_available:
-    app.include_router(notifications_router)
+    app.include_router(notifications_router, prefix="/api")
 if market_data_available:
-    app.include_router(market_data_router)
+    app.include_router(market_data_router, prefix="/api")
 if news_available:
-    app.include_router(news_router)
+    app.include_router(news_router, prefix="/api")
 if kalshi_available:
-    app.include_router(kalshi_router)
+    app.include_router(kalshi_router, prefix="/api")
 
 # Add CORS middleware to allow requests from your React Native app
 app.add_middleware(
