@@ -18,6 +18,13 @@ from services.enhanced_caching import cache_manager, cached
 from services.news_preprocessing import preprocess_news, create_pipeline_ready_output
 from services.sentiment import analyze_text as analyze_sentiment
 from services.alpha_vantage import get_news as alpha_get_news
+try:
+    from services.data_sources import NewsDataSources
+    DATA_SOURCES_AVAILABLE = True
+except ImportError:
+    DATA_SOURCES_AVAILABLE = False
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -410,8 +417,60 @@ class NewsService:
         except Exception as e:
             logger.error(f"Error fetching Alpha Vantage news: {str(e)}")
 
-        # --- Secondary source: legacy RSS feeds (only if AV returned nothing) ---
+        # --- Secondary source: NewsDataSources (robust RSS feeds) ---
+        if (not all_articles or len(all_articles) < 5) and DATA_SOURCES_AVAILABLE:
+            logger.info("Alpha Vantage returned limited/no news, falling back to NewsDataSources")
+            try:
+                async with NewsDataSources() as sources:
+                    # Fetch from all available sources
+                    rss_articles = await sources.fetch_all_sources()
+                    
+                    # Convert to internal format
+                    for article in rss_articles:
+                        # Skip if we already have this URL
+                        if any(a.get("url") == article.get("url") for a in all_articles):
+                            continue
+                            
+                        # Normalize timestamp
+                        pub_date = article.get("published", datetime.utcnow())
+                        if isinstance(pub_date, str):
+                            try:
+                                pub_date = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
+                            except:
+                                pub_date = datetime.utcnow()
+                        
+                        # Calculate sentiment locally since RSS doesn't provide it
+                        combined_text = f"{article.get('title', '')} {article.get('summary', '')}"
+                        sentiment_result = await analyze_sentiment(combined_text)
+                        
+                        # Extract ensemble sentiment
+                        ensemble = sentiment_result.get("ensemble", {})
+                        sentiment_label = ensemble.get("sentiment", "NEUTRAL")
+                        sentiment_conf = ensemble.get("confidence", 0.0)
+
+                        all_articles.append({
+                            "title": article.get("title", ""),
+                            "url": article.get("url", ""),
+                            "time_published": pub_date.strftime("%Y%m%dT%H%M%S"),
+                            "summary": article.get("summary", ""),
+                            "source": article.get("source", "RSS"),
+                            "source_name": "rss_fallback",
+                            "sentiment": sentiment_label,
+                            "sentiment_score": sentiment_conf,
+                            "published": pub_date
+                        })
+                    
+                    logger.info(f"NewsDataSources provided {len(rss_articles)} articles, total now {len(all_articles)}")
+            except Exception as e:
+                logger.error(f"Error fetching from NewsDataSources: {str(e)}")
+
+        # --- Tertiary source: legacy RSS feeds (only if everything else failed) ---
         if not all_articles:
+            # Fetch from all RSS sources concurrently
+            tasks = []
+            for source_name, rss_url in self.rss_sources.items():
+                task = self._fetch_rss_feed(rss_url)
+                tasks.append((source_name, task))
             # Fetch from all RSS sources concurrently
             tasks = []
             for source_name, rss_url in self.rss_sources.items():

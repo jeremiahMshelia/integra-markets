@@ -5,3 +5,7 @@ python-multipart==0.0.6
 requests==2.31.0
 python-dotenv==1.0.0
 pydantic==2.5.0
+nltk==3.8.1
+httpx==0.24.1
+beautifulsoup4==4.12.2
+feedparser==6.0.10

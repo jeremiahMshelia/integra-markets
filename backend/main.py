@@ -103,7 +103,7 @@ class SentimentResponse(BaseModel):
     confidence: float
     timestamp: str
 
-@app.get('/')
+@app.api_route('/', methods=["GET", "HEAD"])
 def read_root():
     return {
         "message": "Integra AI Backend is running!",
@@ -122,7 +122,7 @@ def read_root():
         ]
     }
 
-@app.get('/health')
+@app.api_route('/health', methods=["GET", "HEAD"])
 def health_check():
     return {"status": "healthy", "supabase_connected": bool(supabase_url and supabase_key)}
 
