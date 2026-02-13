@@ -1,30 +1,19 @@
-import os
-from tortoise import Tortoise
-from pathlib import Path
+import logging
+from core.database import create_db_and_tables
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite://./data/db.sqlite3")
-
-# Ensure sqlite directory exists when using sqlite URL
-if DATABASE_URL.startswith("sqlite://"):
-    # Extract the file path from the URL
-    db_file = DATABASE_URL.replace("sqlite://", "", 1)
-    if db_file.startswith("./"):
-        db_file = db_file[2:]  # Remove "./" prefix
-    db_dir = Path(db_file).parent
-    db_dir.mkdir(parents=True, exist_ok=True)
-
-MODELS_MODULES = [
-    "api.models.notification",
-    "api.models.alert_preference",
-]
+logger = logging.getLogger(__name__)
 
 async def init_db():
-    await Tortoise.init(
-        db_url=DATABASE_URL,
-        modules={"models": MODELS_MODULES},
-    )
-    await Tortoise.generate_schemas()
+    """Initialize database tables using SQLAlchemy"""
+    try:
+        # Create tables (synchronous operation)
+        create_db_and_tables()
+        logger.info("Database initialized successfully via SQLAlchemy")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        # Don't raise, allowing app to start even if DB init fails (e.g. if tables exist)
 
 async def close_db():
-    await Tortoise.close_connections()
+    """Close database connections (No-op for SQLAlchemy with connection pooling)"""
+    pass
 
