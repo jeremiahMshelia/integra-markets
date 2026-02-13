@@ -292,7 +292,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
             <View style={styles.imageSentimentBadge}>
               {renderSentimentIcon(item.sentiment)}
               <Text style={[styles.imageSentimentText, { color: getSentimentColor(item.sentiment) }]}>
-                {item.sentiment.toUpperCase()}
+                {item.sentiment.toUpperCase()} {item.sentimentScore || '0.50'}
               </Text>
             </View>
           )}
@@ -336,7 +336,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         </View>
 
         {/* Description */}
-        <Text style={styles.description} numberOfLines={item.image_url ? 2 : 3}>
+        <Text style={styles.description} numberOfLines={item.image_url ? 3 : 4}>
           {item.summary || item.content || 'More details would go here...'}
         </Text>
 

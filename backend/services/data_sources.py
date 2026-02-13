@@ -9,6 +9,7 @@ import feedparser
 import json
 import re
 from datetime import datetime, timedelta
+from time import mktime
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import logging
@@ -44,11 +45,10 @@ class NewsDataSources:
         if self.session:
             await self.session.close()
 
-    async def fetch_reuters_commodities(self) -> List[Dict]:
-        """Fetch Reuters commodities news via RSS feed"""
+    async def fetch_oilprice_news(self) -> List[Dict]:
+        """Fetch OilPrice.com news via RSS feed"""
         try:
-            # Reuters commodities RSS feed
-            url = "https://feeds.reuters.com/reuters/businessNews"
+            url = "https://oilprice.com/rss/main"
             
             async with self.session.get(url) as response:
                 if response.status == 200:
@@ -56,34 +56,28 @@ class NewsDataSources:
                     feed = feedparser.parse(content)
                     
                     articles = []
-                    for entry in feed.entries[:10]:  # Get latest 10 articles
-                        # Filter for commodity-related keywords
-                        title = entry.title.lower()
-                        summary = getattr(entry, 'summary', '').lower()
-                        
-                        commodity_keywords = ['oil', 'gas', 'gold', 'silver', 'copper', 'wheat', 'corn', 'commodity', 'energy', 'metal']
-                        if any(keyword in title or keyword in summary for keyword in commodity_keywords):
-                            articles.append({
-                                'source': 'Reuters',
-                                'title': entry.title,
-                                'summary': getattr(entry, 'summary', ''),
-                                'url': entry.link,
-                                'published': self._parse_date(entry.published),
-                                'category': 'commodities'
-                            })
+                    for entry in feed.entries[:10]:
+                        articles.append({
+                            'source': 'OilPrice.com',
+                            'title': entry.title,
+                            'summary': getattr(entry, 'summary', ''),
+                            'url': entry.link,
+                            'published': self._parse_date(entry),
+                            'category': 'energy'
+                        })
                     
-                    logger.info(f"Fetched {len(articles)} Reuters articles")
+                    logger.info(f"Fetched {len(articles)} OilPrice articles")
                     return articles
                     
         except Exception as e:
-            logger.error(f"Error fetching Reuters news: {e}")
+            logger.error(f"Error fetching OilPrice news: {e}")
             return []
     
     async def fetch_yahoo_finance_commodities(self) -> List[Dict]:
         """Fetch Yahoo Finance commodities news via RSS"""
         try:
-            # Yahoo Finance commodities RSS feed
-            url = "https://feeds.finance.yahoo.com/rss/2.0/headline"
+            # Yahoo Finance commodities RSS feed (General index is more reliable)
+            url = "https://finance.yahoo.com/news/rssindex"
             
             async with self.session.get(url) as response:
                 if response.status == 200:
@@ -103,7 +97,10 @@ class NewsDataSources:
                                 'title': entry.title,
                                 'summary': getattr(entry, 'summary', ''),
                                 'url': entry.link,
-                                'published': self._parse_date(entry.published),
+                                'url': entry.link,
+                                'published': self._parse_date(entry),
+                                'category': 'commodities'
+                            })
                                 'category': 'commodities'
                             })
                     
@@ -132,7 +129,10 @@ class NewsDataSources:
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
                             'url': entry.link,
-                            'published': self._parse_date(entry.published),
+                            'url': entry.link,
+                            'published': self._parse_date(entry),
+                            'category': 'energy_data'
+                        })
                             'category': 'energy_data'
                         })
                     
@@ -161,7 +161,10 @@ class NewsDataSources:
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
                             'url': entry.link,
-                            'published': self._parse_date(entry.published),
+                            'url': entry.link,
+                            'published': self._parse_date(entry),
+                            'category': 'energy_policy'
+                        })
                             'category': 'energy_policy'
                         })
                     
@@ -172,12 +175,10 @@ class NewsDataSources:
             logger.error(f"Error fetching IEA news: {e}")
             return []
 
-    async def fetch_bloomberg_commodities(self) -> List[Dict]:
-        """Fetch Bloomberg commodities news via alternative sources"""
+    async def fetch_mining_news(self) -> List[Dict]:
+        """Fetch Mining.com news for metals/commodities"""
         try:
-            # Bloomberg commodities RSS (if available)
-            # Note: Bloomberg has limited free RSS feeds
-            url = "https://feeds.bloomberg.com/markets/news.rss"
+            url = "https://www.mining.com/feed/"
             
             async with self.session.get(url) as response:
                 if response.status == 200:
@@ -187,25 +188,22 @@ class NewsDataSources:
                     articles = []
                     for entry in feed.entries[:10]:
                         title = entry.title.lower()
-                        summary = getattr(entry, 'summary', '').lower()
-                        
-                        # Filter for commodity content
-                        commodity_keywords = ['oil', 'gas', 'gold', 'silver', 'copper', 'wheat', 'corn', 'commodity', 'energy', 'metal', 'futures']
-                        if any(keyword in title or keyword in summary for keyword in commodity_keywords):
+                        # Filter for major metals/commodities
+                        if any(k in title for k in ['gold', 'silver', 'copper', 'lithium', 'nickel', 'metal', 'mining']):
                             articles.append({
-                                'source': 'Bloomberg',
+                                'source': 'Mining.com',
                                 'title': entry.title,
                                 'summary': getattr(entry, 'summary', ''),
                                 'url': entry.link,
-                                'published': self._parse_date(entry.published),
-                                'category': 'markets'
+                                'published': self._parse_date(entry),
+                                'category': 'commodities'
                             })
                     
-                    logger.info(f"Fetched {len(articles)} Bloomberg articles")
+                    logger.info(f"Fetched {len(articles)} Mining.com articles")
                     return articles
                     
         except Exception as e:
-            logger.error(f"Error fetching Bloomberg news: {e}")
+            logger.error(f"Error fetching Mining.com news: {e}")
             return []
 
     async def fetch_sp_global_platts(self) -> List[Dict]:
@@ -235,7 +233,8 @@ class NewsDataSources:
                                 'title': entry.title,
                                 'summary': getattr(entry, 'summary', ''),
                                 'url': entry.link,
-                                'published': self._parse_date(entry.published),
+                                'url': entry.link,
+                                'published': self._parse_date(entry),
                                 'category': 'commodities'
                             })
                     
@@ -250,6 +249,7 @@ class NewsDataSources:
         """Fetch from additional reliable commodity news sources"""
         articles = []
         
+        try:
         try:
             # CNBC commodities
             cnbc_url = "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
@@ -266,10 +266,13 @@ class NewsDataSources:
                                 'title': entry.title,
                                 'summary': getattr(entry, 'summary', ''),
                                 'url': entry.link,
-                                'published': self._parse_date(entry.published),
+                                'published': self._parse_date(entry),
                                 'category': 'commodities'
                             })
+        except Exception as e:
+            logger.error(f"Error fetching CNBC: {e}")
             
+        try:
             # Financial Times markets (limited free access)
             ft_url = "https://www.ft.com/markets?format=rss"
             async with self.session.get(ft_url) as response:
@@ -285,21 +288,26 @@ class NewsDataSources:
                                 'title': entry.title,
                                 'summary': getattr(entry, 'summary', ''),
                                 'url': entry.link,
-                                'published': self._parse_date(entry.published),
+                                'published': self._parse_date(entry),
                                 'category': 'markets'
                             })
-            
-            logger.info(f"Fetched {len(articles)} additional source articles")
-            
         except Exception as e:
-            logger.error(f"Error fetching additional sources: {e}")
+            logger.error(f"Error fetching FT: {e}")
             
         return articles
 
-    def _parse_date(self, date_string: str) -> datetime:
-        """Parse various date formats to datetime object"""
+    def _parse_date(self, entry) -> datetime:
+        """Parse date from feed entry, preferring struct_time"""
         try:
-            # Try parsing different date formats
+            # Use parsed struct_time if available (most reliable)
+            if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                return datetime.fromtimestamp(mktime(entry.published_parsed))
+            
+            # Fallback to string parsing
+            date_string = getattr(entry, 'published', '')
+            if not date_string:
+                return datetime.now()
+                
             formats = [
                 '%a, %d %b %Y %H:%M:%S %Z',  # RFC 2822
                 '%a, %d %b %Y %H:%M:%S %z',  # RFC 2822 with timezone
@@ -313,7 +321,6 @@ class NewsDataSources:
                 except ValueError:
                     continue
                     
-            # If all formats fail, return current time
             return datetime.now()
             
         except Exception:
@@ -322,11 +329,11 @@ class NewsDataSources:
     async def fetch_all_sources(self) -> List[Dict]:
         """Fetch news from all sources concurrently"""
         tasks = [
-            self.fetch_reuters_commodities(),
+            self.fetch_oilprice_news(),
             self.fetch_yahoo_finance_commodities(),
             self.fetch_eia_reports(),
             self.fetch_iea_news(),
-            self.fetch_bloomberg_commodities(),
+            self.fetch_mining_news(),
             self.fetch_sp_global_platts(),
             self.fetch_additional_sources(),
         ]
