@@ -97,10 +97,7 @@ class NewsDataSources:
                                 'title': entry.title,
                                 'summary': getattr(entry, 'summary', ''),
                                 'url': entry.link,
-                                'url': entry.link,
                                 'published': self._parse_date(entry),
-                                'category': 'commodities'
-                            })
                                 'category': 'commodities'
                             })
                     
@@ -129,10 +126,7 @@ class NewsDataSources:
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
                             'url': entry.link,
-                            'url': entry.link,
                             'published': self._parse_date(entry),
-                            'category': 'energy_data'
-                        })
                             'category': 'energy_data'
                         })
                     
@@ -161,10 +155,7 @@ class NewsDataSources:
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
                             'url': entry.link,
-                            'url': entry.link,
                             'published': self._parse_date(entry),
-                            'category': 'energy_policy'
-                        })
                             'category': 'energy_policy'
                         })
                     
@@ -233,7 +224,6 @@ class NewsDataSources:
                                 'title': entry.title,
                                 'summary': getattr(entry, 'summary', ''),
                                 'url': entry.link,
-                                'url': entry.link,
                                 'published': self._parse_date(entry),
                                 'category': 'commodities'
                             })
@@ -249,7 +239,6 @@ class NewsDataSources:
         """Fetch from additional reliable commodity news sources"""
         articles = []
         
-        try:
         try:
             # CNBC commodities
             cnbc_url = "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
