@@ -15,7 +15,8 @@ interface NewsItem {
   source?: string;
   sourceUrl?: string;
   sentiment?: string;
-  sentimentScore?: string;
+  sentiment_score?: number | string;
+  sentimentScore?: string | number;
   timeAgo?: string;
   image_url?: string; // Image URL for the card
   // Backend preprocessing fields
@@ -85,7 +86,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
           summary: item.summary || item.content || '',
           source: item.source || 'Unknown',
           sentiment: (item.sentiment?.toUpperCase() as "BULLISH" | "BEARISH" | "NEUTRAL") || 'NEUTRAL',
-          sentimentScore: parseFloat(item.sentimentScore || '0.5')
+          sentimentScore: typeof item.sentiment_score === 'number' ? item.sentiment_score : parseFloat(item.sentimentScore as string || '0.5')
         });
       }
     } catch (error) {
@@ -292,7 +293,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
             <View style={styles.imageSentimentBadge}>
               {renderSentimentIcon(item.sentiment)}
               <Text style={[styles.imageSentimentText, { color: getSentimentColor(item.sentiment) }]}>
-                {item.sentiment.toUpperCase()} {item.sentimentScore || '0.50'}
+                {item.sentiment.toUpperCase()} {formatScore(item.sentiment_score || item.sentimentScore)}
               </Text>
             </View>
           )}
@@ -312,7 +313,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
                 {item.sentiment.toUpperCase()}
               </Text>
               <Text style={[styles.sentimentScore, { color: getSentimentColor(item.sentiment) }]}>
-                {item.sentimentScore || '0.50'}
+                {formatScore(item.sentiment_score || item.sentimentScore)}
               </Text>
             </View>
           </View>
@@ -363,6 +364,12 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
     </TouchableOpacity>
   );
 }
+
+const formatScore = (score: string | number | undefined): string => {
+  if (score === undefined || score === null) return '0.50';
+  const numProps = typeof score === 'string' ? parseFloat(score) : score;
+  return isNaN(numProps) ? '0.50' : numProps.toFixed(2);
+};
 
 const getSentimentColor = (sentiment: string): string => {
   switch (sentiment?.toUpperCase()) {
