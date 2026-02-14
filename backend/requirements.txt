@@ -29,6 +29,10 @@ textblob==0.17.1  # For sentiment analysis and NLP
 
 # AI Services
 groq==0.9.0  # For Groq AI service
+transformers==4.35.0  # For FinBERT
+vaderSentiment==3.3.2  # For VADER sentiment
+spacy==3.7.2  # For NER
+redis==5.0.1  # For enhanced caching
 
 # Push Notifications
 exponent-server-sdk==2.0.0  # For mobile push notifications
