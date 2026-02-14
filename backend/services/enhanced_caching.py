@@ -11,6 +11,8 @@ from typing import Dict, Any, Optional, Union
 from datetime import datetime, timedelta
 import hashlib
 
+import os
+
 logger = logging.getLogger(__name__)
 
 # Try to import Redis, fallback to memory-only caching
@@ -28,7 +30,7 @@ class EnhancedCacheManager:
     Designed to handle 100-1,000 concurrent users without API rate limits
     """
     
-    def __init__(self, redis_url: str = "redis://localhost:6379", 
+    def __init__(self, redis_url: Optional[str] = None, 
                  redis_db: int = 0, fallback_to_memory: bool = True):
         """Initialize the cache manager"""
         self.redis_client = None
@@ -36,18 +38,24 @@ class EnhancedCacheManager:
         self.memory_expiry = {}
         self.fallback_to_memory = fallback_to_memory
         
-        # Try to connect to Redis
-        if REDIS_AVAILABLE:
+        # Determine Redis URL
+        if redis_url is None:
+            redis_url = os.environ.get("REDIS_URL")
+        
+        # Try to connect to Redis if available and URL is provided
+        if REDIS_AVAILABLE and redis_url:
             try:
                 self.redis_client = redis.Redis.from_url(redis_url, db=redis_db, decode_responses=True)
                 # Test connection
                 self.redis_client.ping()
-                logger.info("Connected to Redis cache backend")
+                logger.info(f"Connected to Redis cache backend at {redis_url.split('@')[-1]}")
             except Exception as e:
                 logger.warning(f"Failed to connect to Redis: {e}")
                 if not fallback_to_memory:
                     raise
                 self.redis_client = None
+        else:
+            logger.info("Redis not configured (REDIS_URL not set). Using memory-only caching.")
         
         # Performance metrics
         self.stats = {
