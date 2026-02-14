@@ -32,6 +32,7 @@ groq==0.9.0  # For Groq AI service
 transformers==4.35.0  # For FinBERT
 vaderSentiment==3.3.2  # For VADER sentiment
 spacy==3.7.2  # For NER
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl  # Direct model install
 redis==5.0.1  # For enhanced caching
 
 # Push Notifications

@@ -18,7 +18,6 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Download ML models/data during build
-RUN python -m spacy download en_core_web_sm
 RUN python -c "import nltk; nltk.download('vader_lexicon', download_dir='/root/nltk_data')"
 
 # Final stage
