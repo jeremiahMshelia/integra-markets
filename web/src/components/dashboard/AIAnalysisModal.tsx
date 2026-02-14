@@ -56,18 +56,18 @@ const getSentimentColor = (sentiment: string): string => {
 };
 
 const extractKeyDrivers = (article: NewsItem): string[] => {
-    // Use backend keywords if available
+    // Use backend keywords if available (now returns {word, score} objects)
     if (article.keywords && article.keywords.length > 0) {
-        return article.keywords.map(k => k.word);
+        return article.keywords.map((k: any) => typeof k === 'string' ? k : k.word).filter(Boolean);
     }
 
-    // Fallback to text extraction
-    const keywords = ['earnings', 'revenue', 'growth', 'oil', 'gas', 'market', 'investment', 'ipo', 'stock', 'trading', 'crude', 'prices', 'fed', 'rates', 'opec'];
+    // Fallback: scan article text against finance lexicon (commodity-focused first)
+    const commodityFirst = ['crude', 'oil', 'opec', 'gas', 'lng', 'gold', 'silver', 'copper', 'wheat', 'corn', 'soybeans', 'supply', 'demand', 'production', 'sanctions', 'tariff', 'fed', 'rates', 'inflation', 'futures', 'rally', 'decline', 'surplus', 'deficit', 'pipeline', 'refinery', 'inventory', 'earnings', 'revenue', 'growth', 'market', 'investment', 'ipo', 'stock', 'trading', 'prices'];
     const found: string[] = [];
     const text = (article.title + ' ' + (article.summary || '')).toLowerCase();
 
-    for (const keyword of keywords) {
-        if (text.includes(keyword) && found.length < 3) {
+    for (const keyword of commodityFirst) {
+        if (text.includes(keyword) && found.length < 5) {
             found.push(keyword.charAt(0).toUpperCase() + keyword.slice(1));
         }
     }
@@ -188,6 +188,9 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
     const [tourStep, setTourStep] = useState(0);
 
     // Tour steps (no emojis)
+    const [tourMode, setTourMode] = useState<'full' | 'single'>('full');
+
+    // Tour steps (no emojis)
     const tourSteps = [
         {
             title: 'Welcome to Integra Analysis',
@@ -299,7 +302,36 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
         if (!article?.title) return;
 
         setLoadingVote(true);
+
+        // Optimistic update
+        const currentVote = userVote;
         setUserVote(vote);
+
+        setPollData(prev => {
+            const newData = { ...prev };
+
+            // Remove previous vote if exists
+            if (currentVote) {
+                if (currentVote === 'BULLISH') newData.bullish = Math.max(0, newData.bullish - 1);
+                if (currentVote === 'BEARISH') newData.bearish = Math.max(0, newData.bearish - 1);
+                if (currentVote === 'NEUTRAL') newData.neutral = Math.max(0, newData.neutral - 1);
+            } else {
+                newData.total += 1;
+            }
+
+            // Add new vote
+            if (vote === 'BULLISH') newData.bullish += 1;
+            if (vote === 'BEARISH') newData.bearish += 1;
+            if (vote === 'NEUTRAL') newData.neutral += 1;
+
+            // Recalculate percentages
+            const total = newData.total || 1; // Avoid division by zero
+            newData.bullishPercent = Math.round((newData.bullish / total) * 100);
+            newData.bearishPercent = Math.round((newData.bearish / total) * 100);
+            newData.neutralPercent = Math.round((newData.neutral / total) * 100);
+
+            return newData;
+        });
 
         const articleId = getArticleId(article.title);
 
@@ -318,7 +350,8 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                         updated_at: new Date().toISOString(),
                     });
 
-                await fetchPollData();
+                // Fetch real data in background to ensure consistency
+                fetchPollData();
             }
         } catch (error) {
             console.error('Vote error:', error);
@@ -380,7 +413,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                             <div className="sticky top-0 bg-[#1C1C1E] flex items-center justify-between px-4 py-3 border-b border-[#2a2a2a] z-10">
                                 <div className="flex items-center gap-2">
                                     <h2 className="text-lg font-semibold text-white">Integra Analysis</h2>
-                                    <button onClick={() => { setTourStep(0); setShowTour(true); }}>
+                                    <button onClick={() => { setTourMode('full'); setTourStep(0); setShowTour(true); }}>
                                         <Info size={16} className="text-zinc-500 hover:text-zinc-300 transition-colors" />
                                     </button>
                                 </div>
@@ -459,9 +492,9 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                     <div className="flex items-center gap-3">
                                         <span
                                             className="px-3 py-1.5 text-black text-[12px] font-semibold rounded-lg"
-                                            style={{ backgroundColor: getSentimentColor(article.sentiment || 'neutral') }}
+                                            style={{ backgroundColor: '#EAB308' }}
                                         >
-                                            {parseFloat(confidence) > 0.7 ? 'HIGH' : parseFloat(confidence) > 0.4 ? 'MEDIUM' : 'LOW'}
+                                            {article.sentiment || 'NEUTRAL'}
                                         </span>
                                         <span className="text-zinc-400 text-[13px]">Confidence: {confidence}</span>
                                     </div>
@@ -502,7 +535,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                 <div className="bg-[#121212] rounded-xl p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <h4 className="text-white font-semibold text-sm">SENTIMENT POLL</h4>
-                                        <button onClick={() => { setTourStep(5); setShowTour(true); }}>
+                                        <button onClick={() => { setTourMode('single'); setTourStep(5); setShowTour(true); }}>
                                             <Info size={16} className="text-zinc-500 hover:text-zinc-300 transition-colors" />
                                         </button>
                                     </div>
@@ -631,23 +664,27 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-[#1C1C1E] rounded-2xl p-6 max-w-sm w-full border border-[#2a2a2a]"
                                     >
-                                        {/* Progress dots - fancy like mobile */}
-                                        <div className="flex items-center justify-center gap-1 mb-4">
-                                            {tourSteps.map((_, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    className={`h-2 rounded-full transition-all duration-300 ${idx === tourStep
-                                                        ? 'w-6 bg-[#4ECCA3]'
-                                                        : idx < tourStep
-                                                            ? 'w-2 bg-[#4ECCA3]'
-                                                            : 'w-2 bg-zinc-600'
-                                                        }`}
-                                                />
-                                            ))}
-                                        </div>
-                                        <p className="text-zinc-500 text-sm text-center mb-6">
-                                            {tourStep + 1} of {tourSteps.length}
-                                        </p>
+                                        {/* Progress dots - fancy like mobile (ONLY FOR FULL TOUR) */}
+                                        {tourMode === 'full' && (
+                                            <>
+                                                <div className="flex items-center justify-center gap-1 mb-4">
+                                                    {tourSteps.map((_, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            className={`h-2 rounded-full transition-all duration-300 ${idx === tourStep
+                                                                ? 'w-6 bg-[#4ECCA3]'
+                                                                : idx < tourStep
+                                                                    ? 'w-2 bg-[#4ECCA3]'
+                                                                    : 'w-2 bg-zinc-600'
+                                                                }`}
+                                                        />
+                                                    ))}
+                                                </div>
+                                                <p className="text-zinc-500 text-sm text-center mb-6">
+                                                    {tourStep + 1} of {tourSteps.length}
+                                                </p>
+                                            </>
+                                        )}
 
                                         <h3 className="text-white text-xl font-bold text-center mb-3">
                                             {tourSteps[tourStep].title}
@@ -656,22 +693,31 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                             {tourSteps[tourStep].content}
                                         </p>
 
-                                        {/* Skip and Next buttons */}
-                                        <div className="flex gap-3">
+                                        {/* Skip and Next buttons (Full Mode) OR Got it button (Single Mode) */}
+                                        {tourMode === 'full' ? (
+                                            <div className="flex gap-3">
+                                                <button
+                                                    onClick={handleTourSkip}
+                                                    className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-white font-medium transition-colors"
+                                                >
+                                                    Skip
+                                                </button>
+                                                <button
+                                                    onClick={handleTourNext}
+                                                    className="flex-1 py-3 bg-[#4ECCA3] hover:bg-[#3dbb94] rounded-xl text-black font-medium transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    {tourStep < tourSteps.length - 1 ? 'Next' : 'Done'}
+                                                    {tourStep < tourSteps.length - 1 && <span>→</span>}
+                                                </button>
+                                            </div>
+                                        ) : (
                                             <button
-                                                onClick={handleTourSkip}
-                                                className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-white font-medium transition-colors"
+                                                onClick={() => setShowTour(false)}
+                                                className="w-full py-3 bg-[#4ECCA3] hover:bg-[#3dbb94] rounded-xl text-black font-medium transition-colors"
                                             >
-                                                Skip
+                                                Got it
                                             </button>
-                                            <button
-                                                onClick={handleTourNext}
-                                                className="flex-1 py-3 bg-[#4ECCA3] hover:bg-[#3dbb94] rounded-xl text-black font-medium transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                {tourStep < tourSteps.length - 1 ? 'Next' : 'Done'}
-                                                {tourStep < tourSteps.length - 1 && <span>→</span>}
-                                            </button>
-                                        </div>
+                                        )}
                                     </motion.div>
                                 </motion.div>
                             )}

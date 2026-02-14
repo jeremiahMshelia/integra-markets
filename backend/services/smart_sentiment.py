@@ -87,6 +87,9 @@ class SmartSentimentAnalyzer:
         # Step 5: Determine final sentiment
         result = self._determine_sentiment(sentiment_scores, preprocessing)
         
+        # Extract real keywords from text using finance lexicon
+        extracted_keywords = self._extract_finance_keywords(text, preprocessing)
+        
         # Add metadata
         result.update({
             'preprocessing': preprocessing,
@@ -96,8 +99,68 @@ class SmartSentimentAnalyzer:
             'event_type': preprocessing.get('event_type'),
             'market_impact': preprocessing.get('market_impact'),
             'severity': preprocessing.get('severity'),
-            'keywords': preprocessing.get('trigger_keywords', [])
+            'keywords': extracted_keywords
         })
+        
+        return result
+    
+    def _extract_finance_keywords(self, text: str, preprocessing: Dict) -> list:
+        """Extract meaningful finance keywords from text with scores.
+        Returns list of {word, score} dicts matching frontend expectations."""
+        import re
+        
+        FINANCE_LEXICON = {
+            'rate', 'rates', 'cut', 'hike', 'yield', 'yields', 'treasury', 'bond',
+            'interest', 'cpi', 'ppi', 'inflation', 'deflation', 'gdp', 'jobs',
+            'unemployment', 'payrolls', 'pmi', 'guidance', 'earnings', 'revenue',
+            'margin', 'buyback', 'dividend', 'valuation', 'liquidity', 'volatility',
+            'recession', 'growth', 'outlook', 'forecast', 'upgrade', 'downgrade',
+            'opec', 'inventory', 'supply', 'demand', 'production', 'exports',
+            'sanctions', 'geopolitical', 'tariff', 'tariffs', 'risk', 'etf',
+            'inflows', 'outflows', 'ipo', 'merger', 'acquisition', 'approval',
+            'policy', 'dovish', 'hawkish', 'fed', 'reserve', 'powell',
+            'oil', 'gas', 'gold', 'wheat', 'copper', 'silver', 'commodities',
+            'crude', 'brent', 'wti', 'lng', 'petroleum', 'refinery', 'pipeline',
+            'equities', 'stocks', 'price', 'prices', 'volume', 'breakout',
+            'support', 'resistance', 'futures', 'spot', 'trend', 'momentum',
+            'rally', 'surge', 'decline', 'crash', 'correction', 'recovery',
+            'surplus', 'deficit', 'shortage', 'oversupply', 'stockpile',
+            'drought', 'hurricane', 'freeze', 'harvest', 'crop',
+            'embargo', 'blockade', 'conflict', 'war', 'tensions',
+            'storage', 'drawdown', 'injection', 'withdrawal',
+            'smelter', 'mine', 'drilling', 'exploration',
+            'dollar', 'euro', 'yuan', 'yen', 'currency', 'forex',
+            'stimulus', 'spending', 'budget', 'debt', 'credit',
+            'alliance', 'security', 'energy', 'nuclear', 'renewable',
+            'investment', 'investors', 'trading', 'market', 'markets',
+        }
+        
+        # Important 3-letter finance terms to keep
+        SHORT_TERMS = {'oil', 'gdp', 'fed', 'ipo', 'cpi', 'ppi', 'etf', 'lng', 'pmi', 'gas', 'cut'}
+        
+        words = re.findall(r'\b[a-z]{3,}\b', text.lower())
+        counts: dict = {}
+        for w in words:
+            if w in FINANCE_LEXICON:
+                # Skip 3-letter words unless they're important finance terms
+                if len(w) <= 3 and w not in SHORT_TERMS:
+                    continue
+                counts[w] = counts.get(w, 0) + 1
+        
+        if not counts:
+            # Fallback: use trigger_keywords from preprocessing
+            trigger = preprocessing.get('trigger_keywords', [])
+            return [{'word': kw.capitalize(), 'score': 0.7} for kw in trigger[:5]]
+        
+        # Sort by frequency, take top 8
+        sorted_kws = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+        result = []
+        for i, (word, count) in enumerate(sorted_kws[:8]):
+            score = round(min(0.95, 0.6 + count * 0.05 + (8 - i) * 0.02), 2)
+            result.append({
+                'word': word.capitalize(),
+                'score': score
+            })
         
         return result
     

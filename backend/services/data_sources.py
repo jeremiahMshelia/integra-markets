@@ -236,6 +236,7 @@ class NewsDataSources:
             tasks.append(
                 self._fetch_rss(
                     info["url"], info["source"], info["category"],
+                    max_items=15,
                     filter_keywords=(info["category"] == "markets"),
                 )
             )
@@ -247,7 +248,7 @@ class NewsDataSources:
                     _gnews_url(query),
                     "Google News",
                     key.split("_")[0],  # energy, gold, silver, etc.
-                    max_items=8,
+                    max_items=12,
                 )
             )
 
@@ -258,7 +259,7 @@ class NewsDataSources:
                     _gnews_url(query),
                     "Google News",
                     key,
-                    max_items=6,
+                    max_items=10,
                 )
             )
 
@@ -284,14 +285,14 @@ class NewsDataSources:
         if fresh:
             unique = fresh
         else:
-            logger.warning("No articles within 24h, keeping newest 20")
-            unique = unique[:20]
+            logger.warning("No articles within 24h, keeping newest 30")
+            unique = unique[:30]
 
         logger.info(
             "Total: %d unique fresh articles from all sources",
             len(unique),
         )
-        return unique[:50]
+        return unique[:75]
 
     # ──────────────────────────────────────────────────────────────────
     # Deduplication

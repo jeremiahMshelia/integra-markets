@@ -43,8 +43,8 @@ if (!__DEV__) {
 // Import all components
 import IntegraLoadingPage from './components/IntegraLoadingPage';
 import AuthLoadingScreen from './components/AuthLoadingScreen';
-import OnboardingForm from './components/OnboardingForm';
-import AlertPreferencesForm from './components/AlertPreferencesForm';
+import EditProfileModal from './components/EditProfileModal';
+import EditAlertsModal from './components/EditAlertsModal';
 import AlertsScreen from './components/AlertsScreen';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
@@ -953,9 +953,10 @@ const App = () => {
   };
 
   const getFilteredNews = () => {
-    const src = liveNews;
-    if (activeFilter === 'All') return src;
-    return src.filter(item => item.sentiment === activeFilter.toUpperCase());
+    if (activeFilter === 'All') return liveNews;
+    // When filtering by sentiment, search ALL news — not just the paginated slice.
+    // This ensures Bearish/Bullish articles beyond the initial 8 are shown immediately.
+    return allNews.filter(item => item.sentiment === activeFilter.toUpperCase());
   };
 
   const handleLoadMore = async () => {
@@ -1070,25 +1071,66 @@ const App = () => {
   // Render onboarding
   if (showOnboarding) {
     return (
-      <OnboardingForm
-        onComplete={handleOnboardingComplete}
-        onSkip={handleOnboardingSkip}
-        showSkipOption={true}
-        userData={userData}
-      />
+      <View style={styles.container}>
+        <EditProfileModal
+          visible={true}
+          onboarding={true}
+          initialProfile={userData}
+          onSave={async (data) => {
+            // Update local storage to mark profile step as done
+            try {
+              await AsyncStorage.setItem('onboarding_completed', 'true');
+
+              // Map Supabase data format to userData format and update local cache
+              const updatedUserData = {
+                ...userData,
+                username: data.username,
+                fullName: data.full_name,
+                role: data.role,
+                experience: data.experience_level,
+                institution: data.company,
+                bio: data.bio,
+                marketFocus: data.market_focus,
+                avatarUrl: data.avatar_url,
+                linkedin: data.linkedin,
+              };
+
+              await AsyncStorage.setItem('user_data', JSON.stringify(updatedUserData));
+              setUserData(updatedUserData);
+              console.log('[App] Local profile state updated after save');
+            } catch (e) {
+              console.error('[App] Failed to update local state:', e);
+            }
+
+            // Proceed to alerts step
+            setShowOnboarding(false);
+            setShowAlertPreferences(true);
+          }}
+          onSkip={handleOnboardingSkip}
+          onClose={handleOnboardingSkip}
+        />
+      </View>
     );
   }
 
-  // Render alert preferences
+  // Render alert preferences (using EditAlertsModal for consistency)
   if (showAlertPreferences) {
     return (
-      <AlertPreferencesForm
-        onComplete={() => { handleAlertPreferencesComplete(); setIsEditingAlerts(false); }}
-        onSkip={() => { handleAlertPreferencesComplete(); setIsEditingAlerts(false); }}
-        onClose={() => { setShowAlertPreferences(false); setIsEditingAlerts(false); }}
-        showSkipOption={true}
-        isEditMode={isEditingAlerts}
-      />
+      <View style={styles.container}>
+        <EditAlertsModal
+          visible={true}
+          wrapInModal={false}
+          initialPreferences={null}
+          onSave={(data) => {
+            handleAlertPreferencesComplete(data);
+            setIsEditingAlerts(false);
+          }}
+          onClose={() => {
+            handleAlertPreferencesSkip();
+            setIsEditingAlerts(false);
+          }}
+        />
+      </View>
     );
   }
 
