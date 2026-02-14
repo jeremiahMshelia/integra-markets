@@ -633,9 +633,11 @@ class NewsService:
                         text = f"{article.get('title', '')} {article.get('summary', '')}"
                         sentiment_result = await analyze_sentiment(text)
                         
+                        # Extract from ensemble (analyze_text returns {ensemble: {sentiment, confidence}, ...})
+                        ensemble = sentiment_result.get("ensemble", {})
                         article.update({
-                            "sentiment": sentiment_result.get("sentiment", "NEUTRAL").upper(),
-                            "sentiment_score": sentiment_result.get("confidence", 0.0),
+                            "sentiment": ensemble.get("sentiment", "NEUTRAL").upper(),
+                            "sentiment_score": ensemble.get("confidence", 0.0),
                             "sentiment_analysis": sentiment_result
                         })
                         
