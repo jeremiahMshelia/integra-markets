@@ -659,7 +659,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                 // Use direct keywords from backend or fallback to Web-consistent logic
                 let drivers = directDrivers;
                 if (drivers.length === 0) {
-                    const webKeywords = ['earnings', 'revenue', 'growth', 'oil', 'gas', 'market', 'investment', 'ipo', 'stock', 'trading', 'crude', 'prices', 'fed', 'rates', 'opec'];
+                    const webKeywords = ['earnings', 'revenue', 'growth', 'oil', 'gas', 'market', 'investment', 'ipo', 'stock', 'trading', 'crude', 'prices', 'fed', 'rates', 'opec', 'battery', 'lithium', 'ev', 'vehicle', 'electric', 'copper', 'mining', 'supply', 'demand', 'inflation', 'yield', 'bond', 'gold', 'silver', 'tech', 'ai'];
                     const found: { text: string; score: number }[] = [];
                     const text = (fullText || '').toLowerCase();
                     for (const k of webKeywords) {
