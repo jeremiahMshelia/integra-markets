@@ -258,7 +258,7 @@ async def send_ai_alert_notification(
             }
         
         # Prepare notification content
-        title = f"🔔 {commodity} Alert: {alert_data.get('action', 'Update')}"
+        title = f"{commodity} Alert: {alert_data.get('action', 'Update')}"
         body = alert_data.get('message', 'New market development')
         
         # Add push notifications to background task

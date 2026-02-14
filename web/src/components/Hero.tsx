@@ -126,7 +126,7 @@ export default function Hero() {
                     >
                         <div className="relative w-[280px] sm:w-[360px] md:w-[420px] lg:w-[480px]">
                             <Image
-                                src="/integra-mockup.webp"
+                                src="/integra-mockup-app.webp"
                                 alt="App Screenshot"
                                 width={480}
                                 height={960}

@@ -44,7 +44,18 @@ interface AIAnalysisOverlayProps {
 
 const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDataProp, news, isVisible, onClose }) => {
     // Support both prop names
-    const newsData = newsDataProp || news;
+    // Support both prop names and unwrap originalArticle if present (from Alerts)
+    let rawNews: any = newsDataProp || news;
+    if (rawNews?.originalArticle) {
+        rawNews = {
+            ...rawNews.originalArticle,
+            ...rawNews,
+            keywords: rawNews.originalArticle.keywords || rawNews.keywords,
+            summary: rawNews.originalArticle.summary || rawNews.message || rawNews.summary,
+            title: rawNews.originalArticle.title || rawNews.title,
+        };
+    }
+    const newsData = rawNews;
     // Normalize title field (TodayDashboard uses 'headline')
     const normalizedNewsData = newsData ? {
         ...newsData,
@@ -66,6 +77,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     // Tour guide state
     const [showTour, setShowTour] = useState(false);
     const [tourStep, setTourStep] = useState(0);
+    const [tourMode, setTourMode] = useState<'full' | 'single'>('full');
     const TOUR_STORAGE_KEY = '@integra_analysis_tour_completed';
 
     // Tour guide content (no emojis)
@@ -102,6 +114,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
             try {
                 const completed = await AsyncStorage.getItem(TOUR_STORAGE_KEY);
                 if (!completed && isVisible) {
+                    setTourMode('full');
                     setShowTour(true);
                     setTourStep(0);
                 }
@@ -135,7 +148,11 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     };
 
     const handleTourDismiss = () => {
-        completeTour();
+        if (tourMode === 'single') {
+            setShowTour(false);
+        } else {
+            completeTour();
+        }
     };
 
     // Poll State
@@ -195,7 +212,34 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
         if (!newsData?.title) return;
 
         // Optimistic update
+        const currentVote = userVote;
         setUserVote(vote);
+
+        setPollData(prev => {
+            const newData = { ...prev };
+
+            // Remove previous vote if exists
+            if (currentVote) {
+                if (currentVote === 'BULLISH') newData.bullish = Math.max(0, newData.bullish - 1);
+                if (currentVote === 'BEARISH') newData.bearish = Math.max(0, newData.bearish - 1);
+                if (currentVote === 'NEUTRAL') newData.neutral = Math.max(0, newData.neutral - 1);
+            } else {
+                newData.total += 1;
+            }
+
+            // Add new vote
+            if (vote === 'BULLISH') newData.bullish += 1;
+            if (vote === 'BEARISH') newData.bearish += 1;
+            if (vote === 'NEUTRAL') newData.neutral += 1;
+
+            // Recalculate percentages
+            const total = newData.total || 1;
+            newData.bullishPercent = Math.round((newData.bullish / total) * 100);
+            newData.bearishPercent = Math.round((newData.bearish / total) * 100);
+            newData.neutralPercent = Math.round((newData.neutral / total) * 100);
+
+            return newData;
+        });
 
         const articleId = newsData.title.replace(/\s+/g, '-').toLowerCase().slice(0, 50);
 
@@ -205,7 +249,6 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
         if (result.success) {
             // Refresh results
             await fetchPollData();
-            Alert.alert('Vote Submitted', 'Thanks for sharing your sentiment!');
         } else {
             Alert.alert('Error', result.error || 'Failed to submit vote');
             setUserVote(null); // Revert on failure
@@ -546,14 +589,14 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                 const getDirectKeywords = (): { text: string; score: number }[] => {
                     // First check if article has top-level keywords from backend
                     if (newsData.keywords && newsData.keywords.length > 0) {
-                        return newsData.keywords.map(k => ({
+                        return newsData.keywords.map((k: any) => ({
                             text: k.word,
                             score: k.score || 0.9
                         }));
                     }
                     // Fall back to analysis keywords
                     if (newsData.analysis?.keywords && newsData.analysis.keywords.length > 0) {
-                        return newsData.analysis.keywords.map(k => ({
+                        return newsData.analysis.keywords.map((k: any) => ({
                             text: k.word,
                             score: k.score || 0.9
                         }));
@@ -571,7 +614,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                     const drivers = directDrivers.length > 0
                         ? directDrivers
                         : pickDrivers(
-                            a.keywords.map((k) => ({ text: String((k as any).word ?? ''), score: Number((k as any).score ?? 0) })),
+                            a.keywords.map((k: any) => ({ text: String((k as any).word ?? ''), score: Number((k as any).score ?? 0) })),
                             fullText
                         );
 
@@ -613,8 +656,19 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                 const bears = webSentiment.bearish;
                 const neuts = webSentiment.neutral;
 
-                // Use direct keywords from backend
-                const drivers = directDrivers;
+                // Use direct keywords from backend or fallback to Web-consistent logic
+                let drivers = directDrivers;
+                if (drivers.length === 0) {
+                    const webKeywords = ['earnings', 'revenue', 'growth', 'oil', 'gas', 'market', 'investment', 'ipo', 'stock', 'trading', 'crude', 'prices', 'fed', 'rates', 'opec'];
+                    const found: { text: string; score: number }[] = [];
+                    const text = (fullText || '').toLowerCase();
+                    for (const k of webKeywords) {
+                        if (text.includes(k) && found.length < 3) {
+                            found.push({ text: k.charAt(0).toUpperCase() + k.slice(1), score: 0.9 });
+                        }
+                    }
+                    drivers = found.length > 0 ? found : [{ text: 'Market Activity', score: 0.5 }];
+                }
                 const level = newsData.sentimentScore > 0.7 ? 'HIGH' : newsData.sentimentScore > 0.4 ? 'MEDIUM' : 'LOW';
                 const conf = newsData.sentimentScore || 0.5;
                 const insights: string[] = [];
@@ -781,6 +835,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                     <Text style={styles.title}>Integra Analysis</Text>
                                     <TouchableOpacity onPress={() => {
+                                        setTourMode('full');
                                         setTourStep(0);
                                         setShowTour(true);
                                     }}>
@@ -884,17 +939,8 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                     <Text style={styles.sectionTitle}>Market Impact</Text>
                                 </View>
                                 <View style={styles.marketImpactContainer}>
-                                    <View style={[
-                                        styles.impactBadge,
-                                        {
-                                            backgroundColor: analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.bearish
-                                                ? '#4ECCA3'  // Green for bullish
-                                                : analysisData.finBertSentiment.bearish > analysisData.finBertSentiment.bullish
-                                                    ? '#F05454'  // Red for bearish
-                                                    : '#EAB308'  // Yellow for neutral
-                                        }
-                                    ]}>
-                                        <Text style={styles.impactLevel}>{analysisData.marketImpact.level}</Text>
+                                    <View style={[styles.impactBadge, { backgroundColor: '#EAB308' }]}>
+                                        <Text style={[styles.impactLevel, { color: '#000000' }]}>{(newsData.sentiment || 'NEUTRAL').toUpperCase()}</Text>
                                     </View>
                                     <Text style={styles.confidenceText}>
                                         Confidence: {analysisData.marketImpact.confidence}
@@ -937,6 +983,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                 <View style={styles.pollHeader}>
                                     <Text style={styles.pollTitle}>Sentiment Poll</Text>
                                     <TouchableOpacity onPress={() => {
+                                        setTourMode('single');
                                         setTourStep(5); // Jump to poll step
                                         setShowTour(true);
                                     }}>
@@ -948,11 +995,11 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                 {!userVote ? (
                                     <View style={styles.pollOptions}>
                                         <TouchableOpacity
-                                            style={[styles.pollOptionSmall, styles.pollBearishSmall]}
-                                            onPress={() => handleVote('BEARISH')}
+                                            style={[styles.pollOptionSmall, styles.pollBullishSmall]}
+                                            onPress={() => handleVote('BULLISH')}
                                         >
-                                            <MaterialIcons name="trending-down" size={14} color="#F05454" />
-                                            <Text style={[styles.pollOptionTextSmall, { color: '#F05454' }]}>Bearish</Text>
+                                            <MaterialIcons name="trending-up" size={14} color="#4ECCA3" />
+                                            <Text style={[styles.pollOptionTextSmall, { color: '#4ECCA3' }]}>Bullish</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[styles.pollOptionSmall, styles.pollNeutralSmall]}
@@ -962,11 +1009,11 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                             <Text style={[styles.pollOptionTextSmall, { color: '#EAB308' }]}>Neutral</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
-                                            style={[styles.pollOptionSmall, styles.pollBullishSmall]}
-                                            onPress={() => handleVote('BULLISH')}
+                                            style={[styles.pollOptionSmall, styles.pollBearishSmall]}
+                                            onPress={() => handleVote('BEARISH')}
                                         >
-                                            <MaterialIcons name="trending-up" size={14} color="#4ECCA3" />
-                                            <Text style={[styles.pollOptionTextSmall, { color: '#4ECCA3' }]}>Bullish</Text>
+                                            <MaterialIcons name="trending-down" size={14} color="#F05454" />
+                                            <Text style={[styles.pollOptionTextSmall, { color: '#F05454' }]}>Bearish</Text>
                                         </TouchableOpacity>
                                     </View>
                                 ) : (
@@ -1059,21 +1106,23 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                 <View style={styles.tourOverlay}>
                     <View style={styles.tourCard}>
                         {/* Progress indicator */}
-                        <View style={styles.tourProgress}>
-                            {tourSteps.map((_, idx) => (
-                                <View
-                                    key={idx}
-                                    style={[
-                                        styles.tourDot,
-                                        idx === tourStep && styles.tourDotActive,
-                                        idx < tourStep && styles.tourDotCompleted
-                                    ]}
-                                />
-                            ))}
-                        </View>
-
-                        {/* Step counter */}
-                        <Text style={styles.tourStepCounter}>{tourStep + 1} of {tourSteps.length}</Text>
+                        {tourMode === 'full' && (
+                            <>
+                                <View style={styles.tourProgress}>
+                                    {tourSteps.map((_, idx) => (
+                                        <View
+                                            key={idx}
+                                            style={[
+                                                styles.tourDot,
+                                                idx === tourStep && styles.tourDotActive,
+                                                idx < tourStep && styles.tourDotCompleted
+                                            ]}
+                                        />
+                                    ))}
+                                </View>
+                                <Text style={styles.tourStepCounter}>{tourStep + 1} of {tourSteps.length}</Text>
+                            </>
+                        )}
 
                         {/* Title */}
                         <Text style={styles.tourTitle}>{tourSteps[tourStep]?.title}</Text>
@@ -1082,26 +1131,37 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                         <Text style={styles.tourContent}>{tourSteps[tourStep]?.content}</Text>
 
                         {/* Buttons */}
-                        <View style={styles.tourButtons}>
-                            <TouchableOpacity
-                                style={styles.tourDismissButton}
-                                onPress={handleTourDismiss}
-                            >
-                                <Text style={styles.tourDismissText}>
-                                    {tourStep === tourSteps.length - 1 ? 'Done' : 'Skip'}
-                                </Text>
-                            </TouchableOpacity>
-
-                            {tourStep < tourSteps.length - 1 && (
+                        {tourMode === 'full' ? (
+                            <View style={styles.tourButtons}>
                                 <TouchableOpacity
-                                    style={styles.tourNextButton}
-                                    onPress={handleTourNext}
+                                    style={styles.tourDismissButton}
+                                    onPress={handleTourDismiss}
                                 >
-                                    <Text style={styles.tourNextText}>Next</Text>
-                                    <MaterialIcons name="arrow-forward" size={16} color="#121212" />
+                                    <Text style={styles.tourDismissText}>
+                                        {tourStep === tourSteps.length - 1 ? 'Done' : 'Skip'}
+                                    </Text>
                                 </TouchableOpacity>
-                            )}
-                        </View>
+
+                                {tourStep < tourSteps.length - 1 && (
+                                    <TouchableOpacity
+                                        style={styles.tourNextButton}
+                                        onPress={handleTourNext}
+                                    >
+                                        <Text style={styles.tourNextText}>Next</Text>
+                                        <MaterialIcons name="arrow-forward" size={16} color="#121212" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        ) : (
+                            <View style={styles.tourButtons}>
+                                <TouchableOpacity
+                                    style={[styles.tourNextButton, { flex: 1, backgroundColor: '#4ECCA3' }]}
+                                    onPress={() => setShowTour(false)}
+                                >
+                                    <Text style={styles.tourNextText}>Got it</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -1253,7 +1313,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#EAB308',
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 16,
+        borderRadius: 8,
         marginBottom: 8,
     },
     driverText: {
@@ -1270,7 +1330,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#EAB308',
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 6,
+        borderRadius: 8,
     },
     impactLevel: {
         color: '#000000',
@@ -1331,7 +1391,7 @@ const styles = StyleSheet.create({
     },
     pollOption: {
         flex: 1,
-        borderRadius: 14,
+        borderRadius: 8,
         paddingVertical: 14,
         borderWidth: 1,
         alignItems: 'center',
@@ -1357,7 +1417,7 @@ const styles = StyleSheet.create({
     },
     pollResultRow: {
         backgroundColor: '#121212',
-        borderRadius: 12,
+        borderRadius: 8,
         padding: 12,
         borderWidth: 1,
         borderColor: '#333333',
@@ -1402,7 +1462,7 @@ const styles = StyleSheet.create({
     pollOptionSmall: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 20,
+        borderRadius: 8,
         paddingVertical: 8,
         paddingHorizontal: 12,
         borderWidth: 1,

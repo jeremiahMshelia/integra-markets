@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -10,11 +10,14 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Animated,
 } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { supabaseService } from '../services/supabaseService';
 import * as ImagePicker from 'expo-image-picker';
+import EditProfileModal from './EditProfileModal';
+import EditAlertsModal from './EditAlertsModal';
 
 // Use the same color palette as the main app
 const colors = {
@@ -24,13 +27,49 @@ const colors = {
   textSecondary: '#A0A0A0',
   accentPositive: '#4ECCA3',
   accentPositiveBg: 'rgba(78, 204, 163, 0.1)',
-  accentNeutral: '#A0A0A0',
-  accentNeutralBg: 'rgba(160, 160, 160, 0.1)',
+  accentNeutral: '#EAB308',
+  accentNeutralBg: 'rgba(234, 179, 8, 0.1)',
   accentNegative: '#F05454',
   accentNegativeBg: 'rgba(240, 84, 84, 0.1)',
   accentData: '#30A5FF',
   divider: '#333333',
   cardBorder: '#333333',
+};
+
+const SkeletonLoader = ({ width, height, style }) => {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.7,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.3,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          opacity,
+          backgroundColor: '#333',
+          borderRadius: 4,
+          width,
+          height,
+        },
+        style,
+      ]}
+    />
+  );
 };
 
 const getProviderLabel = (provider) => {
@@ -62,18 +101,33 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [photoKey, setPhotoKey] = useState(Date.now()); // For cache busting
   const [commoditiesCount, setCommoditiesCount] = useState(0);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showEditAlerts, setShowEditAlerts] = useState(false);
+  const [userProfileData, setUserProfileData] = useState(null);
+  const [alertPreferences, setAlertPreferences] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const { bookmarks, removeBookmark } = useBookmarks();
 
   // Load profile from Supabase on mount
   useEffect(() => {
-    loadProfile();
-    loadAlertPreferences();
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        await Promise.all([loadProfile(), loadAlertPreferences()]);
+      } catch (error) {
+        console.error('Error loading profile data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
   }, []);
 
   const loadProfile = async () => {
     try {
       const profile = await supabaseService.getProfile();
+      setUserProfileData(profile);
       if (profile?.avatar_url) {
         setProfilePhoto(profile.avatar_url);
       }
@@ -86,6 +140,7 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
     try {
       console.log('[ProfileScreen] Loading alert preferences...');
       const prefs = await supabaseService.getAlertPreferences();
+      setAlertPreferences(prefs);
       console.log('[ProfileScreen] Alert prefs received:', prefs);
 
       if (prefs?.commodities && prefs.commodities.length > 0) {
@@ -145,17 +200,14 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
     }
   };
 
-
-
-  // Default values for demo
-  const defaultUserProfile = userProfile || {
-    username: 'GodModeTrader301',
-    role: 'trader',
-    institution: 'Goldman Sachs',
-    bio: 'Oil Trader at Hedge Fund with 10+ years experience',
-    marketFocus: ['Oil & Oil Products', 'Metals & Minerals'],
-    experience: '10+'
-  };
+  // Process profile data
+  const sourceProfile = userProfileData || userProfile;
+  const displayUserProfile = sourceProfile ? {
+    ...sourceProfile,
+    institution: sourceProfile.company || sourceProfile.institution,
+    marketFocus: sourceProfile.market_focus || sourceProfile.marketFocus,
+    experience: sourceProfile.experience_level || sourceProfile.experience
+  } : {};
 
   const handleDeleteBookmark = (bookmarkId, bookmarkTitle) => {
     Alert.alert(
@@ -215,87 +267,118 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
             </View>
           </View>
 
-          <View style={styles.profileCard}>
-            <View style={styles.profileHeader}>
-              <TouchableOpacity onPress={handleEditProfilePhoto} disabled={isUploadingPhoto}>
-                {isUploadingPhoto ? (
-                  <View style={[styles.profileAvatar, styles.profileAvatarLoading]}>
-                    <ActivityIndicator color={colors.accentPositive} />
-                  </View>
-                ) : profilePhoto || defaultUserProfile.profilePhoto ? (
-                  <View>
-                    <Image
-                      source={{
-                        uri: `${profilePhoto || defaultUserProfile.profilePhoto}?t=${photoKey}`,
-                        cache: 'reload'
-                      }}
-                      style={styles.profileAvatar}
-                    />
-                    <View style={styles.editAvatarBadge}>
-                      <MaterialIcons name="edit" size={12} color="#FFF" />
-                    </View>
-                  </View>
-                ) : (
-                  <View>
-                    <View style={styles.profileAvatar}>
-                      <Text style={styles.profileAvatarText}>
-                        {defaultUserProfile.username?.charAt(0)?.toUpperCase() || 'U'}
-                      </Text>
-                    </View>
-                    <View style={styles.editAvatarBadge}>
-                      <MaterialIcons name="add-a-photo" size={12} color="#FFF" />
-                    </View>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>
-                  {defaultUserProfile.username || 'User'}
-                </Text>
-                {defaultUserProfile.email && (
-                  <Text style={styles.profileEmail}>
-                    {defaultUserProfile.email}
-                  </Text>
-                )}
-                <Text style={styles.profileRole}>
-                  {getRoleLabel(defaultUserProfile.role)}
-                </Text>
-                {defaultUserProfile.institution && (
-                  <Text style={styles.profileInstitution}>
-                    {defaultUserProfile.institution}
-                  </Text>
-                )}
+          {isLoading ? (
+            <View style={styles.profileCard}>
+              <View style={styles.profileHeader}>
+                <SkeletonLoader width={60} height={60} style={{ borderRadius: 30, marginRight: 16 }} />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <SkeletonLoader width={120} height={24} />
+                  <SkeletonLoader width={180} height={16} />
+                  <SkeletonLoader width={80} height={16} />
+                </View>
+              </View>
+
+              <SkeletonLoader width="100%" height={16} style={{ marginBottom: 8 }} />
+              <SkeletonLoader width="80%" height={16} style={{ marginBottom: 16 }} />
+
+              <View style={styles.profileStats}>
+                <View style={styles.profileStat}>
+                  <SkeletonLoader width={30} height={24} style={{ marginBottom: 4 }} />
+                  <Text style={styles.profileStatLabel}>Commodities</Text>
+                </View>
+                <View style={styles.profileStat}>
+                  <SkeletonLoader width={40} height={24} style={{ marginBottom: 4 }} />
+                  <Text style={styles.profileStatLabel}>Experience</Text>
+                </View>
+                <View style={styles.profileStat}>
+                  <SkeletonLoader width={30} height={24} style={{ marginBottom: 4 }} />
+                  <Text style={styles.profileStatLabel}>Bookmarks</Text>
+                </View>
               </View>
             </View>
-
-            {defaultUserProfile.bio && (
-              <Text style={styles.profileBio}>{defaultUserProfile.bio}</Text>
-            )}
-
-            <View style={styles.profileStats}>
-              <View style={styles.profileStat}>
-                <Text style={styles.profileStatValue}>
-                  {commoditiesCount}
-                </Text>
-                <Text style={styles.profileStatLabel}>Commodities</Text>
+          ) : (
+            <View style={styles.profileCard}>
+              <View style={styles.profileHeader}>
+                <TouchableOpacity onPress={handleEditProfilePhoto} disabled={isUploadingPhoto}>
+                  {isUploadingPhoto ? (
+                    <View style={[styles.profileAvatar, styles.profileAvatarLoading]}>
+                      <ActivityIndicator color={colors.accentPositive} />
+                    </View>
+                  ) : profilePhoto || displayUserProfile.profilePhoto ? (
+                    <View>
+                      <Image
+                        source={{
+                          uri: `${profilePhoto || displayUserProfile.profilePhoto}?t=${photoKey}`,
+                          cache: 'reload'
+                        }}
+                        style={styles.profileAvatar}
+                      />
+                      <View style={styles.editAvatarBadge}>
+                        <MaterialIcons name="edit" size={12} color="#FFF" />
+                      </View>
+                    </View>
+                  ) : (
+                    <View>
+                      <View style={styles.profileAvatar}>
+                        <Text style={styles.profileAvatarText}>
+                          {displayUserProfile.username?.charAt(0)?.toUpperCase() || 'U'}
+                        </Text>
+                      </View>
+                      <View style={styles.editAvatarBadge}>
+                        <MaterialIcons name="add-a-photo" size={12} color="#FFF" />
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <View style={styles.profileInfo}>
+                  <Text style={styles.profileName}>
+                    {displayUserProfile.username || 'User'}
+                  </Text>
+                  {displayUserProfile.email && (
+                    <Text style={styles.profileEmail}>
+                      {displayUserProfile.email}
+                    </Text>
+                  )}
+                  {displayUserProfile.role && (
+                    <Text style={styles.profileRole}>
+                      {getRoleLabel(displayUserProfile.role)}
+                    </Text>
+                  )}
+                  {displayUserProfile.institution && (
+                    <Text style={styles.profileInstitution}>
+                      {displayUserProfile.institution}
+                    </Text>
+                  )}
+                </View>
               </View>
-              <View style={styles.profileStat}>
-                <Text style={styles.profileStatValue}>
-                  {defaultUserProfile.experience || '—'}
-                </Text>
-                <Text style={styles.profileStatLabel}>Experience</Text>
-              </View>
-              <View style={styles.profileStat}>
-                <Text style={styles.profileStatValue}>
-                  {bookmarks.length}
-                </Text>
-                <Text style={styles.profileStatLabel}>Bookmarks</Text>
+
+              {displayUserProfile.bio && (
+                <Text style={styles.profileBio}>{displayUserProfile.bio}</Text>
+              )}
+
+              <View style={styles.profileStats}>
+                <View style={styles.profileStat}>
+                  <Text style={styles.profileStatValue}>
+                    {commoditiesCount}
+                  </Text>
+                  <Text style={styles.profileStatLabel}>Commodities</Text>
+                </View>
+                <View style={styles.profileStat}>
+                  <Text style={styles.profileStatValue}>
+                    {displayUserProfile.experience || '—'}
+                  </Text>
+                  <Text style={styles.profileStatLabel}>Experience</Text>
+                </View>
+                <View style={styles.profileStat}>
+                  <Text style={styles.profileStatValue}>
+                    {bookmarks.length}
+                  </Text>
+                  <Text style={styles.profileStatLabel}>Bookmarks</Text>
+                </View>
               </View>
             </View>
-          </View>
+          )}
         </View>
-
-
 
         {/* Bookmarks Section */}
         <View style={styles.section}>
@@ -376,6 +459,14 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
           </View>
 
           <View style={styles.settingsList}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => setShowEditProfile(true)}>
+              <Text style={styles.settingText}>Edit Profile</Text>
+              <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.settingItem} onPress={() => setShowEditAlerts(true)}>
+              <Text style={styles.settingText}>Edit Alerts</Text>
+              <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.settingItem} onPress={() => navigateToScreen('NotificationsSettings')}>
               <Text style={styles.settingText}>Notifications</Text>
               <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
@@ -405,6 +496,39 @@ export default function ProfileScreen({ userProfile, onBack, onNavigateToSetting
           </View>
         </View>
       </ScrollView>
+
+      <EditProfileModal
+        visible={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        initialProfile={userProfileData || displayUserProfile}
+        onSave={(updatedProfile) => {
+          if (updatedProfile) {
+            setUserProfileData(updatedProfile);
+            if (updatedProfile.avatar_url) {
+              setProfilePhoto(updatedProfile.avatar_url);
+              setPhotoKey(Date.now());
+            }
+          }
+          loadProfile();
+          loadAlertPreferences();
+        }}
+      />
+
+      <EditAlertsModal
+        visible={showEditAlerts}
+        onClose={() => setShowEditAlerts(false)}
+        initialPreferences={alertPreferences}
+        onSave={(updatedPrefs) => {
+          if (updatedPrefs) {
+            setAlertPreferences(updatedPrefs);
+            if (updatedPrefs.commodities) {
+              setCommoditiesCount(updatedPrefs.commodities.length);
+            }
+          }
+          loadAlertPreferences();
+          loadProfile();
+        }}
+      />
     </SafeAreaView>
   );
 }

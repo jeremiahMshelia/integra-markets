@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { TrendingUp, TrendingDown, ArrowRight, ExternalLink, Share2, Bookmark, Sparkles, Clock } from 'lucide-react';
 import Image from 'next/image';
 
-interface NewsItem {
+export interface NewsItem {
     title: string;
     url: string;
     published: string;
@@ -158,7 +158,7 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
     // Card layout - same for featured and standard, just different sizes
     const cardHeight = featured ? 'min-h-[500px]' : 'min-h-[400px]';
     const titleSize = featured ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl';
-    const summaryLines = featured ? 'line-clamp-4' : 'line-clamp-3';
+    const summaryLines = featured ? 'line-clamp-5' : 'line-clamp-4';
     const imageHeight = featured ? 'h-64 sm:h-72' : 'h-52 sm:h-56';
 
     return (
@@ -259,4 +259,4 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
     );
 }
 
-export type { NewsItem };
+

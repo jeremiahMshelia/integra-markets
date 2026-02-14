@@ -11,6 +11,11 @@ interface BookmarkItem {
     title: string;
     source: string;
     sentiment: string;
+    url: string;
+    summary: string;
+    published: string;
+    image_url?: string;
+    sentiment_score?: number;
 }
 
 interface UserProfile {
@@ -29,6 +34,7 @@ interface ProfileSidebarProps {
     onClose: () => void;
     user: { email?: string; name?: string; avatar_url?: string } | null;
     onLogout: () => void;
+    onBookmarkClick?: (item: any) => void;
 }
 
 const getSentimentColor = (sentiment: string): string => {
@@ -40,7 +46,20 @@ const getSentimentColor = (sentiment: string): string => {
     }
 };
 
-export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: ProfileSidebarProps) {
+const MaterialSettings = ({ size = 18, className = "" }) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+    >
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .43-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+    </svg>
+);
+
+export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBookmarkClick }: ProfileSidebarProps) {
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [avatarUrl, setAvatarUrl] = useState<string>('');
     const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
@@ -146,7 +165,12 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
                     id: b.article_id,
                     title: b.title || 'Untitled',
                     source: b.source || 'Unknown',
-                    sentiment: b.sentiment || 'NEUTRAL'
+                    sentiment: b.sentiment || 'NEUTRAL',
+                    url: b.url || '',
+                    summary: '', // Bookmarks don't store summary, but needed for NewsItem
+                    published: b.published_at || new Date().toISOString(),
+                    image_url: b.image_url,
+                    sentiment_score: b.sentiment_score
                 })));
             }
         } catch (e) {
@@ -223,7 +247,7 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
 
                         <div className="p-4">
                             <div className="flex items-center gap-2 text-[#4ECCA3] mb-4">
-                                <User size={18} /><span className="font-medium text-white">Profile</span>
+                                <User size={18} fill="currentColor" /><span className="font-medium text-white">Profile</span>
                             </div>
                             <div className="bg-[#1E1E1E] border border-[#333] rounded-2xl p-5">
                                 <div className="flex items-center gap-4 mb-4">
@@ -290,7 +314,7 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
 
                         <div className="p-4">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2"><Bookmark size={18} className="text-[#EAB308]" /><span className="font-medium text-white">Bookmarks</span></div>
+                                <div className="flex items-center gap-2 text-[#4ECCA3]"><Bookmark size={18} fill="currentColor" /><span className="font-medium text-white">Bookmarks</span></div>
                                 <span className="text-zinc-500 text-sm">{bookmarks.length}</span>
                             </div>
                             {bookmarks.length === 0 ? (
@@ -301,13 +325,28 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
                             ) : (
                                 <div className="space-y-2">
                                     {(showAllBookmarks ? bookmarks : bookmarks.slice(0, 3)).map((bookmark) => (
-                                        <div key={bookmark.id} className="bg-[#1E1E1E] border border-[#333] rounded-xl p-4 flex justify-between">
+                                        <div
+                                            key={bookmark.id}
+                                            onClick={() => {
+                                                onBookmarkClick?.(bookmark);
+                                                onClose();
+                                            }}
+                                            className="bg-[#1E1E1E] border border-[#333] rounded-xl p-4 flex justify-between cursor-pointer hover:bg-white/5 transition-colors group"
+                                        >
                                             <div className="flex-1 pr-3">
-                                                <p className="text-white font-medium text-sm line-clamp-2 mb-1">{bookmark.title}</p>
+                                                <p className="text-white font-medium text-sm line-clamp-2 mb-1 group-hover:text-[#4ECCA3] transition-colors">{bookmark.title}</p>
                                                 <p className="text-zinc-500 text-xs mb-1">{bookmark.source}</p>
                                                 <p className="text-xs font-medium uppercase" style={{ color: getSentimentColor(bookmark.sentiment) }}>{bookmark.sentiment}</p>
                                             </div>
-                                            <button onClick={() => handleRemoveBookmark(bookmark.id)} className="p-2 hover:bg-white/5 rounded-lg"><Trash2 size={16} className="text-[#F05454]" /></button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRemoveBookmark(bookmark.id);
+                                                }}
+                                                className="p-2 hover:bg-white/10 rounded-lg h-fit"
+                                            >
+                                                <Trash2 size={16} className="text-[#F05454]" />
+                                            </button>
                                         </div>
                                     ))}
                                     {bookmarks.length > 3 && (
@@ -320,8 +359,22 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout }: Prof
                         </div>
 
                         <div className="p-4">
-                            <div className="flex items-center gap-2 mb-4"><Settings size={18} className="text-zinc-400" /><span className="font-medium text-white">Settings</span></div>
+                            <div className="flex items-center gap-2 mb-4 text-[#4ECCA3]"><MaterialSettings size={18} /><span className="font-medium text-white">Settings</span></div>
                             <div className="bg-[#1E1E1E] border border-[#333] rounded-xl overflow-hidden">
+                                <button
+                                    onClick={() => window.location.href = '/onboarding?edit=profile'}
+                                    className="w-full flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"
+                                >
+                                    <span className="text-white">Edit Profile</span>
+                                    <ChevronRight size={18} className="text-zinc-600" />
+                                </button>
+                                <button
+                                    onClick={() => window.location.href = '/onboarding?edit=alerts'}
+                                    className="w-full flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"
+                                >
+                                    <span className="text-white">Edit Alerts</span>
+                                    <ChevronRight size={18} className="text-zinc-600" />
+                                </button>
                                 <Link href="/settings/privacy" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">Privacy Policy</span><ChevronRight size={18} className="text-zinc-600" /></Link>
                                 <Link href="/settings/terms" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">Terms of Service</span><ChevronRight size={18} className="text-zinc-600" /></Link>
                                 <Link href="/settings/about" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">About</span><ChevronRight size={18} className="text-zinc-600" /></Link>

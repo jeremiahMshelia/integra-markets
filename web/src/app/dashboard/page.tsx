@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
+import { Bell } from 'lucide-react';
 
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import FilterTabs, { FilterType } from '@/components/dashboard/FilterTabs';
@@ -280,14 +282,72 @@ export default function Dashboard() {
         window.location.href = '/';
     };
 
+    // Skeleton loading component for faster perceived loading
+    const SkeletonCard = ({ featured = false }: { featured?: boolean }) => (
+        <div className={`bg-[#1E1E1E] border border-[#333] rounded-2xl overflow-hidden animate-pulse ${featured ? 'mb-6' : ''}`}>
+            <div className={`${featured ? 'h-64 sm:h-72' : 'h-52 sm:h-56'} bg-[#2a2a2a]`} />
+            <div className="p-5">
+                <div className="flex items-center justify-end gap-2 mb-3">
+                    <div className="h-7 w-7 bg-[#333] rounded" />
+                    <div className="h-7 w-7 bg-[#333] rounded" />
+                </div>
+                <div className={`${featured ? 'h-8' : 'h-5'} w-full bg-[#333] rounded mb-2`} />
+                <div className={`${featured ? 'h-8' : 'h-5'} w-3/4 bg-[#333] rounded mb-4`} />
+                <div className="h-4 w-full bg-[#333] rounded mb-2" />
+                <div className="h-4 w-5/6 bg-[#333] rounded mb-2" />
+                <div className="h-4 w-2/3 bg-[#333] rounded mb-4" />
+                <div className="flex items-center gap-3 mt-4">
+                    <div className="h-5 w-5 bg-[#333] rounded-full" />
+                    <div className="h-4 w-20 bg-[#333] rounded" />
+                    <div className="h-4 w-16 bg-[#333] rounded" />
+                </div>
+            </div>
+        </div>
+    );
+
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#121212] flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
-                    <div className="w-10 h-10 border-2 border-[#4ECCA3] border-t-transparent rounded-full animate-spin" />
-                    <p className="text-white text-sm font-medium">Loading news feed...</p>
-                    <p className="text-zinc-500 text-xs">This may take a moment if the server is waking up</p>
-                </div>
+            <div className="min-h-screen bg-[#121212]">
+                <DashboardHeader userEmail={user?.email} onProfileClick={() => setIsProfileOpen(true)} />
+
+                <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                    {/* Title Section */}
+                    <div className="mb-6 sm:mb-8">
+                        <div className="mb-4">
+                            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Today</h1>
+                            <p className="text-zinc-400 text-sm">Your commodities market intelligence feed</p>
+                        </div>
+                        {/* Filter Tabs Skeleton */}
+                        <div className="flex justify-center">
+                            <div className="flex gap-3 sm:gap-4">
+                                {[1, 2, 3, 4].map((i) => (
+                                    <div key={i} className="h-10 w-24 bg-[#333] rounded-full animate-pulse" />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Loading indicator */}
+                    <div className="flex items-center justify-center gap-2 mb-6">
+                        <div className="w-4 h-4 border-2 border-[#4ECCA3] border-t-transparent rounded-full animate-spin" />
+                        <span className="text-zinc-400 text-sm">Loading news feed...</span>
+                    </div>
+
+                    {/* Skeleton Grid - Match actual layout */}
+                    <div className="space-y-6 sm:space-y-8">
+                        {/* Featured skeleton - only on desktop */}
+                        <div className="hidden sm:block">
+                            <SkeletonCard featured={true} />
+                        </div>
+
+                        {/* Grid - stacked on mobile, 2 cols on desktop */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                            {[1, 2, 3, 4, 5, 6].map((i) => (
+                                <SkeletonCard key={i} />
+                            ))}
+                        </div>
+                    </div>
+                </main>
             </div>
         );
     }
@@ -300,9 +360,15 @@ export default function Dashboard() {
                 {/* Page Title & Controls */}
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8">
                     {/* Title Section - Always left aligned */}
-                    <div className="mb-4">
-                        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Today</h1>
-                        <p className="text-zinc-400 text-sm">Your commodities market intelligence feed</p>
+                    {/* Title Section - Always left aligned */}
+                    <div className="mb-4 flex justify-between items-start">
+                        <div>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Today</h1>
+                            <p className="text-zinc-400 text-sm">Your commodities market intelligence feed</p>
+                        </div>
+                        <Link href="/alerts" className="p-2 bg-[#1E1E1E] hover:bg-[#333] rounded-full border border-[#333] transition-colors">
+                            <Bell className="text-white" size={20} />
+                        </Link>
                     </div>
                     {/* Filter Tabs - Centered */}
                     <div className="flex justify-center">
@@ -398,7 +464,7 @@ export default function Dashboard() {
                 isBookmarked={selectedArticle ? bookmarkedUrls.has(selectedArticle.url || selectedArticle.title) : false}
             />
 
-            <ProfileSidebar isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} />
+            <ProfileSidebar isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} onBookmarkClick={handleAIClick} />
         </div>
     );
 }

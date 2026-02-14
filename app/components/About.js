@@ -28,7 +28,7 @@ const colors = {
 
 const About = ({ onBack }) => {
   const handleContact = () => {
-    Linking.openURL('mailto:support@integra-markets.com');
+    Linking.openURL('mailto:contact@integramarkets.app');
   };
 
   return (

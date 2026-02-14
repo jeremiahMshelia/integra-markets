@@ -1,26 +1,20 @@
-// OnboardingForm.js
-import React, { useState } from 'react';
+import React from 'react';
 import {
     StyleSheet,
     Text,
     View,
-    ScrollView,
     TouchableOpacity,
-    SafeAreaView,
-    StatusBar,
     TextInput,
     Alert,
     Dimensions,
     Image,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import Logo from '../../components/mediakit/Logo';
 import * as ImagePicker from 'expo-image-picker';
 import HollowCircularIcon from './HollowCircularIcon';
-// import * as ImageManipulator from 'expo-image-manipulator'; // Temporarily disabled
 
 // Use the same color palette as App.js
-const colors = {
+export const colors = {
     bgPrimary: '#121212',
     bgSecondary: '#1E1E1E',
     textPrimary: '#ECECEC',
@@ -41,7 +35,7 @@ const colors = {
 const { width } = Dimensions.get('window');
 
 // Onboarding data
-const roleOptions = [
+export const roleOptions = [
     { value: 'Trader', icon: 'trending-up', description: 'Active market trading' },
     { value: 'Analyst', icon: 'analytics', description: 'Research & analysis' },
     { value: 'Hedge Fund', icon: 'account-balance', description: 'Fund management' },
@@ -52,51 +46,22 @@ const roleOptions = [
     { value: 'Shipping and Freight', icon: 'local-shipping', description: 'Transportation & logistics' },
 ];
 
-const experienceOptions = [
+export const experienceOptions = [
     { value: '0-2', label: '0-2 years', description: 'New to the industry' },
     { value: '3-5', label: '3-5 years', description: 'Growing expertise' },
     { value: '6-10', label: '6-10 years', description: 'Experienced professional' },
     { value: '10+', label: '10+ years', description: 'Industry veteran' },
 ];
 
-const marketFocusOptions = [
+export const marketFocusOptions = [
     { value: 'Oil & Oil Products', icon: 'local-gas-station', color: colors.accentData },
     { value: 'Metals & Minerals', icon: 'star', color: '#FFD700' },
     { value: 'Agricultural Products', icon: 'eco', color: colors.accentPositive },
     { value: 'Other', icon: 'more-horiz', color: colors.accentNeutral },
 ];
 
-// Welcome Card Component
-const WelcomeCard = ({ onNext }) => (
-    <View style={styles.welcomeCard}>
-        <View style={styles.welcomeHeader}>
-            <Logo variant="full" size="large" style={styles.logoImage} />
-            <Text style={styles.welcomeTitle}>Welcome to Integra Markets</Text>
-            <Text style={styles.welcomeSubtitle}>
-                The commodity trading intelligence platform for market insights and analysis
-            </Text>
-        </View>
-
-        <View style={styles.featuresList}>
-            <View style={styles.featureItem}>
-                <MaterialIcons name="auto-awesome" size={24} color={colors.accentPositive} />
-                <Text style={styles.featureText}>Advanced market analysis</Text>
-            </View>
-            <View style={styles.featureItem}>
-                <MaterialCommunityIcons name="chart-line" size={24} color={colors.accentData} />
-                <Text style={styles.featureText}>Real time news and sentiment</Text>
-            </View>
-        </View>
-
-        <TouchableOpacity style={styles.primaryButton} onPress={onNext}>
-            <Text style={styles.primaryButtonText}>Get Started</Text>
-            <MaterialIcons name="arrow-forward" size={20} color={colors.bgPrimary} />
-        </TouchableOpacity>
-    </View>
-);
-
 // Role Selection Component
-const RoleSelectionCard = ({ selectedRole, onSelect }) => (
+export const RoleSelectionCard = ({ selectedRole, onSelect }) => (
     <View style={styles.formCard}>
         <Text style={styles.cardTitle}>What's your role? (Optional)</Text>
         <Text style={styles.cardSubtitle}>Help us customize your experience - you can skip this if you prefer</Text>
@@ -131,7 +96,7 @@ const RoleSelectionCard = ({ selectedRole, onSelect }) => (
                     </Text>
                     {selectedRole === role.value && (
                         <View style={styles.checkmarkCircle}>
-                            <MaterialIcons name="check" size={12} color={colors.bgPrimary} />
+                            <MaterialIcons name="check" size={12} color={colors.accentPositive} />
                         </View>
                     )}
                 </TouchableOpacity>
@@ -141,7 +106,7 @@ const RoleSelectionCard = ({ selectedRole, onSelect }) => (
 );
 
 // Experience Selection Component
-const ExperienceSelectionCard = ({ selectedExperience, onSelect }) => (
+export const ExperienceSelectionCard = ({ selectedExperience, onSelect }) => (
     <View style={styles.formCard}>
         <Text style={styles.cardTitle}>Years of experience? (Optional)</Text>
         <Text style={styles.cardSubtitle}>This helps us tailor content complexity - you can skip this if you prefer</Text>
@@ -180,7 +145,7 @@ const ExperienceSelectionCard = ({ selectedExperience, onSelect }) => (
 );
 
 // Market Focus Selection Component
-const MarketFocusCard = ({ selectedMarkets, onToggle }) => (
+export const MarketFocusCard = ({ selectedMarkets, onToggle }) => (
     <View style={styles.formCard}>
         <Text style={styles.cardTitle}>Market focus areas</Text>
         <Text style={styles.cardSubtitle}>Select your primary interests (multiple allowed)</Text>
@@ -209,7 +174,7 @@ const MarketFocusCard = ({ selectedMarkets, onToggle }) => (
                     </Text>
                     {selectedMarkets.includes(market.value) && (
                         <View style={styles.marketCheckmark}>
-                            <MaterialIcons name="check" size={16} color={colors.bgPrimary} />
+                            <MaterialIcons name="check" size={16} color={colors.accentPositive} />
                         </View>
                     )}
                 </TouchableOpacity>
@@ -219,7 +184,7 @@ const MarketFocusCard = ({ selectedMarkets, onToggle }) => (
 );
 
 // Details Form Component
-const DetailsFormCard = ({ formData, onUpdate }) => {
+export const DetailsFormCard = ({ formData, onUpdate }) => {
     const pickImage = async () => {
         // Request permission
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -286,7 +251,6 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
     const processImage = async (uri) => {
         try {
             // Temporarily disable image processing to prevent crashes
-            // TODO: Re-enable after fixing ImageManipulator import
             console.log('Image processing temporarily disabled');
             onUpdate('profilePhoto', uri); // Use original URI for now
         } catch (error) {
@@ -405,375 +369,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
     );
 };
 
-// Progress Indicator Component
-const ProgressIndicator = ({ currentStep, totalSteps }) => (
-    <View style={styles.progressContainer}>
-        <View style={styles.progressBar}>
-            <View
-                style={[
-                    styles.progressFill,
-                    { width: `${(currentStep / totalSteps) * 100}%` }
-                ]}
-            />
-        </View>
-        <Text style={styles.progressText}>{currentStep} of {totalSteps}</Text>
-    </View>
-);
-
-// Main Onboarding Component
-const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData = null }) => {
-    // Start at step 1 to skip the welcome screen
-    const [currentStep, setCurrentStep] = useState(1);
-    const [formData, setFormData] = useState({
-        role: '',
-        experience: '',
-        marketFocus: [],
-        institution: '',
-        linkedin: '',
-        github: '',
-        bio: '',
-        profilePhoto: null,
-        username: '', // User must create their own username
-        fullName: userData?.fullName || '',
-        email: userData?.email || '',
-    });
-
-    const totalSteps = 5;  // Keep totalSteps as 5 for progress calculation
-
-    const handleNext = () => {
-        if (currentStep < totalSteps - 1) {
-            setCurrentStep(currentStep + 1);
-        }
-    };
-
-    const handlePrevious = () => {
-        // Don't go back to step 0 (welcome screen)
-        if (currentStep > 1) {
-            setCurrentStep(currentStep - 1);
-        }
-    };
-
-    const handleSkipOnboarding = () => {
-        Alert.alert(
-            'Skip Onboarding',
-            'You can always complete your profile later in settings. Continue to the app?',
-            [
-                { text: 'Continue Setup', style: 'cancel' },
-                {
-                    text: 'Skip for Now',
-                    onPress: () => {
-                        console.log('Onboarding skipped');
-                        onSkip && onSkip();
-                    }
-                }
-            ]
-        );
-    };
-
-    const handleSubmit = () => {
-        // All fields are truly optional now - only username is required if provided
-        // Check for required username if it was entered
-        if (formData.username && formData.username.trim() === '') {
-            Alert.alert(
-                'Username Required',
-                'Please enter a username or leave the field empty.',
-                [{ text: 'OK', style: 'cancel' }]
-            );
-            return;
-        }
-
-        // Proceed with completion - all optional fields are truly optional
-        console.log('Onboarding completed:', formData);
-        onComplete && onComplete(formData);
-    };
-
-    const updateFormData = (field, value) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
-    };
-
-    const toggleMarketFocus = (market) => {
-        setFormData(prev => ({
-            ...prev,
-            marketFocus: prev.marketFocus.includes(market)
-                ? prev.marketFocus.filter(m => m !== market)
-                : [...prev.marketFocus, market]
-        }));
-    };
-
-    const handleSkipMarketFocus = () => {
-        setFormData(prev => ({ ...prev, marketFocus: [] }));
-        handleNext();
-    };
-
-    const canProceed = () => {
-        switch (currentStep) {
-            case 0: return true; // Welcome screen
-            case 1: return true; // Role is optional (can skip)
-            case 2: return true; // Experience is optional (can skip)
-            case 3: return formData.marketFocus.length > 0; // At least one market required
-            case 4: return formData.username && formData.username.trim() !== ''; // Username required
-            default: return true;
-        }
-    };
-
-    // Check if current step has a selection (for showing "Continue" vs "Skip")
-    const hasSelection = () => {
-        switch (currentStep) {
-            case 1: return formData.role !== '';
-            case 2: return formData.experience !== '';
-            default: return true;
-        }
-    };
-
-    const renderStep = () => {
-        switch (currentStep) {
-            case 0:
-                return <WelcomeCard onNext={handleNext} />;
-            case 1:
-                return (
-                    <RoleSelectionCard
-                        selectedRole={formData.role}
-                        onSelect={(role) => updateFormData('role', role)}
-                    />
-                );
-            case 2:
-                return (
-                    <ExperienceSelectionCard
-                        selectedExperience={formData.experience}
-                        onSelect={(exp) => updateFormData('experience', exp)}
-                    />
-                );
-            case 3:
-                return (
-                    <MarketFocusCard
-                        selectedMarkets={formData.marketFocus}
-                        onToggle={toggleMarketFocus}
-                    />
-                );
-            case 4:
-                return (
-                    <DetailsFormCard
-                        formData={formData}
-                        onUpdate={updateFormData}
-                    />
-                );
-            default:
-                return <WelcomeCard onNext={handleNext} />;
-        }
-    };
-
-    return (
-        <SafeAreaView style={styles.safeArea}>
-            <StatusBar barStyle="light-content" backgroundColor={colors.bgPrimary} />
-
-            {/* Header with skip option */}
-            <View style={styles.header}>
-                {currentStep > 0 ? (
-                    <TouchableOpacity style={styles.backButton} onPress={handlePrevious}>
-                        <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
-                    </TouchableOpacity>
-                ) : (
-                    <View style={styles.headerSpacer} />
-                )}
-
-                {currentStep > 0 && (
-                    <ProgressIndicator currentStep={currentStep} totalSteps={totalSteps} />
-                )}
-
-                {showSkipOption && (
-                    <TouchableOpacity style={styles.skipHeaderButton} onPress={handleSkipOnboarding}>
-                        <Text style={styles.skipHeaderText}>Skip</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
-
-            <ScrollView
-                style={styles.container}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {renderStep()}
-            </ScrollView>
-
-            {/* Enhanced footer with navigation options */}
-            {currentStep > 0 && (
-                <View style={styles.footer}>
-                    <View style={styles.footerContent}>
-                        {currentStep < totalSteps - 1 ? (
-                            <>
-                                {/* For optional steps (1,2): Show Skip if no selection */}
-                                {(currentStep === 1 || currentStep === 2) && !hasSelection() ? (
-                                    <TouchableOpacity
-                                        style={styles.skipMainButton}
-                                        onPress={handleNext}
-                                    >
-                                        <Text style={styles.skipMainButtonText}>Skip</Text>
-                                        <MaterialIcons name="arrow-forward" size={20} color={colors.textPrimary} style={{ marginLeft: 8 }} />
-                                    </TouchableOpacity>
-                                ) : (
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.nextButton,
-                                            !canProceed() && styles.disabledButton
-                                        ]}
-                                        onPress={handleNext}
-                                        disabled={!canProceed()}
-                                    >
-                                        <Text style={[
-                                            styles.nextButtonText,
-                                            !canProceed() && styles.disabledButtonText
-                                        ]}>
-                                            Continue
-                                        </Text>
-                                        <MaterialIcons
-                                            name="arrow-forward"
-                                            size={20}
-                                            color={canProceed() ? colors.bgPrimary : colors.textSecondary}
-                                            style={{ marginLeft: 8 }}
-                                        />
-                                    </TouchableOpacity>
-                                )}
-                            </>
-                        ) : (
-                            <TouchableOpacity
-                                style={styles.nextButton}
-                                onPress={handleSubmit}
-                            >
-                                <Text style={styles.nextButtonText}>
-                                    Complete Setup
-                                </Text>
-                                <MaterialIcons name="check" size={20} color={colors.bgPrimary} style={{ marginLeft: 8 }} />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View>
-            )}
-        </SafeAreaView>
-    );
-};
-
 const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: colors.bgPrimary,
-    },
-    container: {
-        flex: 1,
-        backgroundColor: colors.bgPrimary,
-    },
-    scrollContent: {
-        padding: 20,
-        paddingBottom: 100,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.divider,
-    },
-    backButton: {
-        padding: 5,
-    },
-    headerSpacer: {
-        width: 34, // Same width as back button
-    },
-    progressContainer: {
-        flex: 1,
-        alignItems: 'center',
-        paddingHorizontal: 20,
-    },
-    progressBar: {
-        width: '100%',
-        height: 4,
-        backgroundColor: colors.bgSecondary,
-        borderRadius: 2,
-        marginBottom: 5,
-    },
-    progressFill: {
-        height: '100%',
-        backgroundColor: colors.accentPositive,
-        borderRadius: 2,
-    },
-    progressText: {
-        color: colors.textSecondary,
-        fontSize: 12,
-    },
-
-    skipHeaderButton: {
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-    },
-
-    skipHeaderText: {
-        color: colors.accentData,
-        fontSize: 16,
-        fontWeight: '500',
-    },
-
-    // Welcome Card Styles
-    welcomeCard: {
-        backgroundColor: '#000000', // Jet black background as requested
-        borderRadius: 12,
-        padding: 24,
-        alignItems: 'center',
-    },
-    welcomeHeader: {
-        alignItems: 'center',
-        marginBottom: 32,
-    },
-    logoImage: {
-        width: 100,
-        height: 100,
-        resizeMode: 'contain',
-        marginBottom: 16,
-    },
-    logoPlaceholder: {
-        width: 100,
-        height: 100,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 16,
-        backgroundColor: colors.accentPositiveBg,
-        borderRadius: 50,
-    },
-    welcomeTitle: {
-        color: colors.textPrimary,
-        fontSize: 28,
-        fontWeight: '600',
-        textAlign: 'center',
-        marginTop: 16,
-        marginBottom: 8,
-    },
-    welcomeSubtitle: {
-        color: colors.textSecondary,
-        fontSize: 16,
-        textAlign: 'center',
-        lineHeight: 22,
-    },
-    featuresList: {
-        width: '100%',
-        marginBottom: 32,
-    },
-    featureItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        backgroundColor: colors.accentPositiveBg,
-        borderRadius: 8,
-        marginBottom: 8,
-    },
-    featureText: {
-        color: colors.textPrimary,
-        fontSize: 16,
-        marginLeft: 12,
-        fontWeight: '500',
-    },
-
-    // Form Card Styles
     formCard: {
         backgroundColor: colors.bgSecondary,
         borderRadius: 12,
@@ -791,67 +387,6 @@ const styles = StyleSheet.create({
         marginBottom: 24,
         lineHeight: 22,
     },
-
-    // Button Styles
-    primaryButton: {
-        backgroundColor: colors.accentPositive,
-        borderRadius: 8,
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-    },
-    primaryButtonText: {
-        color: colors.bgPrimary,
-        fontSize: 18,
-        fontWeight: '600',
-        marginRight: 8,
-    },
-    nextButton: {
-        backgroundColor: colors.accentPositive,
-        borderRadius: 8,
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-    },
-    nextButtonText: {
-        color: colors.bgPrimary,
-        fontSize: 16,
-        fontWeight: '600',
-        marginRight: 8,
-    },
-    disabledButton: {
-        backgroundColor: colors.bgSecondary,
-        borderWidth: 1,
-        borderColor: colors.divider,
-    },
-    disabledButtonText: {
-        color: colors.textSecondary,
-    },
-    skipMainButton: {
-        backgroundColor: 'transparent',
-        borderRadius: 8,
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        borderWidth: 1,
-        borderColor: colors.divider,
-    },
-    skipMainButtonText: {
-        color: colors.textPrimary,
-        fontSize: 16,
-        fontWeight: '600',
-    },
-
-    // Option Cards Grid
     optionsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -903,8 +438,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-
-    // List Options
     optionsList: {
         width: '100%',
     },
@@ -942,8 +475,6 @@ const styles = StyleSheet.create({
     selectedListOptionDescription: {
         color: colors.textPrimary,
     },
-
-    // Market Focus Grid
     marketGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -985,8 +516,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-
-    // Form Inputs
     inputGroup: {
         marginBottom: 20,
     },
@@ -1021,8 +550,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: 4,
     },
-
-    // Profile Photo Styles
     photoSection: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1084,51 +611,4 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         marginLeft: 8,
     },
-
-    // Footer
-    footer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: colors.bgSecondary,
-        padding: 20,
-        borderTopWidth: 1,
-        borderTopColor: colors.divider,
-    },
-    footerContent: {
-        width: '100%',
-    },
-    skipStepButton: {
-        backgroundColor: 'transparent',
-        borderRadius: 8,
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 12,
-    },
-    skipStepText: {
-        color: colors.textSecondary,
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    skipButton: {
-        backgroundColor: 'transparent',
-        borderRadius: 8,
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 16,
-        borderWidth: 1,
-        borderColor: colors.divider,
-    },
-    skipButtonText: {
-        color: colors.textSecondary,
-        fontSize: 14,
-        fontWeight: '500',
-    },
 });
-
-export default OnboardingForm;

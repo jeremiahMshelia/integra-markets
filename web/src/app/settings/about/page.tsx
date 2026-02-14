@@ -53,7 +53,7 @@ export default function AboutPage() {
                     <section>
                         <h2 className="text-white font-semibold text-lg mb-2">Support & Contact</h2>
                         <p className="mb-3">Found a bug? Have a feature request? We actually read our emails.</p>
-                        <a href="mailto:support@integra-markets.com" className="inline-flex items-center gap-2 px-5 py-3 bg-[#4ECCA3] text-[#121212] font-semibold rounded-lg hover:bg-[#3db892] transition-colors">
+                        <a href="mailto:contact@integramarkets.app" className="inline-flex items-center gap-2 px-5 py-3 bg-[#4ECCA3] text-[#121212] font-semibold rounded-lg hover:bg-[#3db892] transition-colors">
                             <Mail size={18} />Contact Us
                         </a>
                     </section>

@@ -43,7 +43,7 @@ class NewsService:
         
         # Enhanced cache TTL for production (aggressive caching for 100-1000 users)
         self.cache_ttl = {
-            "rss_feeds": 1800,      # 30 minutes for RSS feeds
+            "rss_feeds": 300,       # 5 minutes for RSS feeds (fresher news)
             "article_content": 7200, # 2 hours for full article content
             "sentiment_analysis": 14400, # 4 hours for sentiment analysis
             "preprocessed_news": 10800,  # 3 hours for preprocessed data

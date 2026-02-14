@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase';
-import { Bell, ChevronRight, TrendingUp, TrendingDown, FileText, AlertTriangle, RefreshCw, History, ArrowLeft, Loader2 } from 'lucide-react';
+import { Bell, ChevronRight, TrendingUp, TrendingDown, FileText, AlertTriangle, RefreshCw, History, ArrowLeft, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import ProfileSidebar from '@/components/dashboard/ProfileSidebar';
@@ -149,6 +149,8 @@ export default function AlertsPage() {
     const [preferencesLoaded, setPreferencesLoaded] = useState(false);
     const [alerts, setAlerts] = useState<AlertItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [allAlerts, setAllAlerts] = useState<AlertItem[]>([]);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [user, setUser] = useState<any>(null);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
@@ -324,10 +326,10 @@ export default function AlertsPage() {
 
                         return (a.score > 0) && isRecent;
                     })
-                    .sort((a: AlertItem, b: AlertItem) => b.score - a.score)
-                    .slice(0, 15);
+                    .sort((a: AlertItem, b: AlertItem) => b.score - a.score);
 
-                setAlerts(newsAlerts);
+                setAllAlerts(newsAlerts);
+                setAlerts(newsAlerts.slice(0, 15));
                 setLoading(false);
 
                 // Show in-app toast for the top high-severity alert if push notifications are enabled
@@ -510,7 +512,10 @@ export default function AlertsPage() {
                             ))}
 
                             <div className="mt-4 text-center">
-                                <button className="inline-flex items-center gap-2 text-[#30A5FF] hover:text-[#2B95E6] font-medium py-2">
+                                <button
+                                    onClick={() => setIsHistoryOpen(true)}
+                                    className="inline-flex items-center gap-2 px-5 py-3 bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl text-[#30A5FF] hover:bg-[#252525] transition-colors font-medium text-sm shadow-sm"
+                                >
                                     <History size={18} />
                                     View Alert History
                                 </button>
@@ -521,6 +526,45 @@ export default function AlertsPage() {
             </main>
 
             <ProfileSidebar isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={() => { /* Handle Logout */ }} />
+
+            {/* History Modal */}
+            {isHistoryOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-[#1E1E1E] border border-[#2A2A2A] rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+                        <div className="flex items-center justify-between p-6 border-b border-[#2A2A2A]">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">Alert History</h2>
+                                <p className="text-zinc-400 text-sm mt-1">Chronological list of recent alerts</p>
+                            </div>
+                            <button
+                                onClick={() => setIsHistoryOpen(false)}
+                                className="p-2 hover:bg-[#333] rounded-full text-zinc-400 hover:text-white transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                            {allAlerts.length === 0 ? (
+                                <div className="text-center py-10 text-zinc-500">No history available</div>
+                            ) : (
+                                allAlerts.map((alert) => (
+                                    <div
+                                        key={`hist-${alert.id}`}
+                                        className="py-4 border-b border-[#2A2A2A]"
+                                    >
+                                        <h4 className="text-white font-semibold text-sm mb-1">{alert.title}</h4>
+                                        <p className="text-zinc-400 text-xs mb-2 leading-relaxed">{alert.message}</p>
+                                        <p className="text-zinc-500 text-[10px]">
+                                            {new Date(alert.createdAt).toLocaleString()}
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* In-App Toast Notification */}
             {toast && (

@@ -13,6 +13,7 @@ interface DashboardHeaderProps {
 export default function DashboardHeader({ userEmail, onProfileClick }: DashboardHeaderProps) {
     const [username, setUsername] = useState<string>('');
     const [avatarUrl, setAvatarUrl] = useState<string>('');
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         loadUserProfile();
@@ -22,7 +23,10 @@ export default function DashboardHeader({ userEmail, onProfileClick }: Dashboard
         try {
             const supabase = createClient();
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (!user) {
+                setIsLoading(false);
+                return;
+            }
 
             // Set username from email first
             setUsername(user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'there');
@@ -40,6 +44,8 @@ export default function DashboardHeader({ userEmail, onProfileClick }: Dashboard
             }
         } catch (error) {
             console.error('Error loading profile:', error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -59,7 +65,12 @@ export default function DashboardHeader({ userEmail, onProfileClick }: Dashboard
                 <div className="flex items-center gap-4">
                     {/* Greeting (Desktop) */}
                     <span className="hidden md:block text-sm text-zinc-400">
-                        Hi, <span className="text-white font-medium ml-0.5">{username}</span>
+                        Hi,{' '}
+                        {isLoading ? (
+                            <span className="inline-block w-16 h-4 bg-[#333] rounded animate-pulse ml-1" />
+                        ) : (
+                            <span className="text-white font-medium ml-0.5">{username}</span>
+                        )}
                     </span>
 
                     {/* Profile Button with Avatar */}
@@ -67,7 +78,9 @@ export default function DashboardHeader({ userEmail, onProfileClick }: Dashboard
                         onClick={onProfileClick}
                         className="w-8 h-8 rounded-full bg-[#4ECCA3] ring-2 ring-[#4ECCA3]/40 hover:ring-[#4ECCA3]/70 flex items-center justify-center transition-all overflow-hidden cursor-pointer"
                     >
-                        {avatarUrl ? (
+                        {isLoading ? (
+                            <div className="w-full h-full bg-[#333] animate-pulse" />
+                        ) : avatarUrl ? (
                             <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
                         ) : (
                             <span className="text-[#121212] font-semibold text-xs">

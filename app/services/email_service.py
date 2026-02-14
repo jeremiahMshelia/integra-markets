@@ -259,7 +259,7 @@ async def send_email_alert(
         confidence=confidence
     )
     
-    subject = f"🔔 {commodity} Alert: {sentiment} - {headline[:50]}..."
+    subject = f"{commodity} Alert: {sentiment} - {headline[:50]}..."
     
     # Try Resend first (recommended for testing)
     resend_key = getattr(settings, 'RESEND_API_KEY', None)

@@ -33,17 +33,24 @@ const getTabIcon = (tab: FilterType, isActive: boolean) => {
 
 export default function FilterTabs({ tabs, activeTab, onTabChange }: FilterTabsProps) {
     return (
-        <div className="flex gap-2 sm:gap-10 justify-center">
+        <div className="flex flex-wrap gap-3 sm:gap-4 justify-center">
             {tabs.map((tab) => {
                 const isActive = tab === activeTab;
                 return (
                     <button
                         key={tab}
                         onClick={() => onTabChange(tab)}
-                        className={`flex items-center justify-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${isActive
-                            ? getActiveStyles(tab)
-                            : 'bg-[#2a2a2a] text-zinc-400 hover:bg-[#3a3a3a]'
-                            }`}
+                        className={`
+                            flex items-center justify-center gap-2 
+                            px-6 py-2.5 sm:px-8 sm:py-2.5 
+                            rounded-full text-sm font-semibold 
+                            border transition-all duration-200 
+                            min-w-[5rem]
+                            ${isActive
+                                ? `${getActiveStyles(tab)} border-transparent shadow-lg shadow-black/20`
+                                : 'bg-transparent border-[#404040] text-zinc-400 hover:border-zinc-300 hover:text-white hover:bg-[#2a2a2a]'
+                            }
+                        `}
                     >
                         {getTabIcon(tab, isActive)}
                         {tab}

@@ -486,9 +486,11 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     </TouchableOpacity>
 
                     <View style={styles.formHeader}>
-                        <Text style={styles.formTitle}>
-                            {isSignUp ? 'Create Account' : 'Welcome Back'}
-                        </Text>
+                        <ShinyText
+                            text={isSignUp ? 'Create Account' : 'Welcome Back'}
+                            style={styles.formTitle}
+                            speed={4}
+                        />
                         <Text style={styles.formSubtitle}>
                             {isSignUp
                                 ? 'Join thousands of traders getting AI-powered market insights'
@@ -501,41 +503,50 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                         {isSignUp && (
                             <View style={styles.inputContainer}>
                                 <Text style={styles.inputLabel}>Full Name</Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    value={fullName}
-                                    onChangeText={setFullName}
-                                    placeholder="Enter your full name"
-                                    placeholderTextColor={colors.textSecondary}
-                                    autoCapitalize="words"
-                                />
+                                <View style={styles.inputWrapper}>
+                                    <MaterialIcons name="person" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.textInputWithIcon}
+                                        value={fullName}
+                                        onChangeText={setFullName}
+                                        placeholder="Enter your full name"
+                                        placeholderTextColor={colors.textSecondary}
+                                        autoCapitalize="words"
+                                    />
+                                </View>
                             </View>
                         )}
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>Email Address</Text>
-                            <TextInput
-                                style={styles.textInput}
-                                value={email}
-                                onChangeText={setEmail}
-                                placeholder="Enter your email"
-                                placeholderTextColor={colors.textSecondary}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="email" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.textInputWithIcon}
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    placeholder="Enter your email"
+                                    placeholderTextColor={colors.textSecondary}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                />
+                            </View>
                         </View>
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.inputLabel}>Password</Text>
-                            <TextInput
-                                style={styles.textInput}
-                                value={password}
-                                onChangeText={setPassword}
-                                placeholder="Enter your password"
-                                placeholderTextColor={colors.textSecondary}
-                                secureTextEntry
-                            />
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="lock" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.textInputWithIcon}
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    placeholder="Enter your password"
+                                    placeholderTextColor={colors.textSecondary}
+                                    secureTextEntry
+                                />
+                            </View>
                             {/* Password Strength Indicator - Only show on signup */}
                             {isSignUp && password.length > 0 && (
                                 <View style={styles.passwordCriteria}>
@@ -583,14 +594,17 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                         {isSignUp && (
                             <View style={styles.inputContainer}>
                                 <Text style={styles.inputLabel}>Confirm Password</Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    value={confirmPassword}
-                                    onChangeText={setConfirmPassword}
-                                    placeholder="Confirm your password"
-                                    placeholderTextColor={colors.textSecondary}
-                                    secureTextEntry
-                                />
+                                <View style={styles.inputWrapper}>
+                                    <MaterialIcons name="lock-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.textInputWithIcon}
+                                        value={confirmPassword}
+                                        onChangeText={setConfirmPassword}
+                                        placeholder="Confirm your password"
+                                        placeholderTextColor={colors.textSecondary}
+                                        secureTextEntry
+                                    />
+                                </View>
                             </View>
                         )}
 
@@ -1009,6 +1023,24 @@ const styles = StyleSheet.create({
         fontWeight: '400',
         marginBottom: 8,
         textAlign: 'center',
+    },
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.inputBg,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        paddingHorizontal: 16,
+    },
+    inputIcon: {
+        marginRight: 12,
+    },
+    textInputWithIcon: {
+        flex: 1,
+        color: colors.textPrimary,
+        fontSize: 16,
+        paddingVertical: 16,
     },
 });
 
