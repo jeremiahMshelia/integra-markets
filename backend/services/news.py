@@ -57,15 +57,13 @@ class NewsService:
             "search_results": 3600   # 1 hour for search results
         }
         
-        # RSS feed sources with high-quality commodity news
+        # RSS feed sources — verified working feeds (tested Feb 14 2026)
         self.rss_sources = {
-            "reuters_commodities": "https://feeds.reuters.com/reuters/commoditiesNews",
-            "reuters_energy": "https://feeds.reuters.com/reuters/energy",
-            "bloomberg_energy": "https://feeds.bloomberg.com/energy/news.rss",
-            "marketwatch_commodities": "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
-            "oil_gas_journal": "https://www.ogj.com/rss/ogj-breaking-news.xml",
-            "platts": "https://www.spglobal.com/platts/en/rss-feeds",
-            "energy_intel": "https://www.energyintel.com/rss"
+            "oilprice": "https://oilprice.com/rss/main",
+            "investing_com": "https://www.investing.com/rss/news.rss",
+            "cnbc_commodities": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",
+            "google_news_oil": "https://news.google.com/rss/search?q=crude+oil+price+when:7d&hl=en-US&gl=US&ceid=US:en",
+            "google_news_gold": "https://news.google.com/rss/search?q=gold+price+commodities+when:7d&hl=en-US&gl=US&ceid=US:en",
         }
         
         # Commodity keywords for filtering relevant news
@@ -433,11 +431,15 @@ class NewsService:
                             
                         # Normalize timestamp
                         pub_date = article.get("published", datetime.utcnow())
-                        if isinstance(pub_date, str):
+                        if isinstance(pub_date, datetime):
+                            pass  # Already a datetime, good
+                        elif isinstance(pub_date, str):
                             try:
                                 pub_date = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
                             except:
                                 pub_date = datetime.utcnow()
+                        else:
+                            pub_date = datetime.utcnow()
                         
                         # Calculate sentiment locally since RSS doesn't provide it
                         combined_text = f"{article.get('title', '')} {article.get('summary', '')}"
@@ -448,6 +450,8 @@ class NewsService:
                         sentiment_label = ensemble.get("sentiment", "NEUTRAL")
                         sentiment_conf = ensemble.get("confidence", 0.0)
 
+                        # Store published as ISO string so _parse_pub_dt works later
+                        pub_str = pub_date.strftime("%Y-%m-%dT%H:%M:%S")
                         all_articles.append({
                             "title": article.get("title", ""),
                             "url": article.get("url", ""),
@@ -457,21 +461,15 @@ class NewsService:
                             "source_name": "rss_fallback",
                             "sentiment": sentiment_label,
                             "sentiment_score": sentiment_conf,
-                            "published": pub_date
+                            "published": pub_str
                         })
                     
                     logger.info(f"NewsDataSources provided {len(rss_articles)} articles, total now {len(all_articles)}")
             except Exception as e:
                 logger.error(f"Error fetching from NewsDataSources: {str(e)}")
 
-        # --- Tertiary source: legacy RSS feeds (only if everything else failed) ---
+        # --- Tertiary source: direct RSS feeds (only if everything else failed) ---
         if not all_articles:
-            # Fetch from all RSS sources concurrently
-            tasks = []
-            for source_name, rss_url in self.rss_sources.items():
-                task = self._fetch_rss_feed(rss_url)
-                tasks.append((source_name, task))
-            # Fetch from all RSS sources concurrently
             tasks = []
             for source_name, rss_url in self.rss_sources.items():
                 task = self._fetch_rss_feed(rss_url)
@@ -531,9 +529,13 @@ class NewsService:
         def _parse_pub_dt(published_val: Any) -> Optional[datetime]:
             """Parse various published/time formats into a datetime.
 
-            Supports both RSS dates (RFC2822, ISO) and Alpha Vantage's
-            compact format like 20241119T150000Z.
+            Handles: datetime objects, ISO strings, RFC2822, Alpha Vantage compact.
             """
+            if published_val is None:
+                return None
+            # Handle datetime objects directly (from data_sources.py)
+            if isinstance(published_val, datetime):
+                return published_val
             if not isinstance(published_val, str) or not published_val:
                 return None
             s = published_val.strip()
@@ -578,27 +580,26 @@ class NewsService:
                     hours,
                 )
 
-        # Hard cap on article age in days to avoid very old headlines
-        # Use a 90-day window so we still get news even when sources
-        # don’t provide very recent items.
-        max_age_days = 90
+        # Hard cap — only show articles from the last 24 hours
+        max_age_hours = 24
         if all_articles:
-            cutoff_days = datetime.utcnow() - timedelta(days=max_age_days)
+            cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
             recent_by_days: List[Dict[str, Any]] = []
             for article in all_articles:
                 published = article.get("published") or article.get("time_published")
                 article_dt = _parse_pub_dt(published)
-                if article_dt and article_dt >= cutoff_days:
+                if article_dt and article_dt >= cutoff:
                     recent_by_days.append(article)
 
             if recent_by_days:
                 all_articles = recent_by_days
             else:
                 logger.warning(
-                    "All articles older than %s days; returning empty list",
-                    max_age_days,
+                    "All %d articles older than %s hours; keeping newest 10 anyway",
+                    len(all_articles), max_age_hours,
                 )
-                all_articles = []
+                # Keep the newest articles anyway rather than showing nothing
+                all_articles = all_articles[:10]
 
         # Sort by published date (most recent first)
         all_articles.sort(key=lambda x: x.get("published", ""), reverse=True)
