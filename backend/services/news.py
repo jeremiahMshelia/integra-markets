@@ -42,9 +42,11 @@ class NewsService:
             timeout=30.0,
             follow_redirects=True,
             headers={
-                "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.5",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.google.com/",
+                "Upgrade-Insecure-Requests": "1",
             },
         )
         
@@ -337,16 +339,16 @@ class NewsService:
         """
         Enrich articles with image URLs by extracting from source pages.
         Modifies articles in place.
-        
-        Args:
-            articles: List of article dicts to enrich
-            max_concurrent: Maximum concurrent requests
         """
         # Only fetch images for first N articles to avoid too many requests
         articles_to_enrich = articles[:12]  # Top 12 for visual display
         
         async def fetch_image(article: Dict[str, Any]) -> None:
             url = article.get('url', '')
+            # If image already exists (e.g. from Atom feed), skip
+            if article.get('image_url'):
+                return
+
             if url:
                 image_url = await self._extract_article_image(url)
                 if image_url:

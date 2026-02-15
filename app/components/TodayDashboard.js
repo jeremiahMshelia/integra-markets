@@ -488,78 +488,53 @@ const TodayDashboard = ({ agentActive }) => {
         delayLongPress={400}
         activeOpacity={0.9}
       >
-        {/* Image Section - if image_url exists */}
-        {item.image_url && (
-          <View style={styles.cardImageContainer}>
-            <Image
-              source={{ uri: item.image_url }}
-              style={styles.cardImage}
-              resizeMode="cover"
+        {/* Image Section - Always render (using fallback logo if needed) */}
+        <View style={[styles.cardImageContainer, !item.image_url && { justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }]}>
+          <Image
+            source={item.image_url ? { uri: item.image_url } : require('../../assets/logoNew.png')}
+            style={[
+              styles.cardImage,
+              !item.image_url && {
+                opacity: 0.5,
+                width: '40%',
+                height: '40%',
+                tintColor: '#4ECCA3'
+              }
+            ]}
+            resizeMode={item.image_url ? "cover" : "contain"}
+          />
+          {/* Sentiment badge on top of image */}
+          <View style={[styles.imageSentimentBadge, { backgroundColor: getSentimentColor(item.sentiment) }]}>
+            <MaterialIcons
+              name={getSentimentIcon(item.sentiment)}
+              size={12}
+              color="#000"
             />
-            {/* Sentiment badge on top of image */}
-            <View style={[styles.imageSentimentBadge, { backgroundColor: getSentimentColor(item.sentiment) }]}>
-              <MaterialIcons
-                name={getSentimentIcon(item.sentiment)}
-                size={12}
-                color="#000"
-              />
-              <Text style={styles.imageSentimentText}>
-                {item.sentiment}
-              </Text>
-            </View>
+            <Text style={styles.imageSentimentText}>
+              {item.sentiment}
+            </Text>
           </View>
-        )}
+        </View>
 
         {/* Content Section */}
         <View style={styles.cardContent}>
-          {/* Header - only show if no image */}
-          {!item.image_url && (
-            <View style={styles.cardHeader}>
-              <View style={styles.sentimentContainer}>
-                <MaterialIcons
-                  name={getSentimentIcon(item.sentiment)}
-                  size={16}
-                  color={getSentimentColor(item.sentiment)}
-                />
-                <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
-                  {item.sentiment}
-                </Text>
-                <Text style={styles.sentimentScore}>{item.sentimentScore}</Text>
-              </View>
-              <View style={styles.cardHeaderRight}>
-                <TouchableOpacity
-                  style={styles.aiButton}
-                  onPress={() => openAIOverlay(item)}
-                >
-                  <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.moreButton}
-                  onPress={() => Alert.alert('More Options', 'Additional article options will be available in the next update')}
-                >
-                  <MaterialIcons name="more-horiz" size={20} color="#A0A0A0" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
 
-          {/* Header for cards with images - different layout */}
-          {item.image_url && (
-            <View style={styles.imageCardHeader}>
-              <TouchableOpacity
-                style={styles.aiButton}
-                onPress={() => openAIOverlay(item)}
-              >
-                <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.moreButton}
-                onPress={() => Alert.alert('More Options', 'Additional article options will be available in the next update')}
-              >
-                <MaterialIcons name="more-horiz" size={20} color="#A0A0A0" />
-              </TouchableOpacity>
-            </View>
-          )}
+
+          {/* Header for cards with images - always show now */}
+          <View style={styles.imageCardHeader}>
+            <TouchableOpacity
+              style={styles.aiButton}
+              onPress={() => openAIOverlay(item)}
+            >
+              <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.moreButton}
+              onPress={() => Alert.alert('More Options', 'Additional article options will be available in the next update')}
+            >
+              <MaterialIcons name="more-horiz" size={20} color="#A0A0A0" />
+            </TouchableOpacity>
+          </View>
 
           <Text style={styles.newsHeadline}>{item.headline}</Text>
           <Text style={styles.newsSummary} numberOfLines={item.image_url ? 2 : 3}>{item.summary}</Text>

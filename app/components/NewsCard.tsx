@@ -280,44 +280,36 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       delayLongPress={400}
       activeOpacity={0.85}
     >
-      {/* Image Section - if image_url exists */}
-      {item.image_url && (
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: item.image_url }}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
-          {/* Sentiment badge at bottom-left with dark transparent background */}
-          {item.sentiment && (
-            <View style={styles.imageSentimentBadge}>
-              {renderSentimentIcon(item.sentiment)}
-              <Text style={[styles.imageSentimentText, { color: getSentimentColor(item.sentiment) }]}>
-                {item.sentiment.toUpperCase()} {formatScore(item.sentiment_score || item.sentimentScore)}
-              </Text>
-            </View>
-          )}
-        </View>
-      )}
+      {/* Image Section - Always render (using fallback logo if needed) */}
+      <View style={[styles.imageContainer, !item.image_url && { justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }]}>
+        <Image
+          source={item.image_url ? { uri: item.image_url } : require('../../assets/logoNew.png')}
+          style={[
+            styles.cardImage,
+            !item.image_url && {
+              opacity: 0.5,
+              width: '40%',
+              height: '40%',
+              tintColor: '#4ECCA3'
+            }
+          ]}
+          resizeMode={item.image_url ? "cover" : "contain"}
+        />
+
+        {/* Sentiment badge at bottom-left with dark transparent background */}
+        {item.sentiment && (
+          <View style={styles.imageSentimentBadge}>
+            {renderSentimentIcon(item.sentiment)}
+            <Text style={[styles.imageSentimentText, { color: getSentimentColor(item.sentiment) }]}>
+              {item.sentiment.toUpperCase()} {formatScore(item.sentiment_score || item.sentimentScore)}
+            </Text>
+          </View>
+        )}
+      </View>
 
       {/* Content Section */}
       <View style={styles.contentSection}>
-        {/* Header with sentiment - only if no image */}
-        {!item.image_url && item.sentiment && (
-          <View style={styles.header}>
-            <View style={styles.sentimentBadge}>
-              <View style={styles.sentimentIconContainer}>
-                {renderSentimentIcon(item.sentiment)}
-              </View>
-              <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
-                {item.sentiment.toUpperCase()}
-              </Text>
-              <Text style={[styles.sentimentScore, { color: getSentimentColor(item.sentiment) }]}>
-                {formatScore(item.sentiment_score || item.sentimentScore)}
-              </Text>
-            </View>
-          </View>
-        )}
+
 
         {/* Title row with action buttons on the right */}
         <View style={styles.titleRow}>

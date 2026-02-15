@@ -77,25 +77,8 @@ const formatTimeAgo = (dateStr: string): string => {
     }
 };
 
-// Placeholder gradients for when images are missing (Perplexity style)
-const PLACEHOLDERS = [
-    'linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d)',
-    'linear-gradient(135deg, #0f0c29, #302b63, #24243e)',
-    'linear-gradient(135deg, #114357, #F29492)',
-    'linear-gradient(135deg, #000046, #1CB5E0)',
-];
-
-// Get source logo using Clearbit (free) or Google favicon
-const getSourceLogo = (url?: string): string | null => {
-    if (!url) return null;
-    try {
-        const domain = new URL(url).hostname.replace('www.', '');
-        // Use Clearbit Logo API (free, high quality)
-        return `https://logo.clearbit.com/${domain}`;
-    } catch {
-        return null;
-    }
-};
+// Fallback logo path
+const FALLBACK_LOGO = '/logoNew.png';
 
 export default function NewsCard({ item, featured = false, onAIClick, isBookmarked = false, onBookmarkToggle }: NewsCardProps) {
     const [bookmarked, setBookmarked] = useState(isBookmarked);
@@ -151,9 +134,7 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
     // Custom color for default state
     const displayColor = isDefault ? '#4a9eff' : getSentimentColor(sentiment);
 
-    // Deterministic placeholder based on title length
-    const placeholderBg = PLACEHOLDERS[(item.title?.length || 0) % PLACEHOLDERS.length];
-    const sourceLogo = getSourceLogo(item.url);
+
 
     // Card layout - same for featured and standard, just different sizes
     const cardHeight = featured ? 'min-h-[500px]' : 'min-h-[400px]';
@@ -176,17 +157,12 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                         onError={() => setImageError(true)}
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center relative" style={{ background: placeholderBg }}>
-                        {sourceLogo && !logoError ? (
-                            <img
-                                src={sourceLogo}
-                                alt={item.source}
-                                className="w-16 h-16 object-contain opacity-40"
-                                onError={() => setLogoError(true)}
-                            />
-                        ) : (
-                            <span className="text-5xl opacity-20">📰</span>
-                        )}
+                    <div className="w-full h-full flex items-center justify-center relative bg-[#121212]">
+                        <img
+                            src={FALLBACK_LOGO}
+                            alt="Integra Markets"
+                            className="w-24 h-24 object-contain opacity-50 grayscale"
+                        />
                     </div>
                 )}
 
