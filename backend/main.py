@@ -1,11 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from pydantic import BaseModel
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables (Cloud Run will provide them directly)
 load_dotenv()  # This will load from .env if present, but won't fail if missing
@@ -19,6 +22,14 @@ except ImportError:
         pass
     async def close_db():
         pass
+
+# Notification engine (instant + backstop scheduler)
+try:
+    from services.notification_scheduler import notification_engine
+    notif_available = True
+except Exception as e:
+    print(f"Warning: notification engine not available: {e}")
+    notif_available = False
 
 # Routers
 try:
@@ -53,12 +64,23 @@ app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API
 @app.on_event("startup")
 async def startup_event():
     await init_db()
+    # Start the backstop notification scheduler
+    if notif_available:
+        try:
+            notification_engine.start()
+            logger.info("Notification engine started (instant + backstop)")
+        except Exception as e:
+            logger.error(f"Failed to start notification engine: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    if notif_available:
+        try:
+            notification_engine.stop()
+        except Exception:
+            pass
     await close_db()
 
-# Mount routers conditionally
 # Mount routers conditionally
 if notifications_available:
     app.include_router(notifications_router, prefix="/api")

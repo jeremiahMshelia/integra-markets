@@ -503,6 +503,9 @@ class SupabaseService {
                     device_type: deviceType,
                     is_active: true,
                     updated_at: new Date().toISOString(),
+                }, {
+                    onConflict: 'user_id',
+                    ignoreDuplicates: false,
                 });
 
             if (error) {

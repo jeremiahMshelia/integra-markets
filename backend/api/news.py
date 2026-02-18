@@ -2,10 +2,31 @@
 API Routes for Integra Markets
 Enhanced with FinBERT and VADER sentiment analysis
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+import asyncio
 import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Import notification engine (safe — won't crash if unavailable)
+try:
+    from services.notification_scheduler import notification_engine
+    _notif_available = True
+except Exception:
+    _notif_available = False
+
+
+async def _fire_notifications(articles: list):
+    """Fire push notifications for the given articles (runs in background)."""
+    if not _notif_available:
+        return
+    try:
+        await notification_engine.notify_for_articles(articles)
+    except Exception as e:
+        logger.error("[Notif] Error firing notifications: %s", e)
 
 # Import services
 from services.enhanced_sentiment import analyze_market_sentiment, sentiment_analyzer
@@ -244,7 +265,7 @@ async def preprocess_news_pipeline_endpoint(request: NewsPreprocessRequest):
 
 # --- News Feed Endpoints ---
 @api_router.post("/news/latest", response_model=Dict[str, Any])
-async def get_latest_news(request: LatestNewsRequest):
+async def get_latest_news(request: LatestNewsRequest, background_tasks: BackgroundTasks):
     """Return latest commodity news articles (optionally filtered by commodities)."""
     try:
         result = await get_latest_commodity_news(
@@ -252,19 +273,27 @@ async def get_latest_news(request: LatestNewsRequest):
             limit=50,
             hours=request.hours,
         )
+        # INSTANT NOTIFICATIONS: fire push notifications in background
+        articles = result.get("articles", []) if isinstance(result, dict) else []
+        if articles:
+            background_tasks.add_task(_fire_notifications, articles)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching latest news: {str(e)}")
 
 
 @api_router.get("/news/analysis", response_model=Dict[str, Any])
-async def get_news_analysis_endpoint(hours: int = 6):
+async def get_news_analysis_endpoint(hours: int = 6, background_tasks: BackgroundTasks = None):
     """Return analyzed news feed for the given time window.
 
     For now this reuses the latest news feed so the mobile app has data to display.
     """
     try:
         result = await get_latest_commodity_news(limit=50, hours=hours)
+        # INSTANT NOTIFICATIONS: fire push notifications in background
+        articles = result.get("articles", []) if isinstance(result, dict) else []
+        if articles and background_tasks:
+            background_tasks.add_task(_fire_notifications, articles)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching news analysis: {str(e)}")

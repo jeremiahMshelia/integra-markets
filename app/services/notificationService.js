@@ -30,7 +30,7 @@ if (Platform.OS === 'ios') {
       },
     },
   ]);
-  
+
   Notifications.setNotificationCategoryAsync('BREAKING_NEWS', [
     {
       identifier: 'READ_MORE',
@@ -87,7 +87,7 @@ const isPermEnabled = (perm) => {
 export async function registerForPushNotificationsAsync(options = {}) {
   let token;
   const silent = !!(options && options.silent);
-  
+
   try {
     // Set up notification channel for Android
     if (Platform.OS === 'android') {
@@ -98,7 +98,7 @@ export async function registerForPushNotificationsAsync(options = {}) {
         lightColor: '#4ECCA3',
         sound: true,
       });
-      
+
       // Create additional channels for different notification types
       await Notifications.setNotificationChannelAsync('market-alerts', {
         name: 'Market Alerts',
@@ -107,7 +107,7 @@ export async function registerForPushNotificationsAsync(options = {}) {
         lightColor: '#F05454',
         sound: 'market_alert.wav',
       });
-      
+
       await Notifications.setNotificationChannelAsync('breaking-news', {
         name: 'Breaking News',
         importance: Notifications.AndroidImportance.MAX,
@@ -138,31 +138,41 @@ export async function registerForPushNotificationsAsync(options = {}) {
     // Get push token
     const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId || Constants?.expoConfig?.projectId;
     token = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
-    
+
     // Store the token locally
     if (token?.data) {
       await AsyncStorage.setItem(PUSH_TOKEN_KEY, token.data);
     }
-    
+
     // Register token with backend if user is authenticated
     try {
-        const authToken = await AsyncStorage.getItem('@auth_token');
-        if (authToken) {
-            const { api } = require('./api');
-            api.setAuthToken(authToken);
-            await api.post('/notifications/register-token', {
-                token: token.data,
-                device_type: Platform.OS
-            });
-            console.log('Push token registered with backend');
-        }
+      const authToken = await AsyncStorage.getItem('@auth_token');
+      if (authToken) {
+        const { api } = require('./api');
+        api.setAuthToken(authToken);
+        await api.post('/notifications/register-token', {
+          token: token.data,
+          device_type: Platform.OS
+        });
+        console.log('Push token registered with backend');
+      }
     } catch (error) {
-        console.error('Error registering token with backend:', error);
+      console.error('Error registering token with backend:', error);
     }
-    
+
+    // Also register token directly in Supabase push_tokens table
+    // (used by the background notification scheduler)
+    try {
+      const { supabaseService } = require('./supabaseService');
+      await supabaseService.registerPushToken(token.data, Platform.OS);
+      console.log('Push token registered with Supabase');
+    } catch (error) {
+      console.error('Error registering token with Supabase:', error);
+    }
+
     console.log('Push notification token obtained:', token?.data);
     return token?.data ?? null;
-    
+
   } catch (error) {
     console.error('Error registering for push notifications:', error);
     if (!silent) {
@@ -179,17 +189,17 @@ export async function getNotificationSettings() {
   try {
     const settings = await AsyncStorage.getItem(NOTIFICATION_SETTINGS_KEY);
     const parsedSettings = settings ? JSON.parse(settings) : defaultNotificationSettings;
-    
+
     const perm = await Notifications.getPermissionsAsync();
     const hasPermission = isPermEnabled(perm);
-    
+
     // Update pushNotifications based on actual permission status
     if (parsedSettings.pushNotifications !== hasPermission) {
       parsedSettings.pushNotifications = hasPermission;
       // Save the updated status
       await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(parsedSettings));
     }
-    
+
     return parsedSettings;
   } catch (error) {
     console.error('Error getting notification settings:', error);
@@ -230,7 +240,7 @@ export async function getStoredPushToken() {
 export async function scheduleLocalNotification(title, body, data = {}, scheduledTime = null) {
   try {
     const settings = await getNotificationSettings();
-    
+
     if (!settings.pushNotifications) {
       console.log('Push notifications disabled by user');
       return;
@@ -315,10 +325,10 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
   // Listener for notifications received while app is running
   notificationListener = Notifications.addNotificationReceivedListener(notification => {
     console.log('Notification received:', notification);
-    
+
     // Show alert for immediate feedback
     Alert.alert(notification.request.content.title, notification.request.content.body);
-    
+
     if (onNotificationReceived) {
       onNotificationReceived(notification);
     }
@@ -327,7 +337,7 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
   // Listener for when user taps on notification
   responseListener = Notifications.addNotificationResponseReceivedListener(response => {
     console.log('Notification response received:', response);
-    
+
     if (onNotificationResponse) {
       onNotificationResponse(response);
     }
@@ -353,14 +363,14 @@ export function removeNotificationListeners() {
  */
 export async function sendMarketAlert(commodity, change, price) {
   const settings = await getNotificationSettings();
-  
+
   if (!settings.marketAlerts || !settings.pushNotifications) {
     return;
   }
 
   const title = `${commodity} Alert`;
   const body = `Price ${change > 0 ? 'increased' : 'decreased'} to $${price}`;
-  
+
   return await scheduleLocalNotification(title, body, {
     type: 'market_alert',
     commodity,
@@ -374,14 +384,14 @@ export async function sendMarketAlert(commodity, change, price) {
  */
 export async function sendBreakingNewsAlert(headline, source) {
   const settings = await getNotificationSettings();
-  
+
   if (!settings.breakingNews || !settings.pushNotifications) {
     return;
   }
 
   const title = 'Breaking News';
   const body = headline;
-  
+
   return await scheduleLocalNotification(title, body, {
     type: 'breaking_news',
     source,

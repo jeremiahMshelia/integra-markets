@@ -198,18 +198,39 @@ async def send_test_notification(
     request: TestNotificationRequest,
     current_user: User = Depends(get_current_user)
 ):
-    """Send a test notification to the current user"""
-    if not current_user.push_token:
+    """Send a test notification to the current user.
+    Checks both SQLAlchemy User.push_token and Supabase push_tokens table.
+    """
+    token = current_user.push_token
+    
+    # Also check Supabase push_tokens table if no token on the User model
+    if not token:
+        try:
+            from core.database import db as supabase_db
+            sb = supabase_db.get_client()
+            if sb and current_user.supabase_uid:
+                result = sb.table("push_tokens")\
+                    .select("expo_push_token")\
+                    .eq("user_id", current_user.supabase_uid)\
+                    .eq("is_active", True)\
+                    .execute()
+                data = result.data if hasattr(result, "data") else []
+                if data:
+                    token = data[0].get("expo_push_token")
+                    logger.info(f"Found push token in Supabase for user {current_user.supabase_uid}")
+        except Exception as e:
+            logger.warning(f"Could not check Supabase push_tokens: {e}")
+    
+    if not token:
         raise HTTPException(
             status_code=400, 
             detail="No push token registered. Please enable notifications in the app."
         )
     
     try:
-        # Send test notification immediately
         result = await send_single_expo_notification(
-            current_user.push_token,
-            "Test Notification",
+            token,
+            "🔔 Test Notification",
             request.message,
             {"type": "test", "timestamp": datetime.utcnow().isoformat()}
         )
@@ -217,11 +238,63 @@ async def send_test_notification(
         return {
             "status": "success",
             "message": "Test notification sent",
+            "token_source": "supabase" if not current_user.push_token else "local_db",
             "result": result
         }
     except Exception as e:
         logger.error(f"Error sending test notification: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to send test notification")
+        raise HTTPException(status_code=500, detail=f"Failed to send test notification: {str(e)}")
+
+
+@router.get("/debug")
+async def notification_debug():
+    """Diagnostic endpoint: check push tokens, preferences, and notification engine status."""
+    info = {
+        "status": "ok",
+        "push_tokens": [],
+        "alert_preferences_count": 0,
+        "notification_engine": "unavailable",
+    }
+    
+    try:
+        from core.database import db as supabase_db
+        sb = supabase_db.get_client()
+        if sb:
+            # Count push tokens
+            tokens_result = sb.table("push_tokens")\
+                .select("user_id, expo_push_token, device_type, is_active")\
+                .eq("is_active", True)\
+                .execute()
+            tokens = tokens_result.data if hasattr(tokens_result, "data") else []
+            info["push_tokens"] = [
+                {
+                    "user_id": t["user_id"][:8] + "…",
+                    "token_prefix": (t.get("expo_push_token") or "")[:30] + "…",
+                    "device": t.get("device_type", "?"),
+                }
+                for t in tokens
+            ]
+            
+            # Count alert preferences
+            prefs_result = sb.table("alert_preferences").select("user_id").execute()
+            prefs = prefs_result.data if hasattr(prefs_result, "data") else []
+            info["alert_preferences_count"] = len(prefs)
+        else:
+            info["supabase"] = "not connected"
+    except Exception as e:
+        info["supabase_error"] = str(e)
+    
+    try:
+        from services.notification_scheduler import notification_engine
+        info["notification_engine"] = {
+            "running": notification_engine._running,
+            "sent_cache_size": len(notification_engine._sent),
+            "tracked_users": len(notification_engine._user_timestamps),
+        }
+    except Exception as e:
+        info["notification_engine_error"] = str(e)
+    
+    return info
 
 @router.post("/ai-alert")
 async def send_ai_alert_notification(
