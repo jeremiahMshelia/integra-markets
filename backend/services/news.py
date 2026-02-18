@@ -6,13 +6,22 @@ Integrates multiple news sources with intelligent caching strategies.
 import logging
 import asyncio
 import hashlib
-from typing import Dict, List, Any, Optional
+import os
+import re
+from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timedelta
 import time
+from urllib.parse import urlparse
 from email.utils import parsedate_to_datetime
 import feedparser
 import httpx
 from bs4 import BeautifulSoup
+
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
 
 from services.enhanced_caching import cache_manager, cached
 from services.news_preprocessing import preprocess_news, create_pipeline_ready_output
@@ -24,6 +33,27 @@ try:
 except ImportError:
     DATA_SOURCES_AVAILABLE = False
 
+# Domains whose images should never be used (logos, favicons, etc.)
+_BLOCKED_IMAGE_DOMAINS = {
+    "news.google.com",
+    "lh3.googleusercontent.com",
+    "encrypted-tbn0.gstatic.com",
+    "www.google.com",
+    "google.com",
+    "gstatic.com",
+    "t0.gstatic.com",
+    "t1.gstatic.com",
+    "t2.gstatic.com",
+    "t3.gstatic.com",
+}
+
+def _is_blocked_image(url: str) -> bool:
+    """Return True if the image URL belongs to a blocked domain (e.g. Google)."""
+    try:
+        host = urlparse(url).hostname or ""
+        return host in _BLOCKED_IMAGE_DOMAINS
+    except Exception:
+        return False
 
 
 logger = logging.getLogger(__name__)
@@ -36,8 +66,7 @@ class NewsService:
     
     def __init__(self):
         """Initialize the news service with enhanced caching"""
-        # Use Googlebot User-Agent - sites allow this for SEO
-        # TipRanks and similar sites block Twitterbot but allow Googlebot
+        # Use Chrome User-Agent — sites allow this for normal browsing
         self.client = httpx.AsyncClient(
             timeout=30.0,
             follow_redirects=True,
@@ -49,6 +78,17 @@ class NewsService:
                 "Upgrade-Insecure-Requests": "1",
             },
         )
+        
+        # ── Groq client for AI-powered summaries ─────────────────────
+        groq_key = os.getenv("GROQ_API_KEY")
+        if GROQ_AVAILABLE and groq_key:
+            self.groq = Groq(api_key=groq_key)
+            self.groq_model = "llama-3.3-70b-versatile"  # Fast + cheap
+            logger.info("Groq AI summary generation ENABLED")
+        else:
+            self.groq = None
+            self.groq_model = None
+            logger.warning("Groq AI summary generation DISABLED (no key or package)")
         
         # Enhanced cache TTL for production (aggressive caching for 100-1000 users)
         self.cache_ttl = {
@@ -226,6 +266,45 @@ class NewsService:
             logger.error(f"Error fetching article content {url}: {str(e)}")
             return {"content": "", "error": str(e)}
     
+    # ──────────────────────────────────────────────────────────────────
+    # Google News URL resolution
+    # ──────────────────────────────────────────────────────────────────
+    async def _resolve_google_news_url(self, url: str) -> str:
+        """Resolve a Google News redirect URL to the actual article URL.
+        
+        Google News RSS links look like:
+          https://news.google.com/rss/articles/CBMi...
+        They 302-redirect to the real article.
+        """
+        if "news.google.com" not in url:
+            return url
+        try:
+            # Use a client that does NOT follow redirects to capture Location header
+            async with httpx.AsyncClient(
+                timeout=8.0,
+                follow_redirects=False,
+                headers=self.client.headers,
+            ) as tmp:
+                resp = await tmp.get(url)
+                if resp.status_code in (301, 302, 303, 307, 308):
+                    real_url = resp.headers.get("location", url)
+                    logger.debug("Resolved Google News URL -> %s", real_url[:80])
+                    return real_url
+            # If it returned 200, Google rendered a page. Try extracting the
+            # canonical <link> or <a> tag.
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                # Google News pages embed the real URL in a <a data-n-au> tag
+                for a in soup.find_all("a", href=True):
+                    href = a["href"]
+                    if href.startswith("http") and "news.google.com" not in href:
+                        logger.debug("Resolved Google News URL (from page) -> %s", href[:80])
+                        return href
+            return url
+        except Exception as e:
+            logger.warning("Could not resolve Google News URL %s: %s", url[:60], e)
+            return url
+
     @cached("news_image", ttl_seconds=86400)  # 24-hour cache for images
     async def _extract_article_image(self, url: str) -> Optional[str]:
         """
@@ -236,14 +315,12 @@ class NewsService:
         1. og:image / og:image:url
         2. twitter:image / twitter:image:src
         3. First significant image in content
-        4. Site logo (better than nothing)
         
-        Args:
-            url: Article URL
-            
-        Returns:
-            Image URL or None if not found
+        Skips Google logos / favicons.
         """
+        # Resolve Google News redirects first
+        url = await self._resolve_google_news_url(url)
+        
         try:
             # Fetch with shorter timeout for image extraction
             response = await self.client.get(url, timeout=8.0)
@@ -257,7 +334,7 @@ class NewsService:
                 og_image = soup.find('meta', property=prop)
                 if og_image and og_image.get('content'):
                     img_url = og_image['content']
-                    if img_url.startswith('http'):
+                    if img_url.startswith('http') and not _is_blocked_image(img_url):
                         logger.debug(f"Found {prop} for {url}: {img_url[:50]}...")
                         return img_url
             
@@ -266,20 +343,22 @@ class NewsService:
                 twitter_image = soup.find('meta', attrs={'name': name})
                 if twitter_image and twitter_image.get('content'):
                     img_url = twitter_image['content']
-                    if img_url.startswith('http'):
+                    if img_url.startswith('http') and not _is_blocked_image(img_url):
                         logger.debug(f"Found {name} for {url}: {img_url[:50]}...")
                         return img_url
                 # Also check property attribute
                 twitter_image = soup.find('meta', property=name)
                 if twitter_image and twitter_image.get('content'):
                     img_url = twitter_image['content']
-                    if img_url.startswith('http'):
+                    if img_url.startswith('http') and not _is_blocked_image(img_url):
                         return img_url
             
             # Priority 3: image_src link tag
             image_link = soup.find('link', rel='image_src')
             if image_link and image_link.get('href'):
-                return image_link['href']
+                href = image_link['href']
+                if not _is_blocked_image(href):
+                    return href
             
             # Priority 4: First significant image in article/main content
             main_content = soup.find('article') or soup.find('main') or soup.find('div', class_='content') or soup
@@ -290,7 +369,7 @@ class NewsService:
                 if not src:
                     continue
                     
-                # Skip tiny images and trackers
+                # Skip tiny images, trackers, and blocked domains
                 if any(x in src.lower() for x in ['1x1', 'pixel', 'spacer', 'blank', 'tracking']):
                     continue
                 if src.startswith('data:') and len(src) < 1000:
@@ -300,6 +379,9 @@ class NewsService:
                 if not src.startswith('http'):
                     from urllib.parse import urljoin
                     src = urljoin(url, src)
+                
+                if _is_blocked_image(src):
+                    continue
                 
                 # Check if it's a real content image
                 width = img.get('width', '')
@@ -317,17 +399,6 @@ class NewsService:
                 if any(x in src.lower() for x in ['article', 'content', 'media', 'image', 'photo', 'news', 'upload']):
                     return src
             
-            # Priority 5: Site logo (fallback - better than nothing)
-            logo = soup.find('meta', property='og:logo')
-            if logo and logo.get('content'):
-                return logo['content']
-            
-            # Try common logo locations
-            for img in soup.find_all('img', src=True):
-                src = img.get('src', '')
-                if 'logo' in src.lower() and src.startswith('http'):
-                    return src
-            
             logger.debug(f"No image found for {url}")
             return None
             
@@ -338,15 +409,31 @@ class NewsService:
     async def _enrich_articles_with_images(self, articles: List[Dict[str, Any]], max_concurrent: int = 5) -> None:
         """
         Enrich articles with image URLs by extracting from source pages.
-        Modifies articles in place.
+        Modifies articles in place. Also filters out blocked images that
+        may have been set earlier (e.g. Google logo).
         """
         # Only fetch images for first N articles to avoid too many requests
         articles_to_enrich = articles[:12]  # Top 12 for visual display
         
         async def fetch_image(article: Dict[str, Any]) -> None:
             url = article.get('url', '')
-            # If image already exists (e.g. from Atom feed), skip
-            if article.get('image_url'):
+            
+            # Resolve Google News redirect URLs to real article URLs
+            if url and "news.google.com" in url:
+                resolved = await self._resolve_google_news_url(url)
+                if resolved != url:
+                    article['url'] = resolved  # Update article URL too
+                    url = resolved
+            
+            # If image already exists, validate it isn't a blocked image
+            existing_img = article.get('image_url', '')
+            if existing_img and _is_blocked_image(existing_img):
+                logger.debug("Removing blocked image from article: %s", existing_img[:60])
+                article['image_url'] = None
+                existing_img = None
+            
+            # If image already exists and is valid, skip
+            if existing_img:
                 return
 
             if url:
@@ -355,7 +442,6 @@ class NewsService:
                     article['image_url'] = image_url
         
         # Process in batches to limit concurrency
-        import asyncio
         semaphore = asyncio.Semaphore(max_concurrent)
         
         async def fetch_with_semaphore(article):
@@ -364,6 +450,134 @@ class NewsService:
         
         tasks = [fetch_with_semaphore(a) for a in articles_to_enrich]
         await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # ──────────────────────────────────────────────────────────────────
+    # Groq AI-powered summary improvement
+    # ──────────────────────────────────────────────────────────────────
+    def _needs_summary_fix(self, article: Dict[str, Any]) -> bool:
+        """Determine if an article summary needs AI improvement."""
+        summary = (article.get("summary") or "").strip()
+        title = (article.get("title") or "").strip()
+        
+        # No summary at all
+        if not summary or len(summary) < 20:
+            return True
+        
+        # Summary is just the title repeated (or very similar)
+        if summary.lower().replace(" ", "") == title.lower().replace(" ", ""):
+            return True
+        
+        # Summary looks like a page title / site name (no sentence structure)
+        if len(summary) < 80 and "." not in summary and "," not in summary:
+            return True
+        
+        # Summary is truncated mid-sentence (doesn't end with sentence-ending punct)
+        last_char = summary.rstrip()[-1] if summary.rstrip() else ""
+        if last_char not in ".!?\"'" and len(summary) > 150:
+            return True
+        
+        # Summary ends with common truncation patterns
+        if re.search(r'\b(the|a|an|and|or|for|in|of|to|with|by|from|at|is|are|was)\s*$', summary, re.I):
+            return True
+        
+        return False
+    
+    async def _improve_summaries_with_groq(self, articles: List[Dict[str, Any]]) -> None:
+        """Use Groq Llama 3.3 70B to generate clean summaries for articles
+        that have broken/truncated/missing summaries. Modifies articles in place.
+        
+        Strategy:
+          - Batch articles to minimise API calls (5 per request)
+          - Only process articles whose summary actually needs fixing
+          - Cache results so we never re-summarise the same title
+        """
+        if not self.groq:
+            return
+        
+        # Identify articles that need fixing
+        to_fix: List[Dict[str, Any]] = []
+        for article in articles:
+            # Check cache first
+            cache_key = self._generate_cache_key("groq_summary", article.get("title", ""))
+            cached_summary = cache_manager.get("groq_summary", cache_key)
+            if cached_summary is not None:
+                article["summary"] = cached_summary
+                continue
+            
+            if self._needs_summary_fix(article):
+                to_fix.append(article)
+        
+        if not to_fix:
+            logger.debug("All summaries are clean, skipping Groq")
+            return
+        
+        logger.info("Improving %d article summaries via Groq", len(to_fix))
+        
+        # Process in batches of 5
+        batch_size = 5
+        for i in range(0, len(to_fix), batch_size):
+            batch = to_fix[i:i + batch_size]
+            await self._groq_summarize_batch(batch)
+    
+    async def _groq_summarize_batch(self, articles: List[Dict[str, Any]]) -> None:
+        """Send a batch of articles to Groq and update their summaries."""
+        if not articles:
+            return
+        
+        # Build the prompt
+        items = []
+        for idx, article in enumerate(articles):
+            title = article.get("title", "No title")
+            raw_summary = (article.get("summary") or "")[:600]
+            items.append(f"[{idx + 1}] Title: {title}\nRaw text: {raw_summary}")
+        
+        prompt = (
+            "You are a professional financial news editor for a commodity markets app.\n"
+            "Below are news articles with broken, truncated, or missing summaries.\n"
+            "For EACH article, write a clean, complete summary of exactly 2-3 sentences.\n"
+            "Focus on the key facts and market impact. Do NOT start with 'This article...'.\n"
+            "Write in a professional, concise tone suitable for commodity traders.\n\n"
+            + "\n\n".join(items)
+            + "\n\nRespond with ONLY the summaries, one per article, in this exact format:\n"
+            "[1] Your summary here.\n"
+            "[2] Your summary here.\n"
+            "...and so on. No extra commentary."
+        )
+        
+        try:
+            # Run in executor since groq SDK is synchronous
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.groq.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                    max_tokens=2000,
+                )
+            )
+            
+            content = response.choices[0].message.content or ""
+            
+            # Parse the numbered responses
+            summaries = {}
+            for match in re.finditer(r'\[(\d+)\]\s*(.+?)(?=\[\d+\]|\Z)', content, re.DOTALL):
+                idx = int(match.group(1)) - 1
+                summary_text = match.group(2).strip()
+                if summary_text and len(summary_text) > 20:
+                    summaries[idx] = summary_text
+            
+            # Apply summaries to articles and cache them
+            for idx, article in enumerate(articles):
+                if idx in summaries:
+                    article["summary"] = summaries[idx]
+                    # Cache for 4 hours
+                    cache_key = self._generate_cache_key("groq_summary", article.get("title", ""))
+                    cache_manager.set("groq_summary", cache_key, summaries[idx], 14400)
+                    logger.debug("Improved summary for: %s", article.get("title", "?")[:50])
+                    
+        except Exception as e:
+            logger.error("Groq batch summarization failed: %s", str(e))
     
     async def get_latest_news(self, 
                             commodities: Optional[List[str]] = None,
@@ -664,6 +878,12 @@ class NewsService:
             await self._enrich_articles_with_images(all_articles)
         except Exception as e:
             logger.warning(f"Could not enrich articles with images: {str(e)}")
+        
+        # ── AI-powered summary cleanup via Groq ─────────────────────
+        try:
+            await self._improve_summaries_with_groq(all_articles)
+        except Exception as e:
+            logger.warning(f"Groq summary improvement failed (non-fatal): {str(e)}")
         
         result = {
             "articles": all_articles,
