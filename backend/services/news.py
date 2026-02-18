@@ -579,16 +579,23 @@ class NewsService:
             logger.info("Generated %d local fallback summaries (Groq unavailable)", len(to_fix))
             return
         
-        # Process in batches of 5 via Groq
+        # Process in batches of 5 via Groq (with inter-batch delay to avoid rate limits)
         batch_size = 5
         for i in range(0, len(to_fix), batch_size):
             batch = to_fix[i:i + batch_size]
             await self._groq_summarize_batch(batch)
+            # Small delay between batches to stay under 30 RPM
+            if i + batch_size < len(to_fix):
+                await asyncio.sleep(2)
     
-    async def _groq_summarize_batch(self, articles: List[Dict[str, Any]]) -> None:
-        """Send a batch of articles to Groq and update their summaries."""
+    async def _groq_summarize_batch(self, articles: List[Dict[str, Any]], _retry: int = 0) -> None:
+        """Send a batch of articles to Groq and update their summaries.
+        Retries up to 2 times on rate limit (429) errors with backoff.
+        """
         if not articles:
             return
+        
+        MAX_RETRIES = 2
         
         # Build the prompt
         items = []
@@ -646,7 +653,21 @@ class NewsService:
                     article["summary"] = self._generate_local_summary(article)
                     
         except Exception as e:
-            logger.error("Groq batch summarization failed: %s", str(e))
+            error_str = str(e)
+            
+            # Rate limit (429) — retry with backoff
+            if "429" in error_str or "rate_limit" in error_str.lower():
+                if _retry < MAX_RETRIES:
+                    wait_time = (5, 15)[min(_retry, 1)]  # 5s first retry, 15s second
+                    logger.warning("Groq rate limited, retrying in %ds (attempt %d/%d)",
+                                   wait_time, _retry + 1, MAX_RETRIES)
+                    await asyncio.sleep(wait_time)
+                    return await self._groq_summarize_batch(articles, _retry + 1)
+                else:
+                    logger.error("Groq rate limited after %d retries, using fallback", MAX_RETRIES)
+            else:
+                logger.error("Groq batch summarization failed: %s", error_str)
+            
             # FALLBACK: generate local summaries for the entire batch
             for article in articles:
                 article["summary"] = self._generate_local_summary(article)
