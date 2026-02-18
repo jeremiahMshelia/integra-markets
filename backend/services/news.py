@@ -482,6 +482,67 @@ class NewsService:
         
         return False
     
+    def _generate_local_summary(self, article: Dict[str, Any]) -> str:
+        """Generate a usable summary locally when Groq is unavailable.
+        
+        Strategy:
+          - Use the raw summary text if available, clean it up
+          - Extract complete sentences
+          - Cap at 2-3 sentences
+          - If nothing usable, construct from title + source
+        """
+        title = (article.get("title") or "").strip()
+        raw = (article.get("summary") or "").strip()
+        source = (article.get("source") or "").strip()
+        
+        # If raw text is just the title or too short, build from title
+        if not raw or len(raw) < 30 or raw.lower().replace(" ", "") == title.lower().replace(" ", ""):
+            if source:
+                return f"{title}. Reported by {source}."
+            return f"{title}."
+        
+        # Clean up common noise from RSS feeds
+        text = raw
+        # Remove "... [source]" or "...- Source" at the end
+        text = re.sub(r'\s*[-–—]\s*[A-Z][\w\s.]{2,30}$', '', text)
+        # Remove trailing source attribution like "The National Interest"
+        if source and text.endswith(source):
+            text = text[:-len(source)].rstrip(' -–—')
+        
+        # Remove HTML entities and tags
+        text = re.sub(r'<[^>]+>', ' ', text)
+        text = re.sub(r'&\w+;', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Extract complete sentences (ending with . ! ?)
+        sentences = re.findall(r'[^.!?]*[.!?]', text)
+        
+        if sentences:
+            # Take first 2-3 complete sentences
+            result = ''.join(sentences[:3]).strip()
+            if len(result) > 40:
+                return result
+        
+        # No complete sentences found — truncate intelligently at word boundary
+        if len(text) > 180:
+            # Find the last word boundary before 180 chars
+            truncated = text[:180].rsplit(' ', 1)[0]
+            # Find last sentence-ending punctuation
+            last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+            if last_period > 60:
+                return truncated[:last_period + 1]
+            return truncated + "…"
+        
+        # Short text without sentence endings — add a period
+        if text and text[-1] not in '.!?':
+            # Try to end at a natural break
+            last_break = max(text.rfind(','), text.rfind(';'), text.rfind(' - '))
+            if last_break > len(text) * 0.6:
+                return text[:last_break] + "."
+            return text + "."
+        
+        return text
+    
     async def _improve_summaries_with_groq(self, articles: List[Dict[str, Any]]) -> None:
         """Use Groq Llama 3.3 70B to generate clean summaries for articles
         that have broken/truncated/missing summaries. Modifies articles in place.
@@ -490,10 +551,8 @@ class NewsService:
           - Batch articles to minimise API calls (5 per request)
           - Only process articles whose summary actually needs fixing
           - Cache results so we never re-summarise the same title
+          - Fall back to local summary generation if Groq is unavailable
         """
-        if not self.groq:
-            return
-        
         # Identify articles that need fixing
         to_fix: List[Dict[str, Any]] = []
         for article in articles:
@@ -511,9 +570,16 @@ class NewsService:
             logger.debug("All summaries are clean, skipping Groq")
             return
         
-        logger.info("Improving %d article summaries via Groq", len(to_fix))
+        logger.info("Improving %d article summaries", len(to_fix))
         
-        # Process in batches of 5
+        # If Groq is unavailable, use local fallback immediately
+        if not self.groq:
+            for article in to_fix:
+                article["summary"] = self._generate_local_summary(article)
+            logger.info("Generated %d local fallback summaries (Groq unavailable)", len(to_fix))
+            return
+        
+        # Process in batches of 5 via Groq
         batch_size = 5
         for i in range(0, len(to_fix), batch_size):
             batch = to_fix[i:i + batch_size]
@@ -575,9 +641,16 @@ class NewsService:
                     cache_key = self._generate_cache_key("groq_summary", article.get("title", ""))
                     cache_manager.set("groq_summary", cache_key, summaries[idx], 14400)
                     logger.debug("Improved summary for: %s", article.get("title", "?")[:50])
+                else:
+                    # Groq didn't produce a summary for this article — use local fallback
+                    article["summary"] = self._generate_local_summary(article)
                     
         except Exception as e:
             logger.error("Groq batch summarization failed: %s", str(e))
+            # FALLBACK: generate local summaries for the entire batch
+            for article in articles:
+                article["summary"] = self._generate_local_summary(article)
+            logger.info("Generated %d local fallback summaries", len(articles))
     
     async def get_latest_news(self, 
                             commodities: Optional[List[str]] = None,
