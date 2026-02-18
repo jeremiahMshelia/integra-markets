@@ -157,11 +157,28 @@ export default function AlertsPage() {
     const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
     const [toast, setToast] = useState<{ title: string; body: string; sentiment: Sentiment } | null>(null);
     const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const seenAlertIdsRef = useRef<Set<string>>(new Set());
+    const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const isInitialLoadRef = useRef(true);
 
     useEffect(() => {
         loadData();
         // Register service worker for notifications
         registerServiceWorker();
+
+        // Auto-refresh every 60 seconds when tab is focused
+        const startPolling = () => {
+            pollIntervalRef.current = setInterval(() => {
+                if (!document.hidden) {
+                    loadData(true); // silent refresh (no loading spinner)
+                }
+            }, 60000);
+        };
+        startPolling();
+
+        return () => {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        };
     }, []);
 
     const registerServiceWorker = async () => {
@@ -179,8 +196,8 @@ export default function AlertsPage() {
         }
     };
 
-    const loadData = async () => {
-        setLoading(true);
+    const loadData = async (silentRefresh = false) => {
+        if (!silentRefresh) setLoading(true);
         try {
             const supabase = createClient();
             const { data: { user } } = await supabase.auth.getUser();
@@ -302,7 +319,7 @@ export default function AlertsPage() {
                     else if (rawSentiment.includes('BEAR')) sentiment = 'BEARISH';
 
                     return {
-                        id: `news-${idx}-${Date.now()}`,
+                        id: `news-${article.title?.slice(0, 20)}-${validPublishedDate}`,
                         title: article.title,
                         message: article.summary,
                         source: article.source,
@@ -332,20 +349,53 @@ export default function AlertsPage() {
                 setAlerts(newsAlerts.slice(0, 15));
                 setLoading(false);
 
-                // Show in-app toast for the top high-severity alert if push notifications are enabled
-                if (currentPrefs.pushNotifications && newsAlerts.length > 0) {
-                    const topAlert = newsAlerts[0];
-                    if (topAlert.severity === 'high' || topAlert.score > 10) {
-                        // Small delay so the page renders first
-                        setTimeout(() => {
-                            showToast(topAlert.title, topAlert.message, topAlert.sentiment);
-                        }, 1500);
+                // Detect NEW alerts (not seen before)
+                const newAlerts = newsAlerts.filter((a: AlertItem) => !seenAlertIdsRef.current.has(a.id));
+
+                // Track all current alert IDs
+                for (const a of newsAlerts) {
+                    seenAlertIdsRef.current.add(a.id);
+                }
+
+                // On initial load, just show the top toast 
+                if (isInitialLoadRef.current) {
+                    isInitialLoadRef.current = false;
+                    if (currentPrefs.pushNotifications && newsAlerts.length > 0) {
+                        const topAlert = newsAlerts[0];
+                        if (topAlert.severity === 'high' || topAlert.score > 10) {
+                            setTimeout(() => {
+                                showToast(topAlert.title, topAlert.message, topAlert.sentiment);
+                            }, 1500);
+                        }
                     }
+                } else if (newAlerts.length > 0 && currentPrefs.pushNotifications) {
+                    // On subsequent refreshes, notify about NEW alerts
+                    const topNew = newAlerts[0];
+
+                    // Fire browser notification (if permitted)
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            new Notification(`📊 ${topNew.title}`, {
+                                body: topNew.message?.slice(0, 120) || 'New market alert',
+                                icon: '/NewLogoInt.png.png',
+                                tag: topNew.id, // Prevent duplicate notifications
+                            });
+                        } catch (e) {
+                            console.warn('Browser notification failed:', e);
+                        }
+                    }
+
+                    // Show in-app toast
+                    showToast(
+                        `🔔 ${newAlerts.length} new alert${newAlerts.length > 1 ? 's' : ''}`,
+                        topNew.title,
+                        topNew.sentiment
+                    );
                 }
             }
         } catch (e) {
             console.error('Error loading alerts:', e);
-            setLoading(false);
+            if (!silentRefresh) setLoading(false);
         }
     };
 
@@ -456,7 +506,7 @@ export default function AlertsPage() {
                 <div>
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-lg font-semibold text-white">Recent Alerts</h2>
-                        <button onClick={loadData} className="p-2 hover:bg-[#333] rounded-full text-[#30A5FF]">
+                        <button onClick={() => loadData()} className="p-2 hover:bg-[#333] rounded-full text-[#30A5FF]">
                             <RefreshCw size={20} />
                         </button>
                     </div>

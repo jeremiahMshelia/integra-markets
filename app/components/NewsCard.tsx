@@ -283,14 +283,13 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       {/* Image Section - Always render (using fallback logo if needed) */}
       <View style={[styles.imageContainer, !item.image_url && { justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }]}>
         <Image
-          source={item.image_url ? { uri: item.image_url } : require('../../assets/logoNew.png')}
+          source={item.image_url ? { uri: item.image_url } : require('../../assets/NewLogoInt.png.png')}
           style={[
             styles.cardImage,
             !item.image_url && {
-              opacity: 0.5,
-              width: '40%',
-              height: '40%',
-              tintColor: '#4ECCA3'
+              opacity: 0.8,
+              width: '55%',
+              height: '55%',
             }
           ]}
           resizeMode={item.image_url ? "cover" : "contain"}

@@ -159,9 +159,9 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                 ) : (
                     <div className="w-full h-full flex items-center justify-center relative bg-[#121212]">
                         <img
-                            src={FALLBACK_LOGO}
+                            src="/NewLogoInt.png.png"
                             alt="Integra Markets"
-                            className="w-24 h-24 object-contain opacity-50 grayscale"
+                            className="w-28 h-28 object-contain opacity-70"
                         />
                     </div>
                 )}

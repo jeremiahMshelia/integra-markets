@@ -454,18 +454,50 @@ class NewsService:
     # ──────────────────────────────────────────────────────────────────
     # Groq AI-powered summary improvement
     # ──────────────────────────────────────────────────────────────────
+    @staticmethod
+    def _normalize_for_comparison(text: str) -> str:
+        """Normalize text for similarity comparison: lowercase, strip source, punctuation."""
+        text = text.lower().strip()
+        # Remove common source suffixes like "- Reuters", "| Bloomberg", "The National Interest"
+        text = re.sub(r'\s*[-–—|]\s*[A-Za-z][\w\s.]{2,40}$', '', text)
+        # Remove punctuation and extra whitespace
+        text = re.sub(r'[^\w\s]', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+    
     def _needs_summary_fix(self, article: Dict[str, Any]) -> bool:
         """Determine if an article summary needs AI improvement."""
         summary = (article.get("summary") or "").strip()
         title = (article.get("title") or "").strip()
+        source = (article.get("source") or "").strip()
         
         # No summary at all
         if not summary or len(summary) < 20:
             return True
         
-        # Summary is just the title repeated (or very similar)
-        if summary.lower().replace(" ", "") == title.lower().replace(" ", ""):
+        # Normalize both for comparison
+        norm_summary = self._normalize_for_comparison(summary)
+        norm_title = self._normalize_for_comparison(title)
+        
+        # Summary is just the title repeated (exact or near-match)
+        if norm_summary == norm_title:
             return True
+        
+        # Summary contains the title with very little extra (e.g. "Title Source")
+        if norm_title and norm_summary:
+            # If summary is 85%+ the same length as the title, it's basically the title
+            if len(norm_summary) > 0 and len(norm_title) / len(norm_summary) > 0.75:
+                # Check if one contains the other
+                if norm_title in norm_summary or norm_summary in norm_title:
+                    return True
+            
+            # Check if summary is just title + source name
+            norm_source = source.lower().strip()
+            title_plus_source = f"{norm_title} {norm_source}".strip()
+            title_plus_source_norm = re.sub(r'[^\w\s]', '', title_plus_source)
+            title_plus_source_norm = re.sub(r'\s+', ' ', title_plus_source_norm).strip()
+            if norm_summary == title_plus_source_norm:
+                return True
         
         # Summary looks like a page title / site name (no sentence structure)
         if len(summary) < 80 and "." not in summary and "," not in summary:
@@ -489,16 +521,29 @@ class NewsService:
           - Use the raw summary text if available, clean it up
           - Extract complete sentences
           - Cap at 2-3 sentences
-          - If nothing usable, construct from title + source
+          - If nothing usable, construct from title + commodity context
         """
         title = (article.get("title") or "").strip()
         raw = (article.get("summary") or "").strip()
         source = (article.get("source") or "").strip()
+        commodity = (article.get("commodity") or "").strip()
         
-        # If raw text is just the title or too short, build from title
-        if not raw or len(raw) < 30 or raw.lower().replace(" ", "") == title.lower().replace(" ", ""):
-            if source:
-                return f"{title}. Reported by {source}."
+        # Check if raw text is just the title or too short
+        norm_raw = self._normalize_for_comparison(raw) if raw else ""
+        norm_title = self._normalize_for_comparison(title)
+        is_title_dup = (
+            not raw 
+            or len(raw) < 30 
+            or norm_raw == norm_title
+            or (norm_title and norm_title in norm_raw and len(norm_raw) < len(norm_title) * 1.3)
+        )
+        
+        if is_title_dup:
+            # Build a contextual summary from the title itself
+            if commodity:
+                return f"{title}. A development in the {commodity.lower()} market worth monitoring."
+            elif source:
+                return f"{title}. Analysis from {source}."
             return f"{title}."
         
         # Clean up common noise from RSS feeds
