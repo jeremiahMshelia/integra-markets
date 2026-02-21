@@ -444,7 +444,29 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
     }
 
     // Open article if it has a URL
-    if (alert.sourceUrl) {
+    if (onArticlePress) {
+      // Open Integra Analysis modal with article data
+      onArticlePress({
+        title: alert.title,
+        summary: alert.message,
+        content: alert.message,
+        source: alert.source,
+        url: alert.sourceUrl,
+        source_url: alert.sourceUrl,
+        sentiment: alert.sentiment,
+        sentimentScore: alert.originalArticle?.sentiment_score,
+        image_url: alert.originalArticle?.image_url,
+        keywords: alert.originalArticle?.keywords,
+        bullish: alert.originalArticle?.bullish,
+        bearish: alert.originalArticle?.bearish,
+        neutral: alert.originalArticle?.neutral,
+        market_impact: alert.originalArticle?.market_impact,
+        trade_ideas: alert.originalArticle?.trade_ideas,
+        event_type: alert.originalArticle?.event_type,
+        severity: alert.originalArticle?.severity,
+        timeAgo: alert.timeAgo,
+      });
+    } else if (alert.sourceUrl) {
       try {
         const supported = await Linking.canOpenURL(alert.sourceUrl);
         if (supported) {
@@ -456,9 +478,6 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
         console.log('Could not open URL:', alert.sourceUrl);
         Alert.alert('Error', 'Could not open link.');
       }
-    } else if (onArticlePress) {
-      // If we have an onArticlePress handler, use it
-      onArticlePress(alert);
     } else {
       Alert.alert('No Article', 'This alert does not have a linked article.');
     }

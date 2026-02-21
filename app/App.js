@@ -1235,7 +1235,37 @@ const App = () => {
   if (activeNav === 'Alerts') {
     return (
       <View style={styles.container}>
-        <AlertsScreen onNavigateToAlertPreferences={() => { setIsEditingAlerts(true); setShowAlertPreferences(true); }} />
+        <AlertsScreen
+          onNavigateToAlertPreferences={() => { setIsEditingAlerts(true); setShowAlertPreferences(true); }}
+          onArticlePress={handleArticlePress}
+        />
+        {showAIAnalysis && selectedArticle && (
+          <IntegrAnalysis
+            onClose={() => {
+              setShowAIAnalysis(false);
+              setSelectedArticle(null);
+            }}
+            article={{
+              title: selectedArticle.title,
+              summary: selectedArticle.summary || selectedArticle.content || '',
+              fullSummary: selectedArticle.fullSummary,
+              source: selectedArticle.source || 'Unknown',
+              timeAgo: selectedArticle.timeAgo || selectedArticle.date || '2 hours ago',
+              sentiment: selectedArticle.sentiment || 'NEUTRAL',
+              sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
+              analysis: selectedArticle.analysis,
+              keywords: selectedArticle.keywords || selectedArticle.analysis?.keywords || [],
+              url: selectedArticle.url || selectedArticle.source_url,
+              bullish: selectedArticle.bullish,
+              bearish: selectedArticle.bearish,
+              neutral: selectedArticle.neutral,
+              market_impact: selectedArticle.market_impact,
+              trade_ideas: selectedArticle.trade_ideas,
+              event_type: selectedArticle.event_type,
+              severity: selectedArticle.severity,
+            }}
+          />
+        )}
         {renderBottomNav()}
       </View>
     );

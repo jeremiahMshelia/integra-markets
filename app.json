@@ -3,7 +3,7 @@
     "name": "Integra Markets",
     "slug": "integra",
     "scheme": "com.centori.integramarkets",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/NewLogoInt.png.png",
     "userInterfaceStyle": "light",
@@ -28,13 +28,13 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "50",
+      "buildNumber": "51",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
       "appStoreUrl": "https://apps.apple.com/app/integra-markets/id123456789",
       "category": "finance",
-      "runtimeVersion": "1.0.0",
+      "runtimeVersion": "1.0.1",
       "jsEngine": "hermes",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -42,7 +42,7 @@
     },
     "android": {
       "package": "com.centori.integramarkets",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/NewLogoInt.png.png",
         "backgroundColor": "#000000"
@@ -73,7 +73,7 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "com.googleusercontent.apps.1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq"
+          "iosUrlScheme": "com.googleusercontent.apps.908401428746-rl14nd024rems2rmkgbnke0firp2mdab"
         }
       ],
       [

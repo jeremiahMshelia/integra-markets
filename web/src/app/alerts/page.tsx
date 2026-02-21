@@ -6,6 +6,7 @@ import { Bell, ChevronRight, TrendingUp, TrendingDown, FileText, AlertTriangle, 
 import Link from 'next/link';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import ProfileSidebar from '@/components/dashboard/ProfileSidebar';
+import AIAnalysisModal from '@/components/dashboard/AIAnalysisModal';
 
 // Color Palette (matching mobile)
 const colors = {
@@ -50,6 +51,7 @@ interface AlertItem {
     timeAgo: string;
     read: boolean;
     severity: 'high' | 'medium' | 'low';
+    originalArticle?: any; // Full article data for AI Analysis modal
 }
 
 const getSentimentColor = (sentiment: string) => {
@@ -156,6 +158,7 @@ export default function AlertsPage() {
     const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
     const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
     const [toast, setToast] = useState<{ title: string; body: string; sentiment: Sentiment } | null>(null);
+    const [selectedArticle, setSelectedArticle] = useState<any>(null);
     const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const seenAlertIdsRef = useRef<Set<string>>(new Set());
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -331,6 +334,7 @@ export default function AlertsPage() {
                         timeAgo,
                         read: false,
                         severity: score > 15 ? 'high' : score > 5 ? 'medium' : 'low',
+                        originalArticle: article, // Keep full data for AI Analysis modal
                     } as AlertItem;
                 })
                     .filter((a: AlertItem) => {
@@ -524,11 +528,30 @@ export default function AlertsPage() {
                     ) : (
                         <div className="space-y-3">
                             {alerts.map((alert) => (
-                                <a
+                                <div
                                     key={alert.id}
-                                    href={alert.sourceUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    onClick={() => {
+                                        // Open Integra Analysis modal with full article data
+                                        const article = alert.originalArticle || {};
+                                        setSelectedArticle({
+                                            title: alert.title,
+                                            url: alert.sourceUrl || '',
+                                            published: alert.createdAt,
+                                            summary: alert.message,
+                                            source: alert.source,
+                                            sentiment: alert.sentiment,
+                                            sentiment_score: article.sentiment_score || article.score,
+                                            image_url: article.image_url || article.banner_image,
+                                            keywords: article.keywords,
+                                            bullish: article.bullish,
+                                            bearish: article.bearish,
+                                            neutral: article.neutral,
+                                            market_impact: article.market_impact,
+                                            trade_ideas: article.trade_ideas,
+                                            event_type: article.event_type,
+                                            severity: article.severity,
+                                        });
+                                    }}
                                     className="block bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl p-4 cursor-pointer hover:bg-[#252525] transition-colors group mb-3"
                                 >
                                     <div className="flex gap-4">
@@ -558,7 +581,7 @@ export default function AlertsPage() {
                                             )}
                                         </div>
                                     </div>
-                                </a>
+                                </div>
                             ))}
 
                             <div className="mt-4 text-center">
@@ -576,6 +599,13 @@ export default function AlertsPage() {
             </main>
 
             <ProfileSidebar isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={() => { /* Handle Logout */ }} />
+
+            {/* AI Analysis Modal - opens when clicking an alert */}
+            <AIAnalysisModal
+                isOpen={!!selectedArticle}
+                onClose={() => setSelectedArticle(null)}
+                article={selectedArticle}
+            />
 
             {/* History Modal */}
             {isHistoryOpen && (

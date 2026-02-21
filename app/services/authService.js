@@ -191,39 +191,59 @@ class AuthService {
 
             // Fallback to OAuth flow if native sign-in is not available
             if (supabase && AuthSession && WebBrowser) {
+                // Build redirect URI using the correct scheme from app.json
+                const redirectUri = AuthSession.makeRedirectUri({
+                    scheme: 'com.centori.integramarkets',
+                    path: 'auth/callback'
+                });
+
+                console.log('[Auth] OAuth redirect URI:', redirectUri);
+
                 // Use Supabase OAuth for Google
                 const { data, error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
-                        redirectTo: AuthSession.makeRedirectUri({
-                            scheme: 'integra',
-                            path: 'auth'
-                        }),
+                        redirectTo: redirectUri,
                         queryParams: {
                             access_type: 'offline',
                             prompt: 'consent',
-                        }
+                        },
+                        skipBrowserRedirect: true, // We handle the browser ourselves
                     }
                 });
 
                 if (!error && data?.url) {
                     const result = await WebBrowser.openAuthSessionAsync(
                         data.url,
-                        AuthSession.makeRedirectUri({
-                            scheme: 'integra',
-                            path: 'auth'
-                        })
+                        redirectUri
                     );
 
                     if (result.type === 'success' && result.url) {
-                        // Parse the auth response
-                        const params = AuthSession.parseRedirectUrl(result.url);
+                        // Parse tokens from URL fragment (Supabase returns them in hash)
+                        const url = result.url;
+                        const hashPart = url.includes('#') ? url.split('#')[1] : '';
+                        const queryPart = url.includes('?') ? url.split('?')[1]?.split('#')[0] : '';
 
-                        // Get the session
+                        const params = new URLSearchParams(hashPart || queryPart);
+                        const accessToken = params.get('access_token');
+                        const refreshToken = params.get('refresh_token');
+
+                        if (accessToken) {
+                            // Set the session using the tokens from the redirect
+                            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+                                access_token: accessToken,
+                                refresh_token: refreshToken || '',
+                            });
+
+                            if (!sessionError && sessionData?.session) {
+                                await this.handleAuthSuccess(sessionData.session);
+                                return { success: true, user: this.currentUser };
+                            }
+                        }
+
+                        // Fallback: try getting session directly
                         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
                         if (!sessionError && sessionData?.session) {
-                            // Save auth data
                             await this.handleAuthSuccess(sessionData.session);
                             return { success: true, user: this.currentUser };
                         }
