@@ -1240,12 +1240,13 @@ const App = () => {
           onArticlePress={handleArticlePress}
         />
         {showAIAnalysis && selectedArticle && (
-          <IntegrAnalysis
+          <AIAnalysisOverlay
+            isVisible={showAIAnalysis}
             onClose={() => {
               setShowAIAnalysis(false);
               setSelectedArticle(null);
             }}
-            article={{
+            newsData={{
               title: selectedArticle.title,
               summary: selectedArticle.summary || selectedArticle.content || '',
               fullSummary: selectedArticle.fullSummary,
@@ -1255,7 +1256,6 @@ const App = () => {
               sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
               analysis: selectedArticle.analysis,
               keywords: selectedArticle.keywords || selectedArticle.analysis?.keywords || [],
-              url: selectedArticle.url || selectedArticle.source_url,
               bullish: selectedArticle.bullish,
               bearish: selectedArticle.bearish,
               neutral: selectedArticle.neutral,

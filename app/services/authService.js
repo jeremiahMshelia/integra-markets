@@ -212,13 +212,21 @@ class AuthService {
                     }
                 });
 
+                if (error) {
+                    console.error('[Auth] OAuth signInWithOAuth error:', error.message);
+                }
+
                 if (!error && data?.url) {
+                    console.log('[Auth] Opening browser for OAuth...');
                     const result = await WebBrowser.openAuthSessionAsync(
                         data.url,
                         redirectUri
                     );
 
+                    console.log('[Auth] Browser result type:', result.type);
+
                     if (result.type === 'success' && result.url) {
+                        console.log('[Auth] Got redirect URL, parsing tokens...');
                         // Parse tokens from URL fragment (Supabase returns them in hash)
                         const url = result.url;
                         const hashPart = url.includes('#') ? url.split('#')[1] : '';
@@ -230,24 +238,29 @@ class AuthService {
 
                         if (accessToken) {
                             // Set the session using the tokens from the redirect
-                            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+                            const { data: tokenSessionData, error: tokenSessionError } = await supabase.auth.setSession({
                                 access_token: accessToken,
                                 refresh_token: refreshToken || '',
                             });
 
-                            if (!sessionError && sessionData?.session) {
-                                await this.handleAuthSuccess(sessionData.session);
+                            if (!tokenSessionError && tokenSessionData?.session) {
+                                await this.handleAuthSuccess(tokenSessionData.session);
                                 return { success: true, user: this.currentUser };
                             }
+                            console.warn('[Auth] setSession failed:', tokenSessionError?.message);
                         }
 
                         // Fallback: try getting session directly
-                        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-                        if (!sessionError && sessionData?.session) {
-                            await this.handleAuthSuccess(sessionData.session);
+                        const { data: fallbackSession, error: fallbackError } = await supabase.auth.getSession();
+                        if (!fallbackError && fallbackSession?.session) {
+                            await this.handleAuthSuccess(fallbackSession.session);
                             return { success: true, user: this.currentUser };
                         }
+                    } else if (result.type === 'cancel' || result.type === 'dismiss') {
+                        return { success: false, error: 'Sign in was cancelled' };
                     }
+                } else {
+                    console.warn('[Auth] No OAuth URL returned. Data:', JSON.stringify(data));
                 }
             }
 
@@ -415,27 +428,46 @@ class AuthService {
     }
 
     /**
-     * Validate stored token
+     * Validate stored token - be lenient to keep users logged in
      */
     async validateToken() {
         try {
             const { data: { session }, error } = await supabase.auth.getSession();
 
-            if (error || !session) {
-                await this.signOut();
-                return false;
+            if (session) {
+                // Session is valid, update token if refreshed
+                if (session.access_token !== this.authToken) {
+                    this.authToken = session.access_token;
+                    await AsyncStorage.setItem(AUTH_TOKEN_KEY, this.authToken);
+                }
+                return true;
             }
 
-            // Update token if refreshed
-            if (session.access_token !== this.authToken) {
-                this.authToken = session.access_token;
-                await AsyncStorage.setItem(AUTH_TOKEN_KEY, this.authToken);
+            // No session found - try to refresh it before giving up
+            if (!session) {
+                console.log('[Auth] No active session, attempting refresh...');
+                const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+                if (refreshData?.session) {
+                    console.log('[Auth] Session refreshed successfully');
+                    this.authToken = refreshData.session.access_token;
+                    await AsyncStorage.setItem(AUTH_TOKEN_KEY, this.authToken);
+                    return true;
+                }
+
+                // Refresh failed - but DON'T sign out immediately
+                // The stored user data in AsyncStorage is still valid for showing the UI
+                // The user will be prompted to re-auth only when they try an action that requires it
+                console.warn('[Auth] Session refresh failed:', refreshError?.message || 'unknown');
+                console.log('[Auth] Keeping stored user data to avoid unnecessary logout');
+                return false;
             }
 
             return true;
         } catch (error) {
-            console.error('Token validation error:', error);
-            await this.signOut();
+            // Network errors, cold start timing issues, etc.
+            // DON'T sign out - keep the user logged in with stored data
+            console.error('[Auth] Token validation error (keeping user logged in):', error.message);
             return false;
         }
     }
