@@ -118,17 +118,22 @@ export async function registerForPushNotificationsAsync(options = {}) {
     }
 
     // Check existing permission status
+    console.log('[Push] Step 1: Checking notification permissions...');
     const perm0 = await Notifications.getPermissionsAsync();
     let finalEnabled = isPermEnabled(perm0);
+    console.log('[Push] Permission status:', finalEnabled ? 'GRANTED' : 'NOT GRANTED', JSON.stringify(perm0.status));
 
     // Request permission if not already granted
     if (!finalEnabled) {
+      console.log('[Push] Step 2: Requesting notification permissions...');
       const perm1 = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowBadge: true, allowSound: true, allowProvisional: true } });
       finalEnabled = isPermEnabled(perm1);
+      console.log('[Push] Permission after request:', finalEnabled ? 'GRANTED' : 'DENIED');
     }
 
     // If permission not granted, show user-friendly message
     if (!finalEnabled) {
+      console.log('[Push] ❌ Notifications not permitted — aborting token registration');
       if (!silent) {
         Alert.alert('Notifications Disabled', 'Enable notifications in settings to receive market alerts');
       }
@@ -136,12 +141,23 @@ export async function registerForPushNotificationsAsync(options = {}) {
     }
 
     // Get push token
+    console.log('[Push] Step 3: Getting Expo push token...');
     const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId || Constants?.expoConfig?.projectId;
-    token = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+    console.log('[Push] Project ID:', projectId || 'none (will use default)');
+
+    try {
+      token = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+      console.log('[Push] ✅ Got push token:', token?.data);
+    } catch (tokenError) {
+      console.error('[Push] ❌ Failed to get push token:', tokenError.message);
+      console.log('[Push] This is expected on simulators. Push tokens only work on real devices.');
+      return null;
+    }
 
     // Store the token locally
     if (token?.data) {
       await AsyncStorage.setItem(PUSH_TOKEN_KEY, token.data);
+      console.log('[Push] Token saved to AsyncStorage');
     }
 
     // Register token with backend if user is authenticated
@@ -154,27 +170,37 @@ export async function registerForPushNotificationsAsync(options = {}) {
           token: token.data,
           device_type: Platform.OS
         });
-        console.log('Push token registered with backend');
+        console.log('[Push] ✅ Token registered with backend API');
+      } else {
+        console.log('[Push] No auth token yet — skipping backend registration');
       }
     } catch (error) {
-      console.error('Error registering token with backend:', error);
+      console.error('[Push] ⚠️ Backend registration failed:', error.message);
     }
 
     // Also register token directly in Supabase push_tokens table
     // (used by the background notification scheduler)
     try {
       const { supabaseService } = require('./supabaseService');
-      await supabaseService.registerPushToken(token.data, Platform.OS);
-      console.log('Push token registered with Supabase');
+      const result = await supabaseService.registerPushToken(token.data, Platform.OS);
+      if (result.success) {
+        if (result.local) {
+          console.log('[Push] ⚠️ Token saved locally only (no user session yet)');
+        } else {
+          console.log('[Push] ✅ Token registered in Supabase push_tokens table!');
+        }
+      } else {
+        console.error('[Push] ❌ Supabase registration failed:', result.error);
+      }
     } catch (error) {
-      console.error('Error registering token with Supabase:', error);
+      console.error('[Push] ❌ Supabase registration error:', error.message);
     }
 
-    console.log('Push notification token obtained:', token?.data);
+    console.log('[Push] ✅ Push notification setup complete. Token:', token?.data?.substring(0, 25) + '...');
     return token?.data ?? null;
 
   } catch (error) {
-    console.error('Error registering for push notifications:', error);
+    console.error('[Push] ❌ Fatal error during push setup:', error.message);
     if (!silent) {
       Alert.alert('Notification Error', 'Failed to setup push notifications');
     }
