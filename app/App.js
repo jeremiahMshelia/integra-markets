@@ -53,6 +53,7 @@ import { BookmarkProvider } from './providers/BookmarkProvider';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import TermsOfServiceModal from './components/TermsOfServiceModal';
 import AboutModal from './components/AboutModal';
+import OnboardingTooltip from './components/OnboardingTooltip';
 import { dashboardApi, sentimentApi } from './services/api';
 
 // Color Palette
@@ -497,11 +498,49 @@ const App = () => {
     // testConnection();
   }, []);
 
+  // Re-register push token when user data becomes available (user logged in)
+  useEffect(() => {
+    if (userData && userData.id) {
+      // User is authenticated — ensure push token is registered in Supabase
+      const ensurePushTokenRegistered = async () => {
+        try {
+          const token = await registerForPushNotificationsAsync({ silent: true });
+          if (token) {
+            console.log('[App] Push token re-registered after auth:', token.substring(0, 20) + '...');
+          }
+        } catch (e) {
+          console.warn('[App] Push token re-registration failed:', e);
+        }
+      };
+      ensurePushTokenRegistered();
+    }
+  }, [userData?.id]);
+
   // Initialize notifications
   const initializeNotifications = async () => {
     try {
       // Register for push notifications (silent to avoid popup on startup)
-      await registerForPushNotificationsAsync({ silent: true });
+      const token = await registerForPushNotificationsAsync({ silent: true });
+      console.log('[App] Initial push token:', token ? token.substring(0, 20) + '...' : 'none');
+
+      // If initial registration didn't save to Supabase (user not yet authenticated),
+      // retry after a delay to give the session time to restore
+      if (token) {
+        setTimeout(async () => {
+          try {
+            const { supabaseService } = require('./services/supabaseService');
+            const userId = await supabaseService.getCurrentUserId();
+            if (userId) {
+              await supabaseService.registerPushToken(token, Platform.OS);
+              console.log('[App] Push token registered to Supabase (delayed)');
+            } else {
+              console.log('[App] Still no user session — push token saved locally only');
+            }
+          } catch (e) {
+            console.warn('[App] Delayed push token registration failed:', e);
+          }
+        }, 5000); // Wait 5 seconds for session to restore
+      }
 
       // Set up notification listeners
       setupNotificationListeners(
@@ -1239,6 +1278,14 @@ const App = () => {
           onNavigateToAlertPreferences={() => { setIsEditingAlerts(true); setShowAlertPreferences(true); }}
           onArticlePress={handleArticlePress}
         />
+        <OnboardingTooltip
+          storageKey="@tooltip_alerts_seen"
+          title="Your Curated Alerts"
+          message="Curate your sentiment news by configuring your news source preferences and keywords. Tap the settings icon to get started!"
+          position="top"
+          arrowAlign="center"
+          style={{ top: 100 }}
+        />
         {showAIAnalysis && selectedArticle && (
           <AIAnalysisOverlay
             isVisible={showAIAnalysis}
@@ -1336,6 +1383,15 @@ const App = () => {
             </View>
           </View>
         </Modal>
+
+        <OnboardingTooltip
+          storageKey="@tooltip_newsfeed_seen"
+          title="Your Personalized News Feed"
+          message="All your commodity news based on your preferences will appear here. Swipe through articles and tap any card for a full AI-powered analysis."
+          position="top"
+          arrowAlign="center"
+          style={{ top: 95 }}
+        />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
           {['All', 'Bullish', 'Neutral', 'Bearish'].map((filter) => (
