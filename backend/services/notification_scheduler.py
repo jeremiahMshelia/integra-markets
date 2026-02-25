@@ -101,7 +101,7 @@ class NotificationEngine:
             try:
                 from supabase import create_client
                 url = os.getenv("SUPABASE_URL")
-                key = os.getenv("SUPABASE_KEY")
+                key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
                 if url and key:
                     self._supabase = create_client(url, key)
                     logger.info("[Notif] Supabase client ready")

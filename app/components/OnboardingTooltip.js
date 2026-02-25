@@ -12,7 +12,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /**
- * OnboardingTooltip - Uber-style floating tooltip for first-time users
+ * OnboardingTooltip - Dark themed floating tooltip for first-time users
+ * Matches the Integra Markets dark UI aesthetic
  * 
  * Props:
  *  - storageKey: unique AsyncStorage key to track dismissal (required)
@@ -34,7 +35,7 @@ const OnboardingTooltip = ({
 }) => {
     const [visible, setVisible] = useState(false);
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const scaleAnim = useRef(new Animated.Value(0.9)).current;
+    const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
     useEffect(() => {
         checkIfSeen();
@@ -45,22 +46,21 @@ const OnboardingTooltip = ({
             const seen = await AsyncStorage.getItem(storageKey);
             if (!seen) {
                 setVisible(true);
-                // Slight delay so the main UI renders first
                 setTimeout(() => {
                     Animated.parallel([
                         Animated.timing(fadeAnim, {
                             toValue: 1,
-                            duration: 300,
+                            duration: 250,
                             useNativeDriver: true,
                         }),
                         Animated.spring(scaleAnim, {
                             toValue: 1,
                             friction: 8,
-                            tension: 100,
+                            tension: 120,
                             useNativeDriver: true,
                         }),
                     ]).start();
-                }, 600);
+                }, 800);
             }
         } catch (e) {
             // Silently fail
@@ -71,12 +71,12 @@ const OnboardingTooltip = ({
         Animated.parallel([
             Animated.timing(fadeAnim, {
                 toValue: 0,
-                duration: 200,
+                duration: 180,
                 useNativeDriver: true,
             }),
             Animated.timing(scaleAnim, {
-                toValue: 0.9,
-                duration: 200,
+                toValue: 0.95,
+                duration: 180,
                 useNativeDriver: true,
             }),
         ]).start(async () => {
@@ -94,10 +94,10 @@ const OnboardingTooltip = ({
 
     const arrowStyle =
         arrowAlign === 'left'
-            ? { left: 24 }
+            ? { left: 28 }
             : arrowAlign === 'right'
-                ? { right: 24 }
-                : { alignSelf: 'center', left: '45%' };
+                ? { right: 28 }
+                : { alignSelf: 'center', left: '46%' };
 
     return (
         <Animated.View
@@ -110,7 +110,6 @@ const OnboardingTooltip = ({
                 style,
             ]}
         >
-            {/* Arrow pointing up (when tooltip is below the target) */}
             {position === 'top' && (
                 <View style={[styles.arrowUp, arrowStyle]} />
             )}
@@ -118,7 +117,11 @@ const OnboardingTooltip = ({
             <View style={styles.bubble}>
                 <View style={styles.header}>
                     <Text style={styles.title}>{title}</Text>
-                    <TouchableOpacity onPress={handleDismiss} style={styles.closeBtn}>
+                    <TouchableOpacity
+                        onPress={handleDismiss}
+                        style={styles.closeBtn}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
                         <Text style={styles.closeBtnText}>✕</Text>
                     </TouchableOpacity>
                 </View>
@@ -128,7 +131,6 @@ const OnboardingTooltip = ({
                 </TouchableOpacity>
             </View>
 
-            {/* Arrow pointing down (when tooltip is above the target) */}
             {position === 'bottom' && (
                 <View style={[styles.arrowDown, arrowStyle]} />
             )}
@@ -140,87 +142,86 @@ const styles = StyleSheet.create({
     container: {
         position: 'absolute',
         zIndex: 9999,
-        width: SCREEN_WIDTH - 40,
+        width: SCREEN_WIDTH - 32,
         alignSelf: 'center',
-        left: 20,
+        left: 16,
     },
     bubble: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 18,
+        backgroundColor: '#1E1E1E',
+        borderRadius: 14,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(78, 204, 163, 0.2)',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
-        elevation: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+        elevation: 10,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 6,
     },
     title: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: '#1A1A2E',
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#4ECCA3',
         flex: 1,
+        letterSpacing: 0.3,
     },
     closeBtn: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: '#F0F0F0',
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.08)',
         justifyContent: 'center',
         alignItems: 'center',
         marginLeft: 8,
     },
     closeBtnText: {
-        fontSize: 14,
-        color: '#666',
-        fontWeight: '600',
+        fontSize: 12,
+        color: '#A0A0A0',
+        fontWeight: '500',
     },
     message: {
-        fontSize: 14,
-        lineHeight: 20,
-        color: '#555',
-        marginBottom: 14,
+        fontSize: 13,
+        lineHeight: 19,
+        color: '#A0A0A0',
+        marginBottom: 12,
     },
     gotItBtn: {
-        backgroundColor: '#1A1A2E',
-        borderRadius: 10,
-        paddingVertical: 10,
-        paddingHorizontal: 22,
+        backgroundColor: '#4ECCA3',
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 20,
         alignSelf: 'flex-start',
     },
     gotItText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#121212',
     },
     arrowUp: {
-        width: 16,
-        height: 16,
-        backgroundColor: '#FFFFFF',
+        width: 14,
+        height: 14,
+        backgroundColor: '#1E1E1E',
+        borderLeftWidth: 1,
+        borderTopWidth: 1,
+        borderColor: 'rgba(78, 204, 163, 0.2)',
         transform: [{ rotate: '45deg' }],
-        marginBottom: -8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 4,
+        marginBottom: -7,
     },
     arrowDown: {
-        width: 16,
-        height: 16,
-        backgroundColor: '#FFFFFF',
+        width: 14,
+        height: 14,
+        backgroundColor: '#1E1E1E',
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: 'rgba(78, 204, 163, 0.2)',
         transform: [{ rotate: '45deg' }],
-        marginTop: -8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 4,
+        marginTop: -7,
     },
 });
 
