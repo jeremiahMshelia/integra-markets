@@ -1271,7 +1271,7 @@ const styles = StyleSheet.create({
     },
     summaryText: {
         fontSize: 15,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         lineHeight: 22,
     },
     sentimentItem: {

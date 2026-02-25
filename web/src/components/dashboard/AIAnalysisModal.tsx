@@ -445,7 +445,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                         <div className="w-1 h-4 bg-[#4a9eff] rounded-full" />
                                         <h4 className="text-white font-semibold text-sm">Summary</h4>
                                     </div>
-                                    <p className="text-[#9CA3AF] text-[13px] leading-relaxed">{article.summary}</p>
+                                    <p className="text-[#EEEEEE] text-[13px] leading-relaxed">{article.summary}</p>
                                 </div>
 
                                 {/* Sentiment Bars */}

@@ -202,7 +202,7 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                 </h3>
 
                 {/* Summary */}
-                <p className={`text-sm text-zinc-400 leading-relaxed ${summaryLines} mb-4 flex-1`}>
+                <p className={`text-sm text-[#EEEEEE] leading-relaxed ${summaryLines} mb-4 flex-1`}>
                     {item.summary || 'No summary available.'}
                 </p>
 

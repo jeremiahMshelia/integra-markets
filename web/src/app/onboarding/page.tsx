@@ -44,7 +44,8 @@ const suggestedRegions = [
 
 const suggestedCurrencies = [
     'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD',
-    'AUD', 'CNY', 'RUB', 'INR', 'BRL', 'SAR'
+    'AUD', 'CNY', 'RUB', 'INR', 'BRL', 'SAR',
+    'Bitcoin', 'Ethereum', 'Solana'
 ];
 
 const suggestedWebsiteSources = [

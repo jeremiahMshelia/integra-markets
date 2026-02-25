@@ -31,43 +31,7 @@ export default function Dashboard() {
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-    useEffect(() => {
-        const checkAuth = async () => {
-            const supabase = createClient();
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                window.location.href = '/login';
-                return;
-            }
-
-            // Check if user has completed onboarding
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('username')
-                .eq('id', user.id)
-                .single();
-
-            // If no profile or no username, redirect to onboarding
-            if (!profile?.username) {
-                console.log('[Dashboard] User has not completed onboarding, redirecting...');
-                window.location.href = '/onboarding';
-                return;
-            }
-
-            setUser({
-                email: user.email,
-                name: user.user_metadata?.full_name || user.email?.split('@')[0],
-                avatar_url: user.user_metadata?.avatar_url
-            });
-
-            const savedBookmarks = localStorage.getItem('integra_bookmarks');
-            if (savedBookmarks) {
-                const parsed = JSON.parse(savedBookmarks);
-                setBookmarkedUrls(new Set(parsed.map((b: { id: string }) => b.id)));
-            }
-        };
-        checkAuth();
-    }, []);
+    // Single combined data loading effect (see checkAuthAndLoadData below)
 
     const loadBookmarks = async (userId: string) => {
         try {
@@ -154,6 +118,14 @@ export default function Dashboard() {
             // Display articles - images come from backend, no client-side fetching
             setArticles(normalizedArticles);
 
+            // Cache for instant load on refresh
+            if (normalizedArticles.length > 0) {
+                try {
+                    sessionStorage.setItem('integra_cached_articles', JSON.stringify(normalizedArticles));
+                    sessionStorage.setItem('integra_cache_time', Date.now().toString());
+                } catch { }
+            }
+
             if (normalizedArticles.length === 0) {
                 setError('No news articles found. The server may be starting up - please try again in a moment.');
             }
@@ -165,43 +137,74 @@ export default function Dashboard() {
         }
     };
 
+    // Cache keys
+    const CACHE_KEY_ARTICLES = 'integra_cached_articles';
+    const CACHE_KEY_USER = 'integra_cached_user';
+    const CACHE_KEY_TIME = 'integra_cache_time';
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    // Load cached data immediately on mount
     useEffect(() => {
-        const checkAuthAndLoadData = async () => {
-            const supabase = createClient();
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                window.location.href = '/login';
-                return;
-            }
-            setUser({
-                email: user.email,
-                name: user.user_metadata?.full_name || user.email?.split('@')[0],
-                avatar_url: user.user_metadata?.avatar_url
-            });
+        const cachedArticles = sessionStorage.getItem(CACHE_KEY_ARTICLES);
+        const cachedUser = sessionStorage.getItem(CACHE_KEY_USER);
+        const cacheTime = sessionStorage.getItem(CACHE_KEY_TIME);
 
-            // Load bookmarks
-            loadBookmarks(user.id);
-
-            // Fetch News with User's Commodities
-            let userCommodities = ['Oil', 'Gold', 'Gas']; // Default to bypass stale general cache
+        if (cachedArticles && cachedUser) {
             try {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('market_focus')
-                    .eq('id', user.id)
-                    .single();
+                setArticles(JSON.parse(cachedArticles));
+                setUser(JSON.parse(cachedUser));
+                setLoading(false); // Show cached content instantly
+                console.log('[Cache] Loaded cached data, refreshing in background...');
+            } catch { }
+        }
 
-                if (profile?.market_focus && Array.isArray(profile.market_focus) && profile.market_focus.length > 0) {
-                    userCommodities = profile.market_focus;
-                }
-            } catch (e) {
-                console.error('Error fetching profile commodities:', e);
-            }
-
-            fetchNews(userCommodities);
-        };
+        // Always refresh from server
         checkAuthAndLoadData();
     }, []);
+
+    const checkAuthAndLoadData = async () => {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            window.location.href = '/login';
+            return;
+        }
+        const userData = {
+            email: user.email,
+            name: user.user_metadata?.full_name || user.email?.split('@')[0],
+            avatar_url: user.user_metadata?.avatar_url
+        };
+        setUser(userData);
+        sessionStorage.setItem(CACHE_KEY_USER, JSON.stringify(userData));
+
+        // Load bookmarks
+        loadBookmarks(user.id);
+
+        // Single profile query: check onboarding + get market_focus
+        let userCommodities = ['Oil', 'Gold', 'Gas'];
+        try {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('username, market_focus')
+                .eq('id', user.id)
+                .single();
+
+            // Redirect to onboarding if no profile/username
+            if (!profile?.username) {
+                console.log('[Dashboard] User has not completed onboarding, redirecting...');
+                window.location.href = '/onboarding';
+                return;
+            }
+
+            if (profile?.market_focus && Array.isArray(profile.market_focus) && profile.market_focus.length > 0) {
+                userCommodities = profile.market_focus;
+            }
+        } catch (e) {
+            console.error('Error fetching profile:', e);
+        }
+
+        fetchNews(userCommodities);
+    };
 
     // NOTE: Images now come from backend - no client-side fetching needed
     // Backend enriches articles with image_url before returning
