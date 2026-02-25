@@ -7,6 +7,7 @@ import Link from 'next/link';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import ProfileSidebar from '@/components/dashboard/ProfileSidebar';
 import AIAnalysisModal from '@/components/dashboard/AIAnalysisModal';
+import OnboardingTooltip from '@/components/OnboardingTooltip';
 
 // Color Palette (matching mobile)
 const colors = {
@@ -721,6 +722,12 @@ export default function AlertsPage() {
                     to { width: 0%; }
                 }
             `}</style>
+
+            <OnboardingTooltip
+                storageKey="tooltip_alerts_v3"
+                title="Your Curated Alerts"
+                message="Your curated sentiment news based on your commodity and keyword preferences will appear here. You can adjust your preferences anytime using the Edit Alert Preferences button below."
+            />
         </div>
     );
 }

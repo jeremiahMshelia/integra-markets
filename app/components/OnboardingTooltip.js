@@ -3,9 +3,11 @@ import {
     View,
     Text,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     StyleSheet,
     Animated,
     Dimensions,
+    Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -13,29 +15,18 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /**
  * OnboardingTooltip - Dark themed floating tooltip for first-time users
- * Matches the Integra Markets dark UI aesthetic
- * 
- * Props:
- *  - storageKey: unique AsyncStorage key to track dismissal (required)
- *  - title: bold heading text
- *  - message: descriptive body text
- *  - position: 'top' | 'bottom' (where the arrow points)
- *  - arrowAlign: 'left' | 'center' | 'right' (arrow horizontal position)
- *  - style: additional container style overrides
- *  - onDismiss: optional callback when dismissed
+ * Uses Modal to render above ALL content (fixes z-index/overflow issues)
  */
 const OnboardingTooltip = ({
     storageKey,
     title,
     message,
-    position = 'top',
-    arrowAlign = 'center',
-    style,
+    verticalPosition = 120,
     onDismiss,
 }) => {
     const [visible, setVisible] = useState(false);
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const scaleAnim = useRef(new Animated.Value(0.95)).current;
+    const slideAnim = useRef(new Animated.Value(10)).current;
 
     useEffect(() => {
         checkIfSeen();
@@ -44,26 +35,30 @@ const OnboardingTooltip = ({
     const checkIfSeen = async () => {
         try {
             const seen = await AsyncStorage.getItem(storageKey);
+            console.log(`[Tooltip] Key=${storageKey} seen=${seen}`);
             if (!seen) {
-                setVisible(true);
+                // Delay showing to let the main UI render first
                 setTimeout(() => {
+                    console.log(`[Tooltip] Showing tooltip: ${title}`);
+                    setVisible(true);
                     Animated.parallel([
                         Animated.timing(fadeAnim, {
                             toValue: 1,
-                            duration: 250,
+                            duration: 300,
                             useNativeDriver: true,
                         }),
-                        Animated.spring(scaleAnim, {
-                            toValue: 1,
-                            friction: 8,
-                            tension: 120,
+                        Animated.timing(slideAnim, {
+                            toValue: 0,
+                            duration: 300,
                             useNativeDriver: true,
                         }),
                     ]).start();
-                }, 800);
+                }, 1200);
+            } else {
+                console.log(`[Tooltip] Already dismissed: ${title}`);
             }
         } catch (e) {
-            // Silently fail
+            console.log(`[Tooltip] Error checking: ${e.message}`);
         }
     };
 
@@ -71,12 +66,12 @@ const OnboardingTooltip = ({
         Animated.parallel([
             Animated.timing(fadeAnim, {
                 toValue: 0,
-                duration: 180,
+                duration: 200,
                 useNativeDriver: true,
             }),
-            Animated.timing(scaleAnim, {
-                toValue: 0.95,
-                duration: 180,
+            Animated.timing(slideAnim, {
+                toValue: 10,
+                duration: 200,
                 useNativeDriver: true,
             }),
         ]).start(async () => {
@@ -92,71 +87,80 @@ const OnboardingTooltip = ({
 
     if (!visible) return null;
 
-    const arrowStyle =
-        arrowAlign === 'left'
-            ? { left: 28 }
-            : arrowAlign === 'right'
-                ? { right: 28 }
-                : { alignSelf: 'center', left: '46%' };
 
     return (
-        <Animated.View
-            style={[
-                styles.container,
-                {
-                    opacity: fadeAnim,
-                    transform: [{ scale: scaleAnim }],
-                },
-                style,
-            ]}
+        <Modal
+            visible={visible}
+            transparent
+            animationType="none"
+            statusBarTranslucent
+            onRequestClose={handleDismiss}
         >
-            {position === 'top' && (
-                <View style={[styles.arrowUp, arrowStyle]} />
-            )}
-
-            <View style={styles.bubble}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>{title}</Text>
-                    <TouchableOpacity
-                        onPress={handleDismiss}
-                        style={styles.closeBtn}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                        <Text style={styles.closeBtnText}>✕</Text>
-                    </TouchableOpacity>
+            <TouchableWithoutFeedback onPress={handleDismiss}>
+                <View style={styles.overlay}>
+                    <TouchableWithoutFeedback>
+                        <Animated.View
+                            style={[
+                                styles.tooltipWrapper,
+                                {
+                                    top: verticalPosition,
+                                    opacity: fadeAnim,
+                                    transform: [{ translateY: slideAnim }],
+                                },
+                            ]}
+                        >
+                            <View style={styles.bubble}>
+                                <View style={styles.header}>
+                                    <Text style={styles.title}>{title}</Text>
+                                    <TouchableOpacity
+                                        onPress={handleDismiss}
+                                        style={styles.closeBtn}
+                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    >
+                                        <Text style={styles.closeBtnText}>✕</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <Text style={styles.message}>{message}</Text>
+                                <TouchableOpacity onPress={handleDismiss} style={styles.gotItBtn}>
+                                    <Text style={styles.gotItText}>Got it</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </Animated.View>
+                    </TouchableWithoutFeedback>
                 </View>
-                <Text style={styles.message}>{message}</Text>
-                <TouchableOpacity onPress={handleDismiss} style={styles.gotItBtn}>
-                    <Text style={styles.gotItText}>Got it</Text>
-                </TouchableOpacity>
-            </View>
-
-            {position === 'bottom' && (
-                <View style={[styles.arrowDown, arrowStyle]} />
-            )}
-        </Animated.View>
+            </TouchableWithoutFeedback>
+        </Modal>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
+    overlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    tooltipWrapper: {
         position: 'absolute',
-        zIndex: 9999,
-        width: SCREEN_WIDTH - 32,
-        alignSelf: 'center',
         left: 16,
+        right: 16,
+    },
+    arrow: {
+        position: 'absolute',
+        top: -6,
+        width: 12,
+        height: 12,
+        backgroundColor: '#1E1E1E',
+        borderLeftWidth: 1,
+        borderTopWidth: 1,
+        borderColor: 'rgba(78, 204, 163, 0.25)',
+        transform: [{ rotate: '45deg' }],
+        zIndex: 2,
     },
     bubble: {
         backgroundColor: '#1E1E1E',
         borderRadius: 14,
         padding: 16,
         borderWidth: 1,
-        borderColor: 'rgba(78, 204, 163, 0.2)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-        elevation: 10,
+        borderColor: 'rgba(78, 204, 163, 0.15)',
     },
     header: {
         flexDirection: 'row',
@@ -169,7 +173,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#4ECCA3',
         flex: 1,
-        letterSpacing: 0.3,
+        letterSpacing: 0.2,
     },
     closeBtn: {
         width: 24,
@@ -189,7 +193,7 @@ const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 19,
         color: '#A0A0A0',
-        marginBottom: 12,
+        marginBottom: 14,
     },
     gotItBtn: {
         backgroundColor: '#4ECCA3',
@@ -202,26 +206,6 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '600',
         color: '#121212',
-    },
-    arrowUp: {
-        width: 14,
-        height: 14,
-        backgroundColor: '#1E1E1E',
-        borderLeftWidth: 1,
-        borderTopWidth: 1,
-        borderColor: 'rgba(78, 204, 163, 0.2)',
-        transform: [{ rotate: '45deg' }],
-        marginBottom: -7,
-    },
-    arrowDown: {
-        width: 14,
-        height: 14,
-        backgroundColor: '#1E1E1E',
-        borderRightWidth: 1,
-        borderBottomWidth: 1,
-        borderColor: 'rgba(78, 204, 163, 0.2)',
-        transform: [{ rotate: '45deg' }],
-        marginTop: -7,
     },
 });
 

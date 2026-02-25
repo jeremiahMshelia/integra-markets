@@ -1279,12 +1279,10 @@ const App = () => {
           onArticlePress={handleArticlePress}
         />
         <OnboardingTooltip
-          storageKey="@tooltip_alerts_seen"
+          storageKey="@tooltip_alerts_v3"
           title="Your Curated Alerts"
-          message="Curate your sentiment news by configuring your news source preferences and keywords. Tap the settings icon to get started!"
-          position="top"
-          arrowAlign="center"
-          style={{ top: 100 }}
+          message="Your curated sentiment news based on your commodity and keyword preferences will appear here. You can adjust your preferences anytime using the Edit Alert Preferences button below."
+          verticalPosition={140}
         />
         {showAIAnalysis && selectedArticle && (
           <AIAnalysisOverlay
@@ -1385,12 +1383,10 @@ const App = () => {
         </Modal>
 
         <OnboardingTooltip
-          storageKey="@tooltip_newsfeed_seen"
+          storageKey="@tooltip_newsfeed_v3"
           title="Your Personalized News Feed"
           message="All your commodity news based on your preferences will appear here. Swipe through articles and tap any card for a full AI-powered analysis."
-          position="top"
-          arrowAlign="center"
-          style={{ top: 95 }}
+          verticalPosition={140}
         />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>

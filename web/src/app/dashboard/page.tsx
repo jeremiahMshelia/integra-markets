@@ -11,6 +11,7 @@ import FilterTabs, { FilterType } from '@/components/dashboard/FilterTabs';
 import NewsCard, { NewsItem } from '@/components/dashboard/NewsCard';
 import AIAnalysisModal from '@/components/dashboard/AIAnalysisModal';
 import ProfileSidebar from '@/components/dashboard/ProfileSidebar';
+import OnboardingTooltip from '@/components/OnboardingTooltip';
 
 const filterTabs: FilterType[] = ['All', 'Bullish', 'Neutral', 'Bearish'];
 const ARTICLES_PER_PAGE = 10;
@@ -465,6 +466,12 @@ export default function Dashboard() {
             />
 
             <ProfileSidebar isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} onBookmarkClick={handleAIClick} />
+
+            <OnboardingTooltip
+                storageKey="tooltip_newsfeed_v3"
+                title="Your Personalized News Feed"
+                message="All your commodity news based on your preferences will appear here. Swipe through articles and tap any card for a full AI-powered analysis."
+            />
         </div>
     );
 }
