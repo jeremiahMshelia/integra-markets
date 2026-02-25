@@ -1285,7 +1285,7 @@ const styles = StyleSheet.create({
     },
     sentimentLabel: {
         fontSize: 16,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
     },
     sentimentPercentage: {
         fontSize: 16,
@@ -1339,7 +1339,7 @@ const styles = StyleSheet.create({
     },
     confidenceText: {
         fontSize: 16,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
     },
     insightRow: {
         flexDirection: 'row',
@@ -1348,14 +1348,14 @@ const styles = StyleSheet.create({
     },
     bulletPoint: {
         fontSize: 16,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         marginRight: 8,
         marginTop: 2,
     },
     insightText: {
         flex: 1,
         fontSize: 15,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         lineHeight: 22,
     },
     pollSection: {
@@ -1501,7 +1501,7 @@ const styles = StyleSheet.create({
     },
     voteBreakdown: {
         fontSize: 12,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         textAlign: 'center',
     },
     // Sentiment Dial Styles
@@ -1517,7 +1517,7 @@ const styles = StyleSheet.create({
     dialLabel: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         letterSpacing: 1,
         marginBottom: 12,
     },
@@ -1539,7 +1539,7 @@ const styles = StyleSheet.create({
     dialPointer: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         marginLeft: 12,
     },
     // Emoji Label
@@ -1584,7 +1584,7 @@ const styles = StyleSheet.create({
     voterRole: {
         flex: 1,
         fontSize: 14,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
     },
     voterCount: {
         fontSize: 14,
@@ -1616,7 +1616,7 @@ const styles = StyleSheet.create({
     },
     interpretationText: {
         fontSize: 14,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         lineHeight: 20,
     },
     // Tour Guide Styles
@@ -1657,7 +1657,7 @@ const styles = StyleSheet.create({
     },
     tourStepCounter: {
         fontSize: 12,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         marginBottom: 20,
     },
     tourIcon: {
@@ -1673,7 +1673,7 @@ const styles = StyleSheet.create({
     },
     tourContent: {
         fontSize: 15,
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         textAlign: 'center',
         lineHeight: 22,
         marginBottom: 24,
@@ -1692,7 +1692,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     tourDismissText: {
-        color: '#A0A0A0',
+        color: '#EEEEEE',
         fontSize: 16,
         fontWeight: '600',
     },

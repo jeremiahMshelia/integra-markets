@@ -496,7 +496,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                         >
                                             {article.sentiment || 'NEUTRAL'}
                                         </span>
-                                        <span className="text-zinc-400 text-[13px]">Confidence: {confidence}</span>
+                                        <span className="text-[#EEEEEE] text-[13px]">Confidence: {confidence}</span>
                                     </div>
                                 </div>
 
@@ -510,7 +510,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                         {traderInsights.map((insight, idx) => (
                                             <div key={idx} className="flex items-start gap-2">
                                                 <span className="text-zinc-500">•</span>
-                                                <span className="text-[13px] text-zinc-300">{insight}</span>
+                                                <span className="text-[13px] text-[#EEEEEE]">{insight}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -526,7 +526,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                         {tradeIdeas.map((idea, idx) => (
                                             <div key={idx} className="flex items-start gap-2">
                                                 <span className="text-zinc-500">•</span>
-                                                <span className="text-[13px] text-zinc-300">{idea}</span>
+                                                <span className="text-[13px] text-[#EEEEEE]">{idea}</span>
                                             </div>
                                         ))}
                                     </div>
