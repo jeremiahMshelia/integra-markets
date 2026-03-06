@@ -20,7 +20,7 @@ except ImportError:
 
 # Import news data sources
 try:
-    from data_sources import NewsDataSources
+    from services.data_sources import NewsDataSources
     NEWS_SOURCES_AVAILABLE = True
 except ImportError:
     NEWS_SOURCES_AVAILABLE = False
@@ -408,43 +408,19 @@ async def get_news_feed(request: NewsRequest):
     try:
         if not NEWS_SOURCES_AVAILABLE:
             logger.warning("News sources not available, returning mock data")
-            return get_mock_news_data(request.max_articles)
+            return {"articles": []}
         
         # Fetch news from real sources with optional content enhancement
         all_articles = []
         
-        # Initialize NewsDataSources with enhanced content options
-        enable_enhancement = request.enhanced_content or False
-        async with NewsDataSources(
-            enable_full_content=enable_enhancement,
-            enable_nltk_summary=enable_enhancement
-        ) as news_sources:
-            # Fetch from different sources in parallel
-            import asyncio
-            
-            tasks = []
-            if not request.sources or 'reuters' in (request.sources or []):
-                tasks.append(news_sources.fetch_reuters_commodities())
-            if not request.sources or 'yahoo' in (request.sources or []):
-                tasks.append(news_sources.fetch_yahoo_finance_commodities())
-            if not request.sources or 'eia' in (request.sources or []):
-                tasks.append(news_sources.fetch_eia_reports())
-            if not request.sources or 'iea' in (request.sources or []):
-                tasks.append(news_sources.fetch_iea_news())
-            if not request.sources or 'bloomberg' in (request.sources or []):
-                tasks.append(news_sources.fetch_bloomberg_commodities())
-            if not request.sources or 'oilprice' in (request.sources or []):
-                tasks.append(news_sources.fetch_oilprice_news())
-            
-            # Execute all fetching tasks concurrently
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Combine results and filter out exceptions
-            for result in results:
-                if isinstance(result, list):
-                    all_articles.extend(result)
-                elif isinstance(result, Exception):
-                    logger.error(f"Error fetching news: {result}")
+        # Initialize NewsDataSources
+        async with NewsDataSources() as news_sources:
+            try:
+                # Use the new robust fetcher which handles multiple sources
+                all_articles = await news_sources.fetch_all_sources()
+            except Exception as e:
+                logger.error(f"Error fetching news: {e}")
+                all_articles = []
         
         # Determine time window based on alert frequency
         hours_back = request.hours_back or {
@@ -454,28 +430,48 @@ async def get_news_feed(request: NewsRequest):
         }.get(request.alert_frequency, 24)
         
         # Filter articles by date
-        cutoff_time = datetime.datetime.now() - datetime.timedelta(hours=request.hours_back)
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        cutoff_time = now_utc - datetime.timedelta(hours=hours_back)
+        # Create a parsed copy of all_articles for fallback search
+        parsed_all_articles = []
         time_filtered_articles = []
         for article in all_articles:
             try:
                 # Parse the published date
-                published_str = article.get('published', '')
-                if published_str:
-                    # Handle both datetime objects and strings
-                    if isinstance(published_str, datetime.datetime):
-                        published_date = published_str
-                    else:
-                        published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                published_val = article.get('published')
+                pub_date = None
+                if isinstance(published_val, datetime.datetime):
+                    pub_date = published_val
+                elif published_val:
+                    try:
+                        pub_date = datetime.datetime.fromisoformat(str(published_val).replace('Z', '+00:00'))
+                    except Exception:
+                        pub_date = None
+                        
+                if not pub_date:
+                    logger.debug(f"Skipping article with unparseable date: {article.get('title', '')[:50]}")
+                    continue
                     
-                    # Only include articles within the time window
-                    if published_date >= cutoff_time:
-                        time_filtered_articles.append(article)
-                    else:
-                        logger.debug(f"Filtering out old article: {article.get('title', '')[:50]} from {published_str}")
+                # Ensure timezone-aware for comparison
+                try:
+                    if pub_date.tzinfo is None:
+                        pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
+                except Exception:
+                    pass
+                
+                # Update article with parsed datetime structure
+                article['published'] = pub_date
+                parsed_all_articles.append(article)
+                
+                # Only include articles within the time window
+                if pub_date >= cutoff_time:
+                    time_filtered_articles.append(article)
+                else:
+                    logger.debug(f"Filtering out old article: {article.get('title', '')[:50]} from {pub_date}")
             except Exception as e:
-                # If date parsing fails, include the article (better to show than hide)
-                logger.warning(f"Could not parse date for article: {e}")
-                time_filtered_articles.append(article)
+                logger.warning(f"Could not parse date for article '{article.get('title', '')[:50]}': {e}")
+                # Skip to avoid floating stale items to the top
+                continue
         
         all_articles = time_filtered_articles
         logger.info(f"After time filtering ({request.hours_back}h): {len(all_articles)} articles remain")
@@ -490,24 +486,15 @@ async def get_news_feed(request: NewsRequest):
                 if expanded_hours <= request.hours_back:
                     continue  # Skip if we're already searching this far back
                 
-                expanded_cutoff = datetime.datetime.now() - datetime.timedelta(hours=expanded_hours)
+                expanded_cutoff = now_utc - datetime.timedelta(hours=expanded_hours)
                 expanded_articles = []
                 
-                for article in results[0] if isinstance(results[0], list) else []:
-                    try:
-                        published_str = article.get('published', '')
-                        if published_str:
-                            if isinstance(published_str, datetime.datetime):
-                                published_date = published_str
-                            else:
-                                published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
-                            
-                            if published_date >= expanded_cutoff:
-                                # Check if not already in our list
-                                if not any(a.get('title') == article.get('title') for a in all_articles):
-                                    expanded_articles.append(article)
-                    except:
-                        pass
+                for article in parsed_all_articles:
+                    pub_date = article.get('published')
+                    if pub_date and pub_date >= expanded_cutoff:
+                        # Check if not already in our list
+                        if not any(a.get('title') == article.get('title') for a in all_articles):
+                            expanded_articles.append(article)
                 
                 all_articles.extend(expanded_articles)
                 logger.info(f"Expanded to {expanded_hours}h: now have {len(all_articles)} articles")
@@ -555,12 +542,17 @@ async def get_news_feed(request: NewsRequest):
             if isinstance(published, str):
                 try:
                     published = datetime.datetime.fromisoformat(published.replace('Z', '+00:00'))
-                except:
+                except Exception:
                     return (0, 0)
             
-            # Convert to timestamp for sorting
-            date_score = published.timestamp()
-            
+            # Ensure proper timestamp sorting
+            try:
+                if published.tzinfo is None:
+                    published = published.replace(tzinfo=datetime.timezone.utc)
+                date_score = published.timestamp()
+            except Exception:
+                return (0, 0)
+                
             return (impact_score, date_score)
         
         all_articles.sort(key=article_priority, reverse=True)
@@ -568,22 +560,13 @@ async def get_news_feed(request: NewsRequest):
         # Limit to requested number of articles
         articles = all_articles[:request.max_articles]
         
-        # Enhance articles with full content and NLTK summaries if requested
-        if request.enhanced_content and NEWS_SOURCES_AVAILABLE:
-            try:
-                async with NewsDataSources(
-                    enable_full_content=True,
-                    enable_nltk_summary=True
-                ) as content_sources:
-                    articles = await content_sources.enhance_articles_with_full_content(
-                        articles,
-                        commodity_focus=request.commodity_filter,
-                        max_enhance=request.max_enhanced or 3
-                    )
-                logger.info(f"Enhanced {sum(1 for a in articles if a.get('enhanced', False))} articles with full content")
-            except Exception as e:
-                logger.error(f"Error enhancing articles with full content: {e}")
-        
+        # New robust data sources already extracts comprehensive summaries from feeds.
+        # Legacy full content enhancement requires the old scraping implementations which are deprecated.
+        if request.enhanced_content:
+            logger.info("Enhanced content requested, but legacy scraping is deprecated. Relying on default feed summaries.")
+            for a in articles:
+                a['enhanced'] = False
+
         # Add sentiment analysis to each article
         enhanced_articles = []
         for article in articles:
@@ -616,6 +599,17 @@ async def get_news_feed(request: NewsRequest):
                     sentiment = basic_result['sentiment']
                     confidence = basic_result['confidence']
                 
+                # Handle timezone serialization safely
+                time_published = article.get('published')
+                if isinstance(time_published, datetime.datetime):
+                    # Ensure timezone-aware before output
+                    if time_published.tzinfo is None:
+                        time_published = time_published.replace(tzinfo=datetime.timezone.utc)
+                    time_published_str = time_published.isoformat().replace('+00:00', 'Z')
+                else:
+                    now_utc = datetime.datetime.now(datetime.timezone.utc)
+                    time_published_str = str(time_published) if time_published else now_utc.isoformat().replace('+00:00', 'Z')
+
                 # Enhance article with sentiment data
                 enhanced_article = {
                     'id': len(enhanced_articles) + 1,
@@ -623,7 +617,7 @@ async def get_news_feed(request: NewsRequest):
                     'summary': article.get('summary', ''),
                     'source': article.get('source', ''),
                     'source_url': article.get('url', ''),
-                    'time_published': article.get('published', datetime.datetime.now().isoformat()),
+                    'time_published': time_published_str,
                     'sentiment': sentiment,
                     'sentiment_score': round(confidence, 2),
                     'categories': [article.get('category', 'general')],
@@ -641,6 +635,15 @@ async def get_news_feed(request: NewsRequest):
                 
             except Exception as e:
                 logger.error(f"Error processing article: {e}")
+                now_utc = datetime.datetime.now(datetime.timezone.utc)
+                time_pub_fallback = article.get('published')
+                if isinstance(time_pub_fallback, datetime.datetime):
+                    if time_pub_fallback.tzinfo is None:
+                        time_pub_fallback = time_pub_fallback.replace(tzinfo=datetime.timezone.utc)
+                    time_pub_str = time_pub_fallback.isoformat().replace('+00:00', 'Z')
+                else:
+                    time_pub_str = str(time_pub_fallback) if time_pub_fallback else now_utc.isoformat().replace('+00:00', 'Z')
+
                 # Add article without sentiment if processing fails
                 enhanced_article = {
                     'id': len(enhanced_articles) + 1,
@@ -648,7 +651,7 @@ async def get_news_feed(request: NewsRequest):
                     'summary': article.get('summary', ''),
                     'source': article.get('source', ''),
                     'source_url': article.get('url', ''),
-                    'time_published': article.get('published', datetime.datetime.now().isoformat()),
+                    'time_published': time_pub_str,
                     'sentiment': 'NEUTRAL',
                     'sentiment_score': 0.5,
                     'categories': [article.get('category', 'general')],
@@ -677,7 +680,7 @@ async def get_news_feed(request: NewsRequest):
     except Exception as e:
         logger.error(f"News feed error: {e}")
         # Return mock data as fallback
-        return get_mock_news_data(request.max_articles)
+        return {"articles": []}
 
 # New: User-specific news via Supabase preferences
 @app.post('/api/user/news')

@@ -195,33 +195,44 @@ class NewsDataSources:
     # Date parsing
     # ──────────────────────────────────────────────────────────────────
 
-    def _parse_date(self, entry) -> datetime:
-        """Parse date from feed entry."""
+    def _parse_date(self, entry):
+        """Parse various date formats to a datetime object in UTC.
+        Returns None if parsing fails to avoid mis-ordering stale items.
+        """
         try:
-            parsed = getattr(entry, 'published_parsed', None) or \
-                     getattr(entry, 'updated_parsed', None)
-            if parsed:
-                return datetime.fromtimestamp(mktime(parsed))
-
-            date_string = getattr(entry, 'published', '') or \
-                          getattr(entry, 'updated', '')
+            date_string = getattr(entry, 'published', '') or getattr(entry, 'updated', '')
             if not date_string:
-                return datetime.utcnow()
-
-            for fmt in [
-                '%a, %d %b %Y %H:%M:%S %Z',
-                '%a, %d %b %Y %H:%M:%S %z',
-                '%Y-%m-%dT%H:%M:%S%z',
-                '%Y-%m-%d %H:%M:%S',
-            ]:
+                return None
+            
+            # Prefer robust RFC 2822 parsing with timezone when available
+            try:
+                from email.utils import parsedate_to_datetime
+                dt = parsedate_to_datetime(date_string)
+            except Exception:
+                dt = None
+                
+            if dt is None:
+                # Try ISO-8601 parsing with Z normalization
                 try:
-                    return datetime.strptime(date_string, fmt)
-                except ValueError:
-                    continue
-
-            return datetime.utcnow()
+                    dt = datetime.fromisoformat(str(date_string).replace('Z', '+00:00'))
+                except Exception:
+                    dt = None
+                    
+            # If we parsed a datetime, normalize to UTC
+            if dt is not None:
+                try:
+                    if dt.tzinfo is None:
+                        # Assume feed timestamps without tz are UTC
+                        from datetime import timezone
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    else:
+                        from datetime import timezone
+                        dt = dt.astimezone(timezone.utc)
+                except Exception:
+                    pass
+            return dt
         except Exception:
-            return datetime.utcnow()
+            return None
 
     # ──────────────────────────────────────────────────────────────────
     # Main entry point
@@ -279,8 +290,9 @@ class NewsDataSources:
         unique = self._remove_duplicates(all_articles)
 
         # Filter to last 24 hours only
-        cutoff = datetime.utcnow() - timedelta(hours=24)
-        fresh = [a for a in unique if a['published'] >= cutoff]
+        from datetime import timezone
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        fresh = [a for a in unique if a['published'] is not None and a['published'] >= cutoff]
 
         if fresh:
             unique = fresh
