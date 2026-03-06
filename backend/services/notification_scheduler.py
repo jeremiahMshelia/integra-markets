@@ -334,15 +334,24 @@ class NotificationEngine:
             if not self._rate_ok(user_id):
                 break
 
-            # Build notification
+            # Build notification with sentiment label
             commodity = article.get("commodity", "")
             source = article.get("source", "")
             title = article.get("title", "Market Update")
+            sentiment = str(article.get("sentiment", "NEUTRAL")).upper()
+            
+            # Map sentiment to clean label
+            sentiment_label = {
+                "BULLISH": "BULLISH",
+                "POSITIVE": "BULLISH",
+                "BEARISH": "BEARISH",
+                "NEGATIVE": "BEARISH",
+            }.get(sentiment, "NEUTRAL")
 
             if commodity:
-                notif_title = f"📊 {commodity} Alert"
+                notif_title = f"{commodity.upper()} Alert · {sentiment_label}"
             else:
-                notif_title = f"📰 Market Alert"
+                notif_title = f"Market Alert · {sentiment_label}"
 
             summary = article.get("summary", "")
             if summary and len(summary) > 20:
@@ -362,6 +371,7 @@ class NotificationEngine:
                     "article_url": article.get("url", ""),
                     "commodity": commodity,
                     "source": source,
+                    "sentiment": article.get("sentiment", "NEUTRAL"),
                 },
             )
 

@@ -179,14 +179,8 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
 
             {/* Content Area - Matches Mobile Layout */}
             <div className="flex flex-col flex-1 p-5">
-                {/* Top Row: Bookmark & Integra Icon (right aligned) */}
+                {/* Top Row: Integra Icon only (right aligned) */}
                 <div className="flex items-center justify-end gap-2 mb-3">
-                    <button
-                        onClick={handleBookmark}
-                        className="p-1.5 text-zinc-400 hover:text-white transition-colors"
-                    >
-                        <Bookmark size={18} className={bookmarked ? 'fill-white text-white' : ''} />
-                    </button>
                     <button
                         onClick={handleAIClickLocal}
                         className="p-1.5 text-[#4a9eff] hover:text-[#60a5fa] transition-colors"
@@ -206,7 +200,7 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                     {item.summary || 'No summary available.'}
                 </p>
 
-                {/* Bottom Row: Source Link + Time (left) + Share Button (right) */}
+                {/* Bottom Row: Source Link + Time (left) + Bookmark + Share Button (right) */}
                 <div className="flex items-center justify-between pt-4 border-t border-[#2A2A2E] mt-auto">
                     <div className="flex items-center gap-4 text-sm">
                         <a
@@ -222,13 +216,21 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                         <span className="text-zinc-500">{timeStr}</span>
                     </div>
 
-                    {/* Share Button */}
-                    <button
-                        onClick={handleShare}
-                        className="p-2 text-zinc-500 hover:text-white transition-colors"
-                    >
-                        <Share2 size={18} />
-                    </button>
+                    {/* Bookmark + Share */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleBookmark}
+                            className="p-2 text-zinc-500 hover:text-white transition-colors"
+                        >
+                            <Bookmark size={16} className={bookmarked ? 'fill-yellow-400 text-yellow-400' : ''} />
+                        </button>
+                        <button
+                            onClick={handleShare}
+                            className="p-2 text-zinc-500 hover:text-white transition-colors"
+                        >
+                            <Share2 size={16} />
+                        </button>
+                    </div>
                 </div>
             </div>
         </article>

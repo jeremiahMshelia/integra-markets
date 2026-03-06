@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useBookmarks } from '../providers/BookmarkProvider';
@@ -12,6 +12,7 @@ interface NewsData {
     summary: string;
     fullSummary?: string; // Full untruncated summary for overlay
     source: string;
+    sourceUrl?: string;
     timeAgo?: string;
     sentiment: string;
     sentimentScore: number;
@@ -278,6 +279,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                     title: newsData.title || '',
                     summary: analysis.summary,
                     source: newsData.source,
+                    url: newsData.sourceUrl || '', // Pass URL so article_id matches web
                     sentiment: analysis.finBertSentiment.bullish > analysis.finBertSentiment.bearish
                         ? (analysis.finBertSentiment.bullish > analysis.finBertSentiment.neutral ? 'BULLISH' : 'NEUTRAL')
                         : (analysis.finBertSentiment.bearish > analysis.finBertSentiment.neutral ? 'BEARISH' : 'NEUTRAL'),
@@ -864,7 +866,28 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
 
                             {/* Article Title and Source */}
                             <Text style={styles.articleTitle}>{newsData.title}</Text>
-                            <TouchableOpacity>
+                            <TouchableOpacity
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                onPress={async () => {
+                                    // Check every possible URL field 
+                                    const articleUrl = newsData.sourceUrl || newsData.url || newsData.source_url || '';
+                                    console.log('[AIOverlay] Source tapped, ALL fields:', JSON.stringify({ sourceUrl: newsData.sourceUrl, url: newsData.url, source_url: newsData.source_url }));
+                                    if (articleUrl && articleUrl !== '#') {
+                                        try {
+                                            let finalUrl = articleUrl;
+                                            if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                                                finalUrl = 'https://' + finalUrl;
+                                            }
+                                            await Linking.openURL(finalUrl);
+                                        } catch (error) {
+                                            console.error('Error opening URL:', error);
+                                            Alert.alert('Unable to Open Link', `Could not open the source website.`);
+                                        }
+                                    } else {
+                                        Alert.alert('Source Information', `This article is from ${newsData.source || 'an unknown source'}. No direct link is available.`);
+                                    }
+                                }}
+                            >
                                 <Text style={styles.source}>{newsData.source}</Text>
                             </TouchableOpacity>
 

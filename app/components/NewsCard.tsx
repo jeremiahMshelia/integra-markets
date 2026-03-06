@@ -310,17 +310,10 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       <View style={styles.contentSection}>
 
 
-        {/* Title row with action buttons on the right */}
+        {/* Title row with AI button on the right */}
         <View style={styles.titleRow}>
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.titleActionButtons}>
-            <TouchableOpacity onPress={handleBookmarkToggle} style={styles.bookmarkButton}>
-              <Feather
-                name="bookmark"
-                size={18}
-                color={isCurrentlyBookmarked ? "#FFD700" : "#666666"}
-              />
-            </TouchableOpacity>
             <TouchableOpacity onPress={() => onAIClick(item)} style={styles.starButton}>
               <SingleStar size={28} color="#4a9eff" />
             </TouchableOpacity>
@@ -332,7 +325,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
           {item.summary || item.content || 'More details would go here...'}
         </Text>
 
-        {/* Footer with source and share */}
+        {/* Footer with source, time, bookmark and share */}
         <View style={styles.footer}>
           <View style={styles.sourceContainer}>
             {item.source && (
@@ -347,9 +340,18 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
             )}
             <Text style={styles.timeAgo}>{item.timeAgo || item.date || '4 hours ago'}</Text>
           </View>
-          <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
-            <Feather name="share-2" size={16} color="#666666" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity onPress={handleBookmarkToggle} style={styles.bookmarkButton}>
+              <Feather
+                name="bookmark"
+                size={16}
+                color={isCurrentlyBookmarked ? "#FFD700" : "#666666"}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
+              <Feather name="share-2" size={16} color="#666666" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </TouchableOpacity>

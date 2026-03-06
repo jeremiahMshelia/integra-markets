@@ -16,6 +16,7 @@ import {
   DevSettings,
   Modal,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -265,6 +266,7 @@ const App = () => {
 
         // Source name and direct article URL
         const sourceUrl = a.url || a.source_url || '';
+        console.log('[loadNews] article url:', a.url, 'source_url:', a.source_url, '=> sourceUrl:', sourceUrl);
         let sourceName = (a.source || a.source_name || '').trim();
         if (!sourceName && sourceUrl) {
           try {
@@ -549,7 +551,22 @@ const App = () => {
         },
         (response) => {
           console.log('Notification tapped:', response.notification.request.content.title);
-          // Handle notification tap - could navigate to specific screen
+          const data = response.notification.request.content.data;
+          if (data?.article_url) {
+            // Try to find the article in our feed and open it
+            const matchingArticle = newsItems.find(
+              item => item.url === data.article_url || item.sourceUrl === data.article_url
+            );
+            if (matchingArticle) {
+              setSelectedArticle(matchingArticle);
+              setShowAIAnalysis(true);
+            } else {
+              // If not in feed, open in browser
+              Linking.openURL(data.article_url).catch(err =>
+                console.error('Failed to open notification URL:', err)
+              );
+            }
+          }
         }
       );
     } catch (error) {
@@ -987,6 +1004,7 @@ const App = () => {
   };
 
   const handleArticlePress = (article) => {
+    console.log('[handleArticlePress] sourceUrl:', article.sourceUrl, 'url:', article.url, 'source:', article.source);
     setSelectedArticle(article);
     setShowAIAnalysis(true);
   };
@@ -1246,23 +1264,13 @@ const App = () => {
               setSelectedArticle(null);
             }}
             newsData={{
-              title: selectedArticle.title,
-              summary: selectedArticle.summary || selectedArticle.content || '',
-              fullSummary: selectedArticle.fullSummary, // Full untruncated summary
+              ...selectedArticle,
               source: selectedArticle.source || 'Unknown',
+              sourceUrl: selectedArticle.sourceUrl || selectedArticle.url || '',
               timeAgo: selectedArticle.timeAgo || selectedArticle.date || '2 hours ago',
               sentiment: selectedArticle.sentiment || 'NEUTRAL',
               sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
-              analysis: selectedArticle.analysis,
               keywords: selectedArticle.keywords || selectedArticle.analysis?.keywords || [],
-              // Backend preprocessing fields
-              bullish: selectedArticle.bullish,
-              bearish: selectedArticle.bearish,
-              neutral: selectedArticle.neutral,
-              market_impact: selectedArticle.market_impact,
-              trade_ideas: selectedArticle.trade_ideas,
-              event_type: selectedArticle.event_type,
-              severity: selectedArticle.severity,
             }}
           />
         )}
@@ -1292,22 +1300,13 @@ const App = () => {
               setSelectedArticle(null);
             }}
             newsData={{
-              title: selectedArticle.title,
-              summary: selectedArticle.summary || selectedArticle.content || '',
-              fullSummary: selectedArticle.fullSummary,
+              ...selectedArticle,
               source: selectedArticle.source || 'Unknown',
+              sourceUrl: selectedArticle.sourceUrl || selectedArticle.url || '',
               timeAgo: selectedArticle.timeAgo || selectedArticle.date || '2 hours ago',
               sentiment: selectedArticle.sentiment || 'NEUTRAL',
               sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
-              analysis: selectedArticle.analysis,
               keywords: selectedArticle.keywords || selectedArticle.analysis?.keywords || [],
-              bullish: selectedArticle.bullish,
-              bearish: selectedArticle.bearish,
-              neutral: selectedArticle.neutral,
-              market_impact: selectedArticle.market_impact,
-              trade_ideas: selectedArticle.trade_ideas,
-              event_type: selectedArticle.event_type,
-              severity: selectedArticle.severity,
             }}
           />
         )}
@@ -1389,7 +1388,7 @@ const App = () => {
           verticalPosition={140}
         />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+        <View style={styles.filterContainer}>
           {['All', 'Bullish', 'Neutral', 'Bearish'].map((filter) => (
             <TouchableOpacity
               key={filter}
@@ -1410,7 +1409,7 @@ const App = () => {
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
 
         <FlatList
           data={getFilteredNews()}
@@ -1469,23 +1468,13 @@ const App = () => {
       {showAIAnalysis && selectedArticle && (
         <AIAnalysisOverlay
           newsData={{
-            title: selectedArticle.title,
-            summary: selectedArticle.summary || selectedArticle.content || '',
-            fullSummary: selectedArticle.fullSummary, // Full untruncated summary
+            ...selectedArticle,
             source: selectedArticle.source || 'Unknown',
+            sourceUrl: selectedArticle.sourceUrl || selectedArticle.url || '',
             timeAgo: selectedArticle.timeAgo || selectedArticle.date || '2 hours ago',
             sentiment: selectedArticle.sentiment || 'NEUTRAL',
             sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5,
-            analysis: selectedArticle.analysis,
             keywords: selectedArticle.keywords || selectedArticle.analysis?.keywords || [],
-            // Backend preprocessing fields
-            bullish: selectedArticle.bullish,
-            bearish: selectedArticle.bearish,
-            neutral: selectedArticle.neutral,
-            market_impact: selectedArticle.market_impact,
-            trade_ideas: selectedArticle.trade_ideas,
-            event_type: selectedArticle.event_type,
-            severity: selectedArticle.severity,
           }}
           isVisible={showAIAnalysis}
           onClose={() => {
@@ -1712,16 +1701,18 @@ const styles = StyleSheet.create({
     width: 34,
   },
   filterContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    maxHeight: 60,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 8,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    marginRight: 8,
     borderRadius: 999,
     backgroundColor: colors.bgSecondary,
     borderWidth: 1,
@@ -1733,9 +1724,9 @@ const styles = StyleSheet.create({
   },
   filterText: {
     color: colors.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
-    marginLeft: 4,
+    marginLeft: 3,
   },
   activeFilterText: {
     color: colors.bgPrimary,
