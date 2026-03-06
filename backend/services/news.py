@@ -120,7 +120,7 @@ class NewsService:
     
     def _get_sample_articles(self) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
-        ts = now.isoformat()
+        ts = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         return [
             {
                 "title": "US Natural Gas Storage Exceeds Expectations",
@@ -194,16 +194,21 @@ class NewsService:
                     except Exception:
                         pass
 
-                # Normalize published time to ISO string when possible
+                # Normalize published time to ISO string with Z suffix (UTC)
+                # CRITICAL: Without 'Z', JS new Date() treats it as local time
                 published = entry.get("published", "") or entry.get("updated", "")
                 try:
                     parsed_struct = entry.get("published_parsed") or entry.get("updated_parsed")
                     if parsed_struct:
-                        dt = datetime.fromtimestamp(time.mktime(parsed_struct))
-                        published = dt.isoformat()
+                        dt = datetime.utcfromtimestamp(time.mktime(parsed_struct))
+                        published = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     elif isinstance(published, str) and published:
                         dt = parsedate_to_datetime(published)
-                        published = dt.isoformat()
+                        # Convert to UTC if timezone-aware
+                        if dt.tzinfo is not None:
+                            from datetime import timezone as tz
+                            dt = dt.astimezone(tz.utc)
+                        published = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                 except Exception:
                     # Fall back to original string if parsing fails
                     pass
@@ -806,11 +811,12 @@ class NewsService:
                         sentiment_conf = ensemble.get("confidence", 0.0)
 
                         # Store published as ISO string so _parse_pub_dt works later
-                        pub_str = pub_date.strftime("%Y-%m-%dT%H:%M:%S")
+                        # IMPORTANT: Must include 'Z' for UTC so mobile JS engines don't fallback to Local Time
+                        pub_str = pub_date.strftime("%Y-%m-%dT%H:%M:%SZ")
                         all_articles.append({
                             "title": article.get("title", ""),
                             "url": article.get("url", ""),
-                            "time_published": pub_date.strftime("%Y%m%dT%H%M%S"),
+                            "time_published": pub_date.strftime("%Y%m%dT%H%M%SZ"),
                             "summary": article.get("summary", ""),
                             "source": article.get("source", "RSS"),
                             "source_name": "rss_fallback",
