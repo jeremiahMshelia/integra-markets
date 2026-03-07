@@ -888,15 +888,24 @@ class NewsService:
                 all_articles = filtered_articles + unmatched
 
         def _parse_pub_dt(published_val: Any) -> Optional[datetime]:
-            """Parse various published/time formats into a datetime.
+            """Parse various published/time formats into a naive UTC datetime.
 
-            Handles: datetime objects, ISO strings, RFC2822, Alpha Vantage compact.
+            Always returns a naive (no tzinfo) datetime in UTC so it can
+            safely be compared with datetime.utcnow() cutoffs.
             """
             if published_val is None:
                 return None
             # Handle datetime objects directly (from data_sources.py)
             if isinstance(published_val, datetime):
-                return published_val
+                dt = published_val
+                # Convert aware -> naive UTC
+                if dt.tzinfo is not None:
+                    dt = dt.astimezone(tz=None).replace(tzinfo=None)  
+                    # More reliable: use utctimetuple
+                    import calendar
+                    utc_ts = calendar.timegm(published_val.utctimetuple())
+                    dt = datetime.utcfromtimestamp(utc_ts)
+                return dt
             if not isinstance(published_val, str) or not published_val:
                 return None
             s = published_val.strip()
@@ -915,10 +924,21 @@ class NewsService:
                     pass
 
             try:
-                return datetime.fromisoformat(s.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+                # Strip tzinfo -> naive UTC
+                if dt.tzinfo is not None:
+                    import calendar
+                    utc_ts = calendar.timegm(dt.utctimetuple())
+                    dt = datetime.utcfromtimestamp(utc_ts)
+                return dt
             except Exception:
                 try:
-                    return parsedate_to_datetime(s)
+                    dt = parsedate_to_datetime(s)
+                    if dt.tzinfo is not None:
+                        import calendar
+                        utc_ts = calendar.timegm(dt.utctimetuple())
+                        dt = datetime.utcfromtimestamp(utc_ts)
+                    return dt
                 except Exception:
                     return None
 
