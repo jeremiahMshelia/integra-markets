@@ -59,7 +59,7 @@ class NewsDataSources:
             'Accept-Language': 'en-US,en;q=0.5',
         }
 
-        # ── Direct RSS feeds (verified working Feb 14 2026) ──────────
+        # ── Direct RSS feeds (expanded for Crypto & Macro) ──────────
         self.direct_feeds = {
             "oilprice": {
                 "url": "https://oilprice.com/rss/main",
@@ -71,14 +71,26 @@ class NewsDataSources:
                 "source": "Investing.com",
                 "category": "markets",
             },
-            "cnbc": {
-                "url": (
-                    "https://search.cnbc.com/rs/search/combinedcms/view.xml"
-                    "?partnerId=wrss01&id=10000664"
-                ),
+            "cnbc_commodities": {
+                "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",
                 "source": "CNBC",
                 "category": "commodities",
             },
+            "yahoo_finance": {
+                "url": "https://finance.yahoo.com/news/rssindex",
+                "source": "Yahoo Finance",
+                "category": "markets",
+            },
+            "coindesk": {
+                "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+                "source": "CoinDesk",
+                "category": "crypto",
+            },
+            "cnbc_macro": {
+                "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
+                "source": "CNBC",
+                "category": "economy",
+            }
         }
 
         # ── Google News targeted queries by commodity ────────────────
@@ -247,8 +259,8 @@ class NewsDataSources:
             tasks.append(
                 self._fetch_rss(
                     info["url"], info["source"], info["category"],
-                    max_items=15,
-                    filter_keywords=(info["category"] == "markets"),
+                    max_items=25,
+                    filter_keywords=False,  # Allow crypto and macro news through
                 )
             )
 
