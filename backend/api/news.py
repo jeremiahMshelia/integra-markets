@@ -60,6 +60,7 @@ class ComprehensiveAnalysisRequest(BaseModel):
 class LatestNewsRequest(BaseModel):
     commodities: Optional[List[str]] = None
     hours: int = 6
+    sources: Optional[List[str]] = None  # Filter by user's selected sources
 
 # --- Enhanced Sentiment Analysis Endpoints ---
 @api_router.post("/analyze-sentiment", response_model=Dict[str, Any])
@@ -266,12 +267,13 @@ async def preprocess_news_pipeline_endpoint(request: NewsPreprocessRequest):
 # --- News Feed Endpoints ---
 @api_router.post("/news/latest", response_model=Dict[str, Any])
 async def get_latest_news(request: LatestNewsRequest, background_tasks: BackgroundTasks):
-    """Return latest commodity news articles (optionally filtered by commodities)."""
+    """Return latest commodity news articles (optionally filtered by commodities and sources)."""
     try:
         result = await get_latest_commodity_news(
             commodities=request.commodities,
             limit=50,
             hours=request.hours,
+            sources=request.sources,  # Filter by user's selected sources
         )
         # INSTANT NOTIFICATIONS: fire push notifications in background
         articles = result.get("articles", []) if isinstance(result, dict) else []

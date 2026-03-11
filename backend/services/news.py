@@ -106,14 +106,21 @@ class NewsService:
             "cnbc_commodities": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",
             "google_news_oil": "https://news.google.com/rss/search?q=crude+oil+price+when:7d&hl=en-US&gl=US&ceid=US:en",
             "google_news_gold": "https://news.google.com/rss/search?q=gold+price+commodities+when:7d&hl=en-US&gl=US&ceid=US:en",
+            # Crypto RSS feeds
+            "coindesk": "https://www.coindesk.com/feed/",
+            "cointelegraph": "https://cointelegraph.com/rss",
+            "bitcoin_com": "https://news.bitcoin.com/feed/",
+            "cryptoslate": "https://cryptoslate.com/feed/",
         }
         
         # Commodity keywords for filtering relevant news
         self.commodity_keywords = {
             "oil": ["crude", "oil", "petroleum", "wti", "brent", "opec", "drilling", "refinery"],
             "gas": ["natural gas", "lng", "pipeline", "gas prices", "energy"],
-            "metals": ["gold", "silver", "copper", "aluminum", "steel", "mining"],
-            "agriculture": ["wheat", "corn", "soybeans", "cotton", "coffee", "sugar", "cattle"]
+            "metals": ["gold", "silver", "copper", "aluminum", "steel", "mining", "platinum", "palladium"],
+            "agriculture": ["wheat", "corn", "soybeans", "cotton", "coffee", "sugar", "cattle", "cocoa", "rubber"],
+            "crypto": ["bitcoin", "btc", "ethereum", "eth", "solana", "sol", "cryptocurrency", "crypto", "blockchain", "ether", "btcusd", "ethusd"],
+            "forex": ["usd", "eur", "gbp", "jpy", "forex", "fx", "currency", "dollar", "euro", "pound", "yen"]
         }
         
         logger.info("NewsService initialized with enhanced caching for production")
@@ -727,7 +734,8 @@ class NewsService:
                             commodities: Optional[List[str]] = None,
                             limit: int = 50,
                             include_sentiment: bool = True,
-                            hours: Optional[int] = None) -> Dict[str, Any]:
+                            hours: Optional[int] = None,
+                            sources: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Get latest commodity news with enhanced caching.
         
@@ -735,11 +743,12 @@ class NewsService:
             commodities: List of commodity types to filter by
             limit: Maximum number of articles to return
             include_sentiment: Whether to include sentiment analysis
+            sources: List of source URLs to filter by (from user's alert preferences)
             
         Returns:
             Dict containing news articles with metadata
         """
-        cache_key = self._generate_cache_key("latest_news", str(commodities), limit, include_sentiment, hours)
+        cache_key = self._generate_cache_key("latest_news", str(commodities), limit, include_sentiment, hours, str(sources))
         
         # Check cache first
         cached_result = cache_manager.get("news_latest", cache_key)
@@ -776,12 +785,16 @@ class NewsService:
             logger.error(f"Error fetching Alpha Vantage news: {str(e)}")
 
         # --- Secondary source: NewsDataSources (robust RSS feeds) ---
-        if (not all_articles or len(all_articles) < 5) and DATA_SOURCES_AVAILABLE:
-            logger.info("Alpha Vantage returned limited/no news, falling back to NewsDataSources")
+        # Always fetch RSS feeds for crypto/forex since Alpha Vantage doesn't cover them well
+        needs_crypto = commodities and any(c.upper() in ['CRYPTO', 'BITCOIN', 'ETH', 'ETHEREUM', 'SOL', 'SOLANA', 'FOREX', 'USD', 'EUR'] for c in commodities)
+        logger.info(f"Commodities: {commodities}, needs_crypto: {needs_crypto}")
+        
+        if (not all_articles or len(all_articles) < 5 or needs_crypto) and DATA_SOURCES_AVAILABLE:
+            logger.info("Fetching RSS feeds (Alpha Vantage insufficient or crypto requested)")
             try:
-                async with NewsDataSources() as sources:
+                async with NewsDataSources() as rss_sources:
                     # Fetch from all available sources
-                    rss_articles = await sources.fetch_all_sources()
+                    rss_articles = await rss_sources.fetch_all_sources()
                     
                     # Convert to internal format
                     for article in rss_articles:
@@ -848,7 +861,7 @@ class NewsService:
                     logger.error(f"Error processing feed {source_name}: {str(e)}")
         
         # Filter by commodity keywords if specified
-        if commodities:
+        if commodities and len(all_articles) > 0:
             filtered_articles = []
 
             def _normalize_commodity(name: str) -> Optional[str]:
@@ -863,6 +876,10 @@ class NewsService:
                     return "metals"
                 if key in ("wheat", "corn", "soybeans", "soybean", "agriculture", "ag"):
                     return "agriculture"
+                if key in ("btc", "bitcoin", "eth", "ethereum", "sol", "solana", "crypto", "cryptocurrency"):
+                    return "crypto"
+                if key in ("forex", "fx", "currency", "usd", "eur", "gbp"):
+                    return "forex"
                 return None
 
             normalized_map: Dict[str, Optional[str]] = {
@@ -886,6 +903,11 @@ class NewsService:
                 # Put commodity-matched articles first but keep all others as well
                 unmatched = [a for a in all_articles if a not in filtered_articles]
                 all_articles = filtered_articles + unmatched
+                logger.info(f"Filter matched: {len(filtered_articles)} articles, keeping {len(unmatched)} unmatched")
+            else:
+                # No articles matched - keep all (don't return empty)
+                logger.warning(f"No articles matched filter {commodities}, returning all {len(all_articles)}")
+
 
         def _parse_pub_dt(published_val: Any) -> Optional[datetime]:
             """Parse various published/time formats into a naive UTC datetime.
@@ -985,59 +1007,48 @@ class NewsService:
         # Sort by published date (most recent first)
         all_articles.sort(key=lambda x: x.get("published", ""), reverse=True)
         
-        # Limit results
+        # Limit results FIRST before sentiment analysis (to avoid slow processing)
         all_articles = all_articles[:limit]
         
         # Add sentiment analysis if requested
         if include_sentiment:
             for article in all_articles:
                 try:
-                    # Skip if article already has valid sentiment from Alpha Vantage
-                    # Trust the original sentiment - don't re-analyze
-                    has_valid_sentiment = (
-                        article.get("sentiment") and 
-                        article.get("sentiment_score") is not None and
-                        article.get("sentiment_score") >= 0.5  # Our normalized scores are 0.5-0.99
-                    )
-                    if has_valid_sentiment:
-                        logger.debug(f"Skipping sentiment analysis - already has: {article.get('sentiment')} {article.get('sentiment_score')}")
+                    # Skip if article already has valid sentiment
+                    if article.get("sentiment") and article.get("sentiment_score"):
                         continue
                     
-                    # Use cached sentiment analysis
-                    sentiment_key = self._generate_cache_key("sentiment", article.get("url", ""), article.get("title", ""))
-                    cached_sentiment = cache_manager.get("news_sentiment", sentiment_key)
+                    # Quick sentiment
+                    text = f"{article.get('title', '')} {article.get('summary', '')}"[:1000]
+                    sentiment_result = await analyze_sentiment(text)
                     
-                    if cached_sentiment is not None:
-                        article.update(cached_sentiment)
-                    else:
-                        # Analyze sentiment
-                        text = f"{article.get('title', '')} {article.get('summary', '')}"
-                        sentiment_result = await analyze_sentiment(text)
-                        
-                        # Extract from ensemble (analyze_text returns {ensemble: {sentiment, confidence}, ...})
-                        ensemble = sentiment_result.get("ensemble", {})
-                        article.update({
-                            "sentiment": ensemble.get("sentiment", "NEUTRAL").upper(),
-                            "sentiment_score": ensemble.get("confidence", 0.0),
-                            "sentiment_analysis": sentiment_result
-                        })
-                        
-                        # Cache the sentiment analysis
-                        cache_manager.set("news_sentiment", sentiment_key, {
-                            "sentiment": article["sentiment"],
-                            "sentiment_score": article["sentiment_score"],
-                            "sentiment_analysis": article["sentiment_analysis"]
-                        }, self.cache_ttl["sentiment_analysis"])
-                        
+                    ensemble = sentiment_result.get("ensemble", {})
+                    article["sentiment"] = ensemble.get("sentiment", "NEUTRAL").upper()
+                    article["sentiment_score"] = ensemble.get("confidence", 0.5)
                 except Exception as e:
-                    logger.error(f"Error analyzing sentiment for article: {str(e)}")
-                    # Only set defaults if no sentiment exists
-                    if not article.get("sentiment"):
-                        article.update({
-                            "sentiment": "NEUTRAL",
-                            "sentiment_score": 0.0
-                        })
+                    article["sentiment"] = "NEUTRAL"
+                    article["sentiment_score"] = 0.5
         
+        # Filter by user's selected sources if provided
+        logger.info(f"Sources param type: {type(sources)}, value: {sources}")
+        if sources and len(sources) > 0:
+            logger.info(f"Filtering articles by user-selected sources: {sources}")
+            filtered_by_source = []
+            for article in all_articles:
+                article_url = article.get("url", "").lower()
+                article_source = article.get("source", "").lower()
+                
+                # Check if article matches any of the user's selected sources
+                for source_url in sources:
+                    source_lower = source_url.lower()
+                    # Match by URL or source name
+                    if source_lower in article_url or source_lower in article_source:
+                        filtered_by_source.append(article)
+                        break
+                
+            logger.info(f"Source filter: {len(all_articles)} -> {len(filtered_by_source)} articles")
+            all_articles = filtered_by_source
+
         # Enrich articles with images for desktop visual display
         try:
             await self._enrich_articles_with_images(all_articles)
@@ -1195,6 +1206,7 @@ async def get_latest_commodity_news(
     commodities: Optional[List[str]] = None,
     limit: int = 50,
     hours: Optional[int] = None,
+    sources: Optional[List[str]] = None,  # Filter by user's selected sources
 ) -> Dict[str, Any]:
     """Get latest commodity news with enhanced caching"""
     return await news_service.get_latest_news(
@@ -1202,6 +1214,7 @@ async def get_latest_commodity_news(
         limit=limit,
         include_sentiment=True,
         hours=hours,
+        sources=sources,
     )
 
 async def analyze_news_article(url: str) -> Dict[str, Any]:

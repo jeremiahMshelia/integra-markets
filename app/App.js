@@ -224,7 +224,7 @@ const App = () => {
       }
 
       // Get commodities from preferences, or use defaults
-      const defaultCommodities = ['OIL', 'GOLD', 'WHEAT', 'NAT GAS'];
+      const defaultCommodities = ['OIL', 'GOLD', 'WHEAT', 'NAT GAS', 'CRYPTO'];
       let commodities = defaultCommodities;
 
       if (prefs?.commodities && Array.isArray(prefs.commodities) && prefs.commodities.length > 0) {
@@ -239,13 +239,26 @@ const App = () => {
           'Corn': 'WHEAT',
           'Soybeans': 'WHEAT',
           'Copper': 'GOLD',
+          'Bitcoin': 'CRYPTO',
+          'BTC': 'CRYPTO',
+          'Ethereum': 'CRYPTO',
+          'ETH': 'CRYPTO',
+          'Solana': 'CRYPTO',
+          'SOL': 'CRYPTO',
+          'Crypto': 'CRYPTO',
+          'Cryptocurrency': 'CRYPTO',
         };
         commodities = prefs.commodities.map(c => commodityMap[c] || c.toUpperCase()).filter((v, i, a) => a.indexOf(v) === i);
         if (commodities.length === 0) commodities = defaultCommodities;
       }
 
       console.log('[News] Loading news for commodities:', commodities);
-      const data = await dashboardApi.getTodayDashboard(commodities);
+      
+      // Get user's selected sources from alert preferences
+      const userSources = prefs?.websiteURLs || prefs?.website_urls || [];
+      console.log('[News] Filtering by user sources:', userSources);
+      
+      const data = await dashboardApi.getTodayDashboard(commodities, userSources);
       const articles = Array.isArray(data?.news) ? data.news : [];
 
       // Map backend articles into the shape NewsCard expects, then hard-cap to 20
