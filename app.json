@@ -27,7 +27,7 @@
       "**/*"
     ],
     "ios": {
-      "bundleIdentifier": "com.centori.integramarkets",
+      "bundleIdentifier": "com.centori.integra",
       "buildNumber": "56",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
