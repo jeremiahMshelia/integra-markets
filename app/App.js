@@ -182,21 +182,22 @@ const App = () => {
     } catch { }
   };
 
+  const parseAlphaTime = (ts) => {
+    if (!ts) return null;
+    // Alpha Vantage sometimes uses YYYYMMDDTHHMMSS (optionally with Z)
+    const m = String(ts).match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/);
+    if (m) {
+      const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   const formatTimeAgo = (timestamp) => {
     if (!timestamp) return 'recently';
     try {
-      const parseAlphaTime = (ts) => {
-        if (!ts) return null;
-        // Alpha Vantage sometimes uses YYYYMMDDTHHMMSS (optionally with Z)
-        const m = String(ts).match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/);
-        if (m) {
-          const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
-          const d = new Date(iso);
-          return isNaN(d.getTime()) ? null : d;
-        }
-        const d = new Date(ts);
-        return isNaN(d.getTime()) ? null : d;
-      };
       const date = parseAlphaTime(timestamp);
       if (!date) return 'recently';
       const diffMs = Date.now() - date.getTime();
@@ -357,6 +358,7 @@ const App = () => {
           severity: a.severity,
           // Image URL for card display
           image_url: a.image_url,
+          timestamp: parseAlphaTime(a.published || a.time_published)?.getTime() || Date.now(),
         };
       });
 
@@ -367,24 +369,14 @@ const App = () => {
         return;
       }
 
-      // Apply keyword filtering/prioritization if user has custom keywords
-      let prioritized = mapped;
-      if (prefs?.keywords && Array.isArray(prefs.keywords) && prefs.keywords.length > 0) {
-        const userKeywords = prefs.keywords.map(k => k.toLowerCase());
-        // Score articles by keyword matches
-        prioritized = mapped.map(article => {
-          const text = `${article.title} ${article.summary}`.toLowerCase();
-          const matchScore = userKeywords.reduce((score, kw) => {
-            return score + (text.includes(kw) ? 1 : 0);
-          }, 0);
-          return { ...article, matchScore };
-        });
-        // Sort by match score (highest first), then by original order
-        prioritized.sort((a, b) => b.matchScore - a.matchScore);
-        console.log('[News] Applied keyword prioritization, top matches:', prioritized.slice(0, 3).map(a => ({ title: a.title.slice(0, 40), matches: a.matchScore })));
-      }
+      // Always sort by timestamp (newest first) as requested by user
+      mapped.sort((a, b) => {
+        const timeA = a.timestamp || 0;
+        const timeB = b.timestamp || 0;
+        return timeB - timeA;
+      });
 
-      const limited = prioritized.slice(0, 20);
+      const limited = mapped.slice(0, 20);
       setAllNews(limited);
 
       // Trust backend sentiment - no need to re-analyze
@@ -544,28 +536,44 @@ const App = () => {
         }, 5000); // Wait 5 seconds for session to restore
       }
 
+      // Set up notification listeners with cleanup support
+      const { removeNotificationListeners } = require('./services/notificationService');
+      
+      // Clean up any existing listeners first to prevent duplicates
+      try {
+        removeNotificationListeners();
+      } catch (e) {
+        // Ignore if no listeners exist
+      }
+      
       // Set up notification listeners
-      setupNotificationListeners(
+      const { notificationListener, responseListener } = setupNotificationListeners(
         (notification) => {
-          console.log('Notification received:', notification.request.content.title);
+          console.log('Notification received:', notification?.request?.content?.title);
         },
         (response) => {
-          console.log('Notification tapped:', response.notification.request.content.title);
-          const data = response.notification.request.content.data;
-          if (data?.article_url) {
-            // Try to find the article in our feed and open it
-            const matchingArticle = newsItems.find(
-              item => item.url === data.article_url || item.sourceUrl === data.article_url
-            );
-            if (matchingArticle) {
-              setSelectedArticle(matchingArticle);
+          try {
+            console.log('Notification tapped:', response?.notification?.request?.content?.title);
+            const content = response?.notification?.request?.content;
+            const data = content?.data;
+            
+            if (data?.article_url) {
+              // Construct a synthetic article from push payload to avoid closure traps
+              // (allNews is likely empty in this scope because it's set on mount)
+              const syntheticArticle = {
+                title: content?.title || 'Market Alert',
+                summary: content?.body || '',
+                url: data.article_url,
+                sourceUrl: data.article_url,
+                source: data.source || 'News',
+                sentiment: data.sentiment || 'NEUTRAL',
+                commodity: data.commodity || ''
+              };
+              setSelectedArticle(syntheticArticle);
               setShowAIAnalysis(true);
-            } else {
-              // If not in feed, open in browser
-              Linking.openURL(data.article_url).catch(err =>
-                console.error('Failed to open notification URL:', err)
-              );
             }
+          } catch (error) {
+            console.error('Error handling notification tap:', error);
           }
         }
       );
@@ -600,6 +608,7 @@ const App = () => {
       let onboardingCompleted = null;
       let alertsCompleted = null;
       let storedUserData = null;
+      let storageError = null;
 
       try {
         onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
@@ -607,7 +616,40 @@ const App = () => {
         storedUserData = await AsyncStorage.getItem('user_data');
       } catch (storageError) {
         console.warn('AsyncStorage access failed:', storageError);
-        // Continue with null values - don't crash
+        // Continue - we'll try to restore from Supabase if user data exists
+      }
+
+      // Try to restore session from Supabase if AsyncStorage failed but we might have a valid session
+      // This handles cases where user data was cleared but Supabase session is still valid
+      if (storageError && !storedUserData) {
+        try {
+          const { supabaseService } = require('./services/supabaseService');
+          const { data: { session } } = await supabaseService.supabase.auth.getSession();
+          if (session?.user) {
+            console.log('[App] AsyncStorage failed but found valid Supabase session, restoring...');
+            const profile = await supabaseService.getProfile(session.user.id);
+            const restoredUserData = {
+              id: session.user.id,
+              email: session.user.email,
+              username: profile?.username || session.user.email?.split('@')[0],
+              fullName: profile?.full_name || '',
+              role: profile?.role || '',
+              experience: profile?.experience_level || '',
+              institution: profile?.company || '',
+              bio: profile?.bio || '',
+              marketFocus: profile?.market_focus || [],
+              avatarUrl: profile?.avatar_url || '',
+            };
+            setUserData(restoredUserData);
+            await AsyncStorage.setItem('user_data', JSON.stringify(restoredUserData));
+            await AsyncStorage.setItem('onboarding_completed', 'true');
+            await AsyncStorage.setItem('alerts_completed', 'true');
+            // Skip to showing main app
+            return;
+          }
+        } catch (e) {
+          console.log('[App] Could not restore from Supabase after storage failure:', e);
+        }
       }
 
       console.log('Storage values:', {
@@ -616,9 +658,46 @@ const App = () => {
         storedUserData: storedUserData ? 'exists' : 'null'
       });
 
+      // Track if we successfully restored user data in this function
+      let userDataRestored = false;
+
       // Try to load fresh profile from Supabase
       if (storedUserData) {
-        let parsedUserData = JSON.parse(storedUserData);
+        let parsedUserData;
+        try {
+          parsedUserData = JSON.parse(storedUserData);
+        } catch (parseError) {
+          console.warn('[App] Failed to parse stored user data, attempting Supabase restore');
+          // Try to restore from Supabase if stored data is corrupted
+          try {
+            const { supabaseService } = require('./services/supabaseService');
+            const { data: { session } } = await supabaseService.supabase.auth.getSession();
+            if (session?.user) {
+              const profile = await supabaseService.getProfile(session.user.id);
+              parsedUserData = {
+                id: session.user.id,
+                email: session.user.email,
+                username: profile?.username || session.user.email?.split('@')[0],
+                fullName: profile?.full_name || '',
+                role: profile?.role || '',
+                experience: profile?.experience_level || '',
+                institution: profile?.company || '',
+                bio: profile?.bio || '',
+                marketFocus: profile?.market_focus || [],
+                avatarUrl: profile?.avatar_url || '',
+              };
+              await AsyncStorage.setItem('user_data', JSON.stringify(parsedUserData));
+            } else {
+              // No valid session, show auth
+              setShowAuth(true);
+              return;
+            }
+          } catch (e) {
+            console.log('[App] Could not restore from Supabase:', e);
+            setShowAuth(true);
+            return;
+          }
+        }
 
         // If we have a user ID, fetch fresh profile from Supabase
         if (parsedUserData.id) {
@@ -648,6 +727,7 @@ const App = () => {
         }
 
         setUserData(parsedUserData);
+        userDataRestored = true;
 
         // Even if we have user data, verify onboarding is actually complete via Supabase username
         // This prevents stale AsyncStorage from bypassing onboarding for new accounts
@@ -676,6 +756,7 @@ const App = () => {
 
             setUserData(restoredUserData);
             await AsyncStorage.setItem('user_data', JSON.stringify(restoredUserData));
+            userDataRestored = true;
 
             // IMPORTANT: If profile has no username, user needs onboarding even if AsyncStorage says otherwise
             if (!profile?.username) {
@@ -710,8 +791,12 @@ const App = () => {
         }
       }
 
-      if (onboardingCompleted !== 'true') {
-        console.log('Showing auth screen');
+      // Final decision: if we restored user data in this function, we're good
+      // Only show auth if we truly don't have user data and onboarding wasn't completed
+      if (userDataRestored) {
+        console.log('User data restored, showing main app');
+      } else if (onboardingCompleted !== 'true') {
+        console.log('Showing auth screen - no user data and no onboarding');
         setShowAuth(true);
       } else if (alertsCompleted !== 'true') {
         console.log('Showing alert preferences');

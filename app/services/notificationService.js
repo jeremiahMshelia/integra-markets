@@ -352,11 +352,23 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
   notificationListener = Notifications.addNotificationReceivedListener(notification => {
     console.log('Notification received:', notification);
 
-    // Show alert for immediate feedback
-    Alert.alert(notification.request.content.title, notification.request.content.body);
+    // Show alert for immediate feedback - wrapped in try-catch to prevent crashes
+    try {
+      const title = notification?.request?.content?.title;
+      const body = notification?.request?.content?.body;
+      if (title && body) {
+        Alert.alert(title, body);
+      }
+    } catch (alertError) {
+      console.warn('Failed to show notification alert:', alertError);
+    }
 
     if (onNotificationReceived) {
-      onNotificationReceived(notification);
+      try {
+        onNotificationReceived(notification);
+      } catch (callbackError) {
+        console.error('Error in notification received callback:', callbackError);
+      }
     }
   });
 
@@ -365,7 +377,11 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
     console.log('Notification response received:', response);
 
     if (onNotificationResponse) {
-      onNotificationResponse(response);
+      try {
+        onNotificationResponse(response);
+      } catch (callbackError) {
+        console.error('Error in notification response callback:', callbackError);
+      }
     }
   });
 
