@@ -24,6 +24,15 @@ interface NewsItem {
     trade_ideas?: string[];
     event_type?: string;
     severity?: string;
+    // Groq trader insights
+    trader_insights?: {
+        success?: boolean;
+        model_used?: string;
+        trader_summary?: string;
+        key_driver?: string;
+        market_context?: string;
+        action_considerations?: string[];
+    };
 }
 
 interface AIAnalysisModalProps {
@@ -368,16 +377,31 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
     const confidence = (article.sentiment_score || 0.5).toFixed(2);
     const commodity = detectCommodity(article.title + ' ' + (article.summary || ''));
 
-    // Add market_impact to insights if available
-    const traderInsights = generateTraderInsights(sentimentProbs, keyDrivers);
-    if (article.market_impact) {
+    // Use backend trader_insights if available, otherwise generate
+    const insights = article.trader_insights;
+    const hasGroqInsights = insights?.success && insights?.trader_summary;
+    
+    // Display trader insights - use Groq if available, otherwise generate
+    const traderInsights = hasGroqInsights 
+        ? [insights!.trader_summary!]
+        : generateTraderInsights(sentimentProbs, keyDrivers);
+    if (!hasGroqInsights && article.market_impact) {
         traderInsights.unshift(article.market_impact);
     }
 
-    // Use backend trade_ideas if available, otherwise generate
-    const tradeIdeas = article.trade_ideas && article.trade_ideas.length > 0
-        ? article.trade_ideas
-        : generateTradeIdeas(sentimentProbs, commodity);
+    // Use backend trade_ideas if available (centori format: array of objects), otherwise generate
+    let tradeIdeas: string[];
+    if (article.trade_ideas && article.trade_ideas.length > 0) {
+        // Convert centori's trade_ideas format to display strings
+        tradeIdeas = article.trade_ideas.map((idea: any) => {
+            if (typeof idea === 'string') return idea;
+            return `${idea.direction || ''}: ${idea.rationale || ''} (${idea.risk_management || ''})`;
+        });
+    } else if (hasGroqInsights && insights?.action_considerations) {
+        tradeIdeas = insights.action_considerations;
+    } else {
+        tradeIdeas = generateTradeIdeas(sentimentProbs, commodity);
+    }
 
     // Display poll percentages (only show actual votes, no defaults)
     const displayBullish = pollData.bullishPercent;
@@ -505,6 +529,11 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="w-1 h-4 bg-[#4ECCA3] rounded-full" />
                                         <h4 className="text-white font-semibold text-sm">What this means for Traders</h4>
+                                        {hasGroqInsights && insights?.key_driver && (
+                                            <span className="ml-auto text-xs bg-[#4ECCA3]/20 text-[#4ECCA3] px-2 py-0.5 rounded">
+                                                {insights.key_driver}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="space-y-2">
                                         {traderInsights.map((insight, idx) => (

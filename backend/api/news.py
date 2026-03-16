@@ -13,11 +13,13 @@ logger = logging.getLogger(__name__)
 
 # Import Groq AI service for trader insights
 try:
-    from groq_ai_service import get_trader_insights
+    from groq_ai_service import get_trader_insights, analyze_news_compound, GroqAIService
     GROQ_AVAILABLE = True
 except ImportError:
     GROQ_AVAILABLE = False
     get_trader_insights = None
+    analyze_news_compound = None
+    GroqAIService = None
 
 # Import notification engine (safe — won't crash if unavailable)
 try:
@@ -109,8 +111,23 @@ async def analyze_sentiment_legacy(request: SentimentAnalysisRequest):
         # Use the smart sentiment pipeline which already returns
         # bullish/bearish/neutral + confidence and keywords
         analysis = analyze_financial_text(request.text)
+        
+        # Get the commodity from request or infer from text
+        commodity = request.commodity or "commodity"
+        
+        # Use centori's analyze_news_compound approach for structured output
+        groq_insights = None
+        if GROQ_AVAILABLE and analyze_news_compound:
+            try:
+                groq_service = GroqAIService()
+                groq_insights = await groq_service.analyze_news_compound(
+                    text=request.text,
+                    commodity=commodity
+                )
+            except Exception as e:
+                logger.warning(f"Could not generate Groq compound insights: {e}")
 
-        return {
+        response = {
             "bullish": analysis.get("bullish", 0.33),
             "bearish": analysis.get("bearish", 0.33),
             "neutral": analysis.get("neutral", 0.34),
@@ -121,6 +138,19 @@ async def analyze_sentiment_legacy(request: SentimentAnalysisRequest):
             "severity": analysis.get("severity", "low"),
             "raw": analysis,
         }
+        
+        # Add Groq compound insights if available
+        if groq_insights and isinstance(groq_insights, dict) and not groq_insights.get("error"):
+            response["trader_insights"] = {
+                "success": True,
+                "model_used": "groq/compound",
+                "trader_summary": groq_insights.get("what_it_means_for_traders", ""),
+                "key_driver": ", ".join(groq_insights.get("keywords", [])[:3]),
+                "trade_ideas": groq_insights.get("trade_ideas", []),
+                "summary": groq_insights.get("summary", ""),
+            }
+        
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analyzing sentiment: {str(e)}")
 

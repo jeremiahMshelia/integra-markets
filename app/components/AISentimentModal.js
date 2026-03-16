@@ -120,6 +120,34 @@ const AISentimentModal = ({ visible, onClose, newsItem }) => {
                   </View>
                 </View>
 
+                {/* Groq Trader Insights */}
+                {analysisData.trader_insights?.success && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>What It Means For Traders</Text>
+                    <View style={[styles.tradingIntelligenceContainer, { backgroundColor: '#1a3320' }]}>
+                      <Text style={styles.traderSummary}>
+                        {analysisData.trader_insights?.trader_summary || 'No summary available'}
+                      </Text>
+                      {analysisData.trader_insights?.key_driver && (
+                        <View style={styles.keyDriverContainer}>
+                          <Text style={styles.keyDriverLabel}>Key Driver:</Text>
+                          <Text style={styles.keyDriverValue}>
+                            {analysisData.trader_insights.key_driver}
+                          </Text>
+                        </View>
+                      )}
+                      {analysisData.trader_insights?.action_considerations?.length > 0 && (
+                        <View style={styles.actionContainer}>
+                          <Text style={styles.actionLabel}>Action Considerations:</Text>
+                          {analysisData.trader_insights.action_considerations.map((action, idx) => (
+                            <Text key={idx} style={styles.actionItem}>• {action}</Text>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>VADER Analysis</Text>
                   <View style={styles.vaderContainer}>
@@ -390,6 +418,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 5,
     lineHeight: 20,
+  },
+  traderSummary: {
+    color: '#4ECCA3',
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 15,
+  },
+  keyDriverContainer: {
+    backgroundColor: 'rgba(78, 204, 163, 0.1)',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  keyDriverLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  keyDriverValue: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionContainer: {
+    marginTop: 5,
+  },
+  actionLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  actionItem: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    marginBottom: 4,
+    lineHeight: 18,
   },
 });
 

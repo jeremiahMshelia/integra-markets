@@ -274,9 +274,7 @@ const App = () => {
         if (!summary && title) {
           summary = title;
         }
-        if (summary.length > 260) {
-          summary = summary.substring(0, 257) + '...';
-        }
+        // Don't truncate - show full summary
 
         // Source name and direct article URL
         const sourceUrl = a.url || a.source_url || '';
@@ -450,6 +448,7 @@ const App = () => {
             keywords: Array.isArray(res?.keywords) ? res.keywords : [],
             impact: res?.impact || 'LOW',
             confidence: Number(res?.confidence ?? 0.5),
+            trader_insights: res?.trader_insights || null,
           },
         };
       } catch {
