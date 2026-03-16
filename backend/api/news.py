@@ -11,6 +11,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Import Groq AI service for trader insights
+try:
+    from groq_ai_service import get_trader_insights
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    get_trader_insights = None
+
 # Import notification engine (safe — won't crash if unavailable)
 try:
     from services.notification_scheduler import notification_engine
@@ -155,6 +163,21 @@ async def comprehensive_analysis_endpoint(request: ComprehensiveAnalysisRequest)
                 sentiment_result,
                 request.commodity
             )
+            
+            # Generate enhanced trader insights using Groq Compound
+            if GROQ_AVAILABLE and get_trader_insights:
+                try:
+                    article_text = request.text[:500]  # Limit text length
+                    trader_insights = await get_trader_insights(
+                        article_title=preprocessing_result.get("summary", "")[:200] if preprocessing_result else request.text[:200],
+                        article_summary=article_text,
+                        commodity=request.commodity or "commodity",
+                        sentiment=sentiment_result.get("ensemble", {}).get("sentiment", "NEUTRAL"),
+                        sentiment_score=sentiment_result.get("ensemble", {}).get("confidence", 0.5)
+                    )
+                    result["trader_insights"] = trader_insights
+                except Exception as e:
+                    logger.warning(f"Could not generate trader insights: {e}")
         
         return {
             "status": "success",

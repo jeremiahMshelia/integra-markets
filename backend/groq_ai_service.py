@@ -99,9 +99,11 @@ class GroqAIService:
         # Model options
         self.models = {
             "llama": "llama-3.3-70b-versatile",  # 128k context
-            "gpt-oss": "openai/gpt-oss-120b"      # 120B parameter model
+            "gpt-oss": "openai/gpt-oss-120b",     # 120B parameter model with reasoning
+            "compound": "groq/compound",           # Groq Compound with web search & code execution
+            "compound-mini": "groq/compound-mini", # Lighter compound model
         }
-        self.default_model = "gpt-oss"  # Use GPT-OSS-120B by default
+        self.default_model = "llama"  # Use Llama by default (compound may need special access)
         self.search_engine = DDGS() if SEARCH_AVAILABLE else None
         
         # Define available tools
@@ -647,6 +649,82 @@ class GroqAIService:
         
         return report
 
+    async def generate_trader_insights(
+        self,
+        article_title: str,
+        article_summary: str,
+        commodity: str,
+        sentiment: str,
+        sentiment_score: float
+    ) -> Dict[str, Any]:
+        """
+        Generate trader-specific insights using Groq Compound.
+        Provides a concise, personalized summary of what this news means for traders.
+        Uses web search to get current context.
+        """
+        # Use compound-mini model for trader insights
+        model = self.models.get("compound-mini", "llama-3.3-70b-versatile")
+        
+        prompt = f"""You are a commodity trading expert. Based on this news article, provide a concise trading insight.
+
+Article Title: {article_title}
+Article Summary: {article_summary[:500]}
+Commodity: {commodity}
+Current Sentiment: {sentiment} ({sentiment_score:.0%} confidence)
+
+Provide a JSON response with:
+{{
+    "trader_summary": "A 2-3 sentence summary of what this news means for traders (e.g., 'Oil prices rally on OPEC production cuts - consider long positions with tight stops below $75'),
+    "key_driver": "The main factor driving sentiment (e.g., 'OPEC decision', 'Fed rate hike', 'weather disruption'),
+    "market_context": "Brief current market context from your knowledge",
+    "action_considerations": "1-2 specific action considerations for traders"
+}}
+
+Keep it concise, actionable, and trader-focused. No more than 1 paragraph for trader_summary."""
+
+        try:
+            result = await self._get_completion(
+                prompt,
+                mode=ResponseMode.JSON_OBJECT,
+                model=model
+            )
+            
+            # Handle both string and dict responses
+            if isinstance(result, str):
+                try:
+                    result = json.loads(result)
+                except:
+                    result = {"trader_summary": result}
+            
+            # Check if result is valid
+            if not result or not result.get("trader_summary"):
+                return {
+                    "success": False,
+                    "error": "Empty response",
+                    "trader_summary": f"{sentiment.title()} sentiment on {commodity} - {sentiment_score:.0%} confidence",
+                    "key_driver": "Market sentiment analysis",
+                    "action_considerations": "Monitor for confirmation signals"
+                }
+            
+            return {
+                "success": True,
+                "model_used": model,
+                "trader_summary": result.get("trader_summary", ""),
+                "key_driver": result.get("key_driver", ""),
+                "market_context": result.get("market_context", ""),
+                "action_considerations": result.get("action_considerations", ""),
+                "raw_response": result
+            }
+        except Exception as e:
+            logger.error(f"Error generating trader insights: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "trader_summary": f"{sentiment.title()} sentiment on {commodity} - {sentiment_score:.0%} confidence",
+                "key_driver": "Market sentiment analysis",
+                "action_considerations": "Monitor for confirmation signals"
+            }
+
 # Convenience functions for integration
 async def analyze_commodity(query: str, commodity: str = None) -> Dict[str, Any]:
     """Quick commodity analysis"""
@@ -662,3 +740,16 @@ async def generate_daily_report(commodities: List[str] = ["oil", "gold", "wheat"
     """Generate daily market report"""
     service = GroqAIService()
     return await service.generate_market_report(commodities)
+
+async def get_trader_insights(
+    article_title: str,
+    article_summary: str,
+    commodity: str,
+    sentiment: str,
+    sentiment_score: float
+) -> Dict[str, Any]:
+    """Generate trader-specific insights using Groq Compound"""
+    service = GroqAIService()
+    return await service.generate_trader_insights(
+        article_title, article_summary, commodity, sentiment, sentiment_score
+    )
