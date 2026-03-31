@@ -27,7 +27,7 @@
       "**/*"
     ],
     "ios": {
-      "bundleIdentifier": "com.centori.integra",
+      "bundleIdentifier": "com.pipscobar.integra-markets",
       "buildNumber": "56",
       "deploymentTarget": "13.0",
       "supportsTablet": true,

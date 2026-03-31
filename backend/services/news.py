@@ -120,7 +120,11 @@ class NewsService:
             "metals": ["gold", "silver", "copper", "aluminum", "steel", "mining", "platinum", "palladium"],
             "agriculture": ["wheat", "corn", "soybeans", "cotton", "coffee", "sugar", "cattle", "cocoa", "rubber"],
             "crypto": ["bitcoin", "btc", "ethereum", "eth", "solana", "sol", "cryptocurrency", "crypto", "blockchain", "ether", "btcusd", "ethusd"],
-            "forex": ["usd", "eur", "gbp", "jpy", "forex", "fx", "currency", "dollar", "euro", "pound", "yen"]
+            "forex": ["usd", "eur", "gbp", "jpy", "forex", "fx", "currency", "dollar", "euro", "pound", "yen"],
+            "macro": ["federal reserve", "fed", "interest rate", "monetary policy", "central bank",
+                      "ecb", "bank of england", "bank of japan", "pboc", "inflation", "gdp",
+                      "recession", "sanctions", "tariff", "trade war", "geopolit",
+                      "strait", "shipping lane", "yuan", "renminbi", "opec+"]
         }
         
         logger.info("NewsService initialized with enhanced caching for production")
@@ -735,7 +739,10 @@ class NewsService:
                             limit: int = 50,
                             include_sentiment: bool = True,
                             hours: Optional[int] = None,
-                            sources: Optional[List[str]] = None) -> Dict[str, Any]:
+                            sources: Optional[List[str]] = None,
+                            regions: Optional[List[str]] = None,
+                            currencies: Optional[List[str]] = None,
+                            keywords: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Get latest commodity news with enhanced caching.
         
@@ -744,11 +751,14 @@ class NewsService:
             limit: Maximum number of articles to return
             include_sentiment: Whether to include sentiment analysis
             sources: List of source URLs to filter by (from user's alert preferences)
+            regions: List of region names (e.g. 'Middle East', 'Asia Pacific')
+            currencies: List of currency codes (e.g. 'USD', 'CNY')
+            keywords: List of custom keywords (e.g. 'Fed', 'OPEC', 'sanctions')
             
         Returns:
             Dict containing news articles with metadata
         """
-        cache_key = self._generate_cache_key("latest_news", str(commodities), limit, include_sentiment, hours, str(sources))
+        cache_key = self._generate_cache_key("latest_news", str(commodities), limit, include_sentiment, hours, str(sources), str(regions), str(currencies), str(keywords))
         
         # Check cache first
         cached_result = cache_manager.get("news_latest", cache_key)
@@ -756,7 +766,7 @@ class NewsService:
             logger.debug("Cache HIT for latest news")
             return cached_result
         
-        logger.info(f"Fetching latest news for commodities: {commodities}")
+        logger.info(f"Fetching latest news for commodities: {commodities}, regions: {regions}, currencies: {currencies}, keywords: {keywords}")
         
         all_articles: List[Dict[str, Any]] = []
 
@@ -786,13 +796,55 @@ class NewsService:
 
         # --- Secondary source: NewsDataSources (robust RSS feeds) ---
         # Always fetch RSS feeds for crypto/forex since Alpha Vantage doesn't cover them well
+        # Also always fetch when user has region/currency/keyword preferences for macro coverage
         needs_crypto = commodities and any(c.upper() in ['CRYPTO', 'BITCOIN', 'ETH', 'ETHEREUM', 'SOL', 'SOLANA', 'FOREX', 'USD', 'EUR'] for c in commodities)
-        logger.info(f"Commodities: {commodities}, needs_crypto: {needs_crypto}")
+        needs_macro = bool(regions) or bool(currencies) or bool(keywords)
+        logger.info(f"Commodities: {commodities}, needs_crypto: {needs_crypto}, needs_macro: {needs_macro}")
         
-        if (not all_articles or len(all_articles) < 5 or needs_crypto) and DATA_SOURCES_AVAILABLE:
-            logger.info("Fetching RSS feeds (Alpha Vantage insufficient or crypto requested)")
+        if (not all_articles or len(all_articles) < 5 or needs_crypto or needs_macro) and DATA_SOURCES_AVAILABLE:
+            logger.info("Fetching RSS feeds (Alpha Vantage insufficient, crypto requested, or macro preferences set)")
             try:
                 async with NewsDataSources() as rss_sources:
+                    # Inject user keywords/regions as additional Google News queries
+                    if keywords:
+                        for kw in keywords[:5]:  # Limit to 5 to avoid too many requests
+                            rss_sources.commodity_queries[f"user_kw_{kw}"] = f"{kw} market economy"
+                    if regions:
+                        region_query_map = {
+                            "Middle East": "Middle East oil energy geopolitics",
+                            "Asia Pacific": "Asia Pacific trade commodity market",
+                            "Europe": "Europe economy energy market",
+                            "Africa": "Africa mining commodity trade",
+                            "North America": "US economy Fed market",
+                            "South America": "South America commodity trade",
+                            "Eastern Europe": "Eastern Europe energy trade",
+                            "Southeast Asia": "Southeast Asia commodity trade",
+                        }
+                        for region in regions:
+                            query = region_query_map.get(region, f"{region} commodity market")
+                            rss_sources.region_queries[f"user_region_{region}"] = query
+                    if currencies:
+                        currency_query_map = {
+                            "USD": "US dollar Federal Reserve monetary policy",
+                            "EUR": "euro ECB European economy",
+                            "GBP": "British pound Bank of England",
+                            "JPY": "Japanese yen Bank of Japan",
+                            "CNY": "Chinese yuan renminbi China economy",
+                            "CHF": "Swiss franc SNB",
+                            "CAD": "Canadian dollar Bank of Canada",
+                            "AUD": "Australian dollar RBA",
+                            "RUB": "Russian ruble sanctions",
+                            "INR": "Indian rupee RBI economy",
+                            "BRL": "Brazilian real economy",
+                            "SAR": "Saudi riyal OPEC oil",
+                            "Bitcoin": "Bitcoin BTC cryptocurrency",
+                            "Ethereum": "Ethereum ETH crypto",
+                            "Solana": "Solana SOL crypto",
+                        }
+                        for curr in currencies:
+                            query = currency_query_map.get(curr, f"{curr} currency forex")
+                            rss_sources.commodity_queries[f"user_curr_{curr}"] = query
+
                     # Fetch from all available sources
                     rss_articles = await rss_sources.fetch_all_sources()
                     
@@ -860,8 +912,49 @@ class NewsService:
                 except Exception as e:
                     logger.error(f"Error processing feed {source_name}: {str(e)}")
         
-        # Filter by commodity keywords if specified
-        if commodities and len(all_articles) > 0:
+        # Build combined preference match terms from regions, currencies, and keywords
+        user_match_terms: List[str] = []
+        if keywords:
+            user_match_terms.extend([kw.lower() for kw in keywords])
+        if regions:
+            region_term_map = {
+                "Middle East": ["middle east", "opec", "saudi", "iran", "iraq", "uae", "strait", "gulf"],
+                "Asia Pacific": ["asia", "china", "japan", "india", "asia pacific", "beijing", "tokyo"],
+                "Europe": ["europe", "eu", "ecb", "uk", "britain", "germany", "france"],
+                "Africa": ["africa", "nigeria", "south africa", "kenya", "mining"],
+                "North America": ["us", "usa", "united states", "fed", "federal reserve", "canada", "america"],
+                "South America": ["brazil", "argentina", "latin america", "south america"],
+                "Eastern Europe": ["russia", "ukraine", "poland", "eastern europe"],
+                "Southeast Asia": ["indonesia", "vietnam", "thailand", "southeast asia", "asean"],
+            }
+            for region in regions:
+                user_match_terms.extend(region_term_map.get(region, [region.lower()]))
+        if currencies:
+            currency_term_map = {
+                "USD": ["dollar", "usd", "fed", "federal reserve", "treasury"],
+                "EUR": ["euro", "eur", "ecb", "eurozone"],
+                "GBP": ["pound", "gbp", "sterling", "bank of england"],
+                "JPY": ["yen", "jpy", "bank of japan", "boj"],
+                "CNY": ["yuan", "renminbi", "cny", "china", "pboc"],
+                "CHF": ["swiss franc", "chf", "snb"],
+                "CAD": ["canadian dollar", "cad", "bank of canada"],
+                "AUD": ["australian dollar", "aud", "rba"],
+                "RUB": ["ruble", "rub", "russia"],
+                "INR": ["rupee", "inr", "rbi", "india"],
+                "BRL": ["real", "brl", "brazil"],
+                "SAR": ["riyal", "sar", "saudi"],
+                "Bitcoin": ["bitcoin", "btc"],
+                "Ethereum": ["ethereum", "eth"],
+                "Solana": ["solana", "sol"],
+            }
+            for curr in currencies:
+                user_match_terms.extend(currency_term_map.get(curr, [curr.lower()]))
+        
+        # Deduplicate
+        user_match_terms = list(set(user_match_terms))
+
+        # Filter by commodity keywords AND user preference terms
+        if (commodities or user_match_terms) and len(all_articles) > 0:
             filtered_articles = []
 
             def _normalize_commodity(name: str) -> Optional[str]:
@@ -882,31 +975,43 @@ class NewsService:
                     return "forex"
                 return None
 
-            normalized_map: Dict[str, Optional[str]] = {
-                commodity: _normalize_commodity(commodity) for commodity in commodities
-            }
+            normalized_map: Dict[str, Optional[str]] = {}
+            if commodities:
+                normalized_map = {
+                    commodity: _normalize_commodity(commodity) for commodity in commodities
+                }
 
             for article in all_articles:
                 article_text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
+                matched = False
                 
-                for commodity in commodities:
-                    category_key = normalized_map.get(commodity)
-                    if not category_key:
-                        continue
-                    keywords = self.commodity_keywords.get(category_key, [])
-                    if any(keyword.lower() in article_text for keyword in keywords):
-                        article["commodity"] = commodity
+                # Check commodity keywords
+                if commodities:
+                    for commodity in commodities:
+                        category_key = normalized_map.get(commodity)
+                        if not category_key:
+                            continue
+                        kw_list = self.commodity_keywords.get(category_key, [])
+                        if any(keyword.lower() in article_text for keyword in kw_list):
+                            article["commodity"] = commodity
+                            filtered_articles.append(article)
+                            matched = True
+                            break
+                
+                # Check user preference terms (regions, currencies, keywords)
+                if not matched and user_match_terms:
+                    if any(term in article_text for term in user_match_terms):
+                        article["commodity"] = "MACRO"
                         filtered_articles.append(article)
-                        break
 
             if filtered_articles:
-                # Put commodity-matched articles first but keep all others as well
+                # Put preference-matched articles first but keep all others as well
                 unmatched = [a for a in all_articles if a not in filtered_articles]
                 all_articles = filtered_articles + unmatched
-                logger.info(f"Filter matched: {len(filtered_articles)} articles, keeping {len(unmatched)} unmatched")
+                logger.info(f"Filter matched: {len(filtered_articles)} articles (commodity + preferences), keeping {len(unmatched)} unmatched")
             else:
                 # No articles matched - keep all (don't return empty)
-                logger.warning(f"No articles matched filter {commodities}, returning all {len(all_articles)}")
+                logger.warning(f"No articles matched filter {commodities}/{keywords}/{regions}/{currencies}, returning all {len(all_articles)}")
 
 
         def _parse_pub_dt(published_val: Any) -> Optional[datetime]:
@@ -1206,7 +1311,10 @@ async def get_latest_commodity_news(
     commodities: Optional[List[str]] = None,
     limit: int = 50,
     hours: Optional[int] = None,
-    sources: Optional[List[str]] = None,  # Filter by user's selected sources
+    sources: Optional[List[str]] = None,
+    regions: Optional[List[str]] = None,
+    currencies: Optional[List[str]] = None,
+    keywords: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Get latest commodity news with enhanced caching"""
     return await news_service.get_latest_news(
@@ -1215,6 +1323,9 @@ async def get_latest_commodity_news(
         include_sentiment=True,
         hours=hours,
         sources=sources,
+        regions=regions,
+        currencies=currencies,
+        keywords=keywords,
     )
 
 async def analyze_news_article(url: str) -> Dict[str, Any]:

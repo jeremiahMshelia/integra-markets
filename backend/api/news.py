@@ -71,6 +71,9 @@ class LatestNewsRequest(BaseModel):
     commodities: Optional[List[str]] = None
     hours: int = 6
     sources: Optional[List[str]] = None  # Filter by user's selected sources
+    regions: Optional[List[str]] = None  # User's region preferences
+    currencies: Optional[List[str]] = None  # User's currency preferences
+    keywords: Optional[List[str]] = None  # User's custom keywords
 
 # --- Enhanced Sentiment Analysis Endpoints ---
 @api_router.post("/analyze-sentiment", response_model=Dict[str, Any])
@@ -326,7 +329,10 @@ async def get_latest_news(request: LatestNewsRequest, background_tasks: Backgrou
             commodities=request.commodities,
             limit=50,
             hours=request.hours,
-            sources=request.sources,  # Filter by user's selected sources
+            sources=request.sources,
+            regions=request.regions,
+            currencies=request.currencies,
+            keywords=request.keywords,
         )
         # INSTANT NOTIFICATIONS: fire push notifications in background
         articles = result.get("articles", []) if isinstance(result, dict) else []

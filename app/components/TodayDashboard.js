@@ -316,7 +316,7 @@ const TodayDashboard = ({ agentActive }) => {
                 <Text style={styles.summarText}>{sentimentAnalysis.summary}</Text>
               </View>
               <View style={styles.analysisSection}>
-                <Text style={styles.sectionTitle}>FinBERT Sentiment</Text>
+                <Text style={styles.sectionTitle}>Sentiment Analysis</Text>
                 <View style={styles.barContainer}>
                   <View style={styles.labelContainer}>
                     <Text style={styles.barLabel}>Bullish</Text>

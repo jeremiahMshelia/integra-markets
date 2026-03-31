@@ -147,11 +147,47 @@ const App = () => {
   // Load alert preferences
   const loadAlertPreferences = async () => {
     try {
+      // Try AsyncStorage first (fast)
       const prefs = await AsyncStorage.getItem('alert_preferences');
       if (prefs) {
         const parsed = JSON.parse(prefs);
-        setAlertPreferences(parsed);
-        return parsed;
+        // Normalize field names (Supabase uses snake_case, app uses camelCase)
+        const normalized = {
+          ...parsed,
+          commodities: parsed.commodities || [],
+          regions: parsed.regions || [],
+          currencies: parsed.currencies || [],
+          keywords: parsed.keywords || [],
+          websiteURLs: parsed.websiteURLs || parsed.website_urls || parsed.websiteUrls || [],
+          alertFrequency: parsed.alertFrequency || parsed.alert_frequency || 'Daily',
+          alertThreshold: parsed.alertThreshold || parsed.alert_threshold || 'Medium',
+        };
+        setAlertPreferences(normalized);
+        return normalized;
+      }
+      
+      // Fallback: fetch from Supabase if AsyncStorage is empty
+      try {
+        const { supabaseService } = require('./services/supabaseService');
+        const supaPrefs = await supabaseService.getAlertPreferences();
+        if (supaPrefs) {
+          const normalized = {
+            commodities: supaPrefs.commodities || [],
+            regions: supaPrefs.regions || [],
+            currencies: supaPrefs.currencies || [],
+            keywords: supaPrefs.keywords || [],
+            websiteURLs: supaPrefs.website_urls || [],
+            alertFrequency: supaPrefs.alert_frequency || 'Daily',
+            alertThreshold: supaPrefs.alert_threshold || 'Medium',
+          };
+          // Cache locally for next time
+          await AsyncStorage.setItem('alert_preferences', JSON.stringify(normalized));
+          setAlertPreferences(normalized);
+          console.log('[App] Loaded alert preferences from Supabase:', normalized);
+          return normalized;
+        }
+      } catch (e) {
+        console.log('[App] Could not load alert prefs from Supabase:', e);
       }
     } catch (error) {
       console.error('Error loading alert preferences:', error);
@@ -258,7 +294,13 @@ const App = () => {
       const userSources = prefs?.websiteURLs || prefs?.website_urls || [];
       console.log('[News] Filtering by user sources:', userSources);
       
-      const data = await dashboardApi.getTodayDashboard(commodities, userSources);
+      // Get user's regions, currencies, and keywords for preference-based filtering
+      const userRegions = prefs?.regions || [];
+      const userCurrencies = prefs?.currencies || [];
+      const userKeywords = prefs?.keywords || [];
+      console.log('[News] User preferences - regions:', userRegions, 'currencies:', userCurrencies, 'keywords:', userKeywords);
+      
+      const data = await dashboardApi.getTodayDashboard(commodities, userSources, userRegions, userCurrencies, userKeywords);
       const articles = Array.isArray(data?.news) ? data.news : [];
 
       // Map backend articles into the shape NewsCard expects, then hard-cap to 20
@@ -493,15 +535,18 @@ const App = () => {
     // Wrap in try-catch to prevent initialization crashes
     try {
       checkAppState();
-      initializeNotifications();
     } catch (error) {
       console.error('Error during app initialization:', error);
-      // Continue anyway - don't let initialization errors crash the app
     }
 
-    // Database setup removed - these were causing crashes as imports were commented out
-    // setupDatabase.createTables();
-    // testConnection();
+    // Defer notifications to after first render (non-blocking)
+    setTimeout(() => {
+      try {
+        initializeNotifications();
+      } catch (error) {
+        console.error('Error initializing notifications:', error);
+      }
+    }, 3000);
   }, []);
 
   // Re-register push token when user data becomes available (user logged in)
@@ -673,86 +718,56 @@ const App = () => {
       // Track if we successfully restored user data in this function
       let userDataRestored = false;
 
-      // Try to load fresh profile from Supabase
+      // 1. Try to load user data from storage
       if (storedUserData) {
-        let parsedUserData;
         try {
-          parsedUserData = JSON.parse(storedUserData);
+          const parsedUserData = JSON.parse(storedUserData);
+          if (parsedUserData && parsedUserData.id) {
+            setUserData(parsedUserData);
+            userDataRestored = true;
+            console.log('[App] Restored user data from AsyncStorage');
+
+            // Refresh profile from Supabase in background (non-blocking)
+            setTimeout(async () => {
+              try {
+                const { supabaseService } = require('./services/supabaseService');
+                const profile = await supabaseService.getProfile(parsedUserData.id);
+                if (profile) {
+                  const refreshedData = {
+                    ...parsedUserData,
+                    username: profile.username || parsedUserData.username,
+                    fullName: profile.full_name || parsedUserData.fullName,
+                    role: profile.role || '',
+                    experience: profile.experience_level || '',
+                    institution: profile.company || '',
+                    bio: profile.bio || '',
+                    marketFocus: profile.market_focus || [],
+                    avatarUrl: profile.avatar_url || '',
+                    linkedin: profile.linkedin || '',
+                    github: profile.github || '',
+                  };
+                  setUserData(refreshedData);
+                  AsyncStorage.setItem('user_data', JSON.stringify(refreshedData));
+                }
+              } catch (e) {
+                console.log('[App] Minor error refreshing profile:', e);
+              }
+            }, 2000); // Defer by 2 seconds
+          }
         } catch (parseError) {
-          console.warn('[App] Failed to parse stored user data, attempting Supabase restore');
-          // Try to restore from Supabase if stored data is corrupted
-          try {
-            const { supabaseService } = require('./services/supabaseService');
-            const { data: { session } } = await supabaseService.supabase.auth.getSession();
-            if (session?.user) {
-              const profile = await supabaseService.getProfile(session.user.id);
-              parsedUserData = {
-                id: session.user.id,
-                email: session.user.email,
-                username: profile?.username || session.user.email?.split('@')[0],
-                fullName: profile?.full_name || '',
-                role: profile?.role || '',
-                experience: profile?.experience_level || '',
-                institution: profile?.company || '',
-                bio: profile?.bio || '',
-                marketFocus: profile?.market_focus || [],
-                avatarUrl: profile?.avatar_url || '',
-              };
-              await AsyncStorage.setItem('user_data', JSON.stringify(parsedUserData));
-            } else {
-              // No valid session, show auth
-              setShowAuth(true);
-              return;
-            }
-          } catch (e) {
-            console.log('[App] Could not restore from Supabase:', e);
-            setShowAuth(true);
-            return;
-          }
+          console.warn('[App] Failed to parse stored user data');
         }
+      }
 
-        // If we have a user ID, fetch fresh profile from Supabase
-        if (parsedUserData.id) {
-          try {
-            const { supabaseService } = require('./services/supabaseService');
-            const profile = await supabaseService.getProfile(parsedUserData.id);
-
-            if (profile) {
-              console.log('[App] Loaded profile from Supabase in checkAppState');
-              parsedUserData = {
-                ...parsedUserData,
-                username: profile.username || parsedUserData.username,
-                fullName: profile.full_name || parsedUserData.fullName,
-                role: profile.role || '',
-                experience: profile.experience_level || '',
-                institution: profile.company || '',
-                bio: profile.bio || '',
-                marketFocus: profile.market_focus || [],
-                avatarUrl: profile.avatar_url || '',
-                linkedin: profile.linkedin || '',
-                github: profile.github || '',
-              };
-            }
-          } catch (e) {
-            console.log('[App] Could not load profile from Supabase:', e);
-          }
-        }
-
-        setUserData(parsedUserData);
-        userDataRestored = true;
-
-        // Even if we have user data, verify onboarding is actually complete via Supabase username
-        // This prevents stale AsyncStorage from bypassing onboarding for new accounts
-      } else if (onboardingCompleted === 'true') {
-        // No stored user data but onboarding was completed - check Supabase session
+      // 2. If storage failed or was empty, check Supabase Session as the ultimate truth
+      if (!userDataRestored) {
         try {
           const { supabaseService } = require('./services/supabaseService');
           const { data: { session } } = await supabaseService.supabase.auth.getSession();
 
           if (session?.user) {
-            console.log('[App] Found active Supabase session, loading profile');
+            console.log('[App] Found active Supabase session, restoring profile...');
             const profile = await supabaseService.getProfile(session.user.id);
-
             const restoredUserData = {
               id: session.user.id,
               email: session.user.email,
@@ -768,56 +783,44 @@ const App = () => {
 
             setUserData(restoredUserData);
             await AsyncStorage.setItem('user_data', JSON.stringify(restoredUserData));
-            userDataRestored = true;
-
-            // IMPORTANT: If profile has no username, user needs onboarding even if AsyncStorage says otherwise
-            if (!profile?.username) {
-              console.log('[App] Profile has no username, needs onboarding');
-              setShowOnboarding(true);
-              return;
+            
+            // Mark onboarding as complete if they have a username (implies they finished profile)
+            if (profile?.username) {
+              await AsyncStorage.setItem('onboarding_completed', 'true');
+              await AsyncStorage.setItem('alerts_completed', 'true');
+              onboardingCompleted = 'true';
+              alertsCompleted = 'true';
             }
+            
+            userDataRestored = true;
           }
         } catch (e) {
           console.log('[App] Could not restore from Supabase session:', e);
         }
       }
 
-      // Check via Supabase if onboarding is really complete before skipping
-      if (onboardingCompleted === 'true') {
-        try {
-          const { supabaseService } = require('./services/supabaseService');
-          const { data: { session } } = await supabaseService.supabase.auth.getSession();
-
-          if (session?.user) {
-            const profile = await supabaseService.getProfile(session.user.id);
-
-            // If profile doesn't have username, need onboarding regardless of AsyncStorage
-            if (!profile?.username) {
-              console.log('[App] Username not set in Supabase, showing onboarding');
-              setShowAuth(true);
-              return;
-            }
-          }
-        } catch (e) {
-          console.log('[App] Could not verify onboarding via Supabase:', e);
-        }
-      }
-
-      // Final decision: if we restored user data in this function, we're good
-      // Only show auth if we truly don't have user data and onboarding wasn't completed
+      // Final decision logic
       if (userDataRestored) {
-        console.log('User data restored, showing main app');
-      } else if (onboardingCompleted !== 'true') {
-        console.log('Showing auth screen - no user data and no onboarding');
-        setShowAuth(true);
-      } else if (alertsCompleted !== 'true') {
-        console.log('Showing alert preferences');
-        setShowAlertPreferences(true);
+        console.log('User session active, checking if onboarding/alerts needed');
+        if (onboardingCompleted !== 'true') {
+          // If we have a session but no local onboarding flag, double check the profile
+          const { supabaseService } = require('./services/supabaseService');
+          const profile = await supabaseService.getProfile();
+          if (!profile?.username) {
+            setShowOnboarding(true);
+          } else if (alertsCompleted !== 'true') {
+            setShowAlertPreferences(true);
+          }
+        } else if (alertsCompleted !== 'true') {
+          setShowAlertPreferences(true);
+        }
       } else {
-        console.log('All onboarding complete, showing main app');
+        // No session and no stored data - user must log in
+        console.log('Showing auth screen - no session found');
+        setShowAuth(true);
       }
     } catch (error) {
-      console.error('Error checking app state:', error);
+      console.error('Error in checkAppState:', error);
     }
   };
 

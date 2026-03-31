@@ -31,7 +31,7 @@ export const dashboardApi = {
    * Backend exposes /api/sentiment/market, /api/sentiment/movers, /api/news/analysis, /api/weather/alerts.
    * We merge them client-side for now.
    */
-  async getTodayDashboard(trackedCommodities = [], userSources = []) {
+  async getTodayDashboard(trackedCommodities = [], userSources = [], regions = [], currencies = [], keywords = []) {
     try {
       const [marketSentiment, topMovers, _unused, weatherAlerts] = await Promise.all([
         request('/sentiment/market'),
@@ -49,7 +49,10 @@ export const dashboardApi = {
           body: JSON.stringify({ 
             commodities: trackedCommodities, 
             hours,
-            sources: userSources,  // Filter by user's selected sources
+            sources: userSources,
+            regions: regions.length > 0 ? regions : undefined,
+            currencies: currencies.length > 0 ? currencies : undefined,
+            keywords: keywords.length > 0 ? keywords : undefined,
           }),
         });
       } catch {

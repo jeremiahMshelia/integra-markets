@@ -93,15 +93,15 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
         },
         {
             title: 'Sentiment Analysis',
-            content: 'Our FinBERT model analyzes the text to determine bullish, bearish, or neutral sentiment with confidence scores. Higher percentages indicate stronger conviction.'
+            content: 'Our sentiment engine analyzes the text to determine bullish, bearish, or neutral sentiment with confidence scores. Higher percentages indicate stronger conviction.'
         },
         {
             title: 'Key Sentiment Drivers',
             content: 'These are the most significant keywords and factors identified by our NLP engine that are driving the sentiment for this article.'
         },
         {
-            title: 'Market Impact & Trade Ideas',
-            content: 'We assess the potential price impact based on historical patterns and provide actionable trade ideas for your consideration.'
+            title: 'Market Impact',
+            content: 'We assess the potential price impact based on historical patterns.'
         },
         {
             title: 'Community Sentiment Poll',
@@ -787,9 +787,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     const formatAnalysisForCopy = () => {
         const sentiment = `Bullish: ${analysisData.finBertSentiment.bullish}%, Bearish: ${analysisData.finBertSentiment.bearish}%, Neutral: ${analysisData.finBertSentiment.neutral}%`;
         const drivers = analysisData.keyDrivers.map(d => `${d.text} (${d.score})`).join(', ');
-        const insights = analysisData.traderInsights.map((insight, i) => `${i + 1}. ${insight}`).join('\n');
-
-        return `INTEGRA AI ANALYSIS\n\nArticle: ${newsData.title}\nSource: ${newsData.source}\n\nSUMMARY:\n${analysisData.summary}\n\nSENTIMENT:\n${sentiment}\n\nKEY DRIVERS:\n${drivers}\n\nMARKET IMPACT:\n${analysisData.marketImpact.level} (Confidence: ${analysisData.marketImpact.confidence})\n\nTRADER INSIGHTS:\n${insights}`;
+        return `INTEGRA AI ANALYSIS\n\nArticle: ${newsData.title}\nSource: ${newsData.source}\n\nSUMMARY:\n${analysisData.summary}\n\nSENTIMENT:\n${sentiment}\n\nKEY DRIVERS:\n${drivers}\n\nMARKET IMPACT:\n${analysisData.marketImpact.level} (Confidence: ${analysisData.marketImpact.confidence})`;
     };
 
     const analysisData = analysis || {
@@ -970,36 +968,6 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                     </Text>
                                 </View>
                             </View>
-
-                            {/* What this means for Traders */}
-                            <View style={styles.section}>
-                                <View style={styles.sectionHeader}>
-                                    <View style={[styles.sectionIndicator, { backgroundColor: '#4ECCA3' }]} />
-                                    <Text style={styles.sectionTitle}>What this means for Traders</Text>
-                                </View>
-                                {analysisData.traderInsights.map((insight, index) => (
-                                    <View key={index} style={styles.insightRow}>
-                                        <Text style={styles.bulletPoint}>•</Text>
-                                        <Text style={styles.insightText}>{insight}</Text>
-                                    </View>
-                                ))}
-                            </View>
-
-                            {/* Trade Ideas - NEW SECTION */}
-                            {analysisData.tradeIdeas.length > 0 && (
-                                <View style={[styles.section, { marginBottom: 20 }]}>
-                                    <View style={styles.sectionHeader}>
-                                        <View style={[styles.sectionIndicator, { backgroundColor: '#4ECCA3' }]} />
-                                        <Text style={styles.sectionTitle}>Trade Ideas</Text>
-                                    </View>
-                                    {analysisData.tradeIdeas.map((idea, index) => (
-                                        <View key={index} style={styles.insightRow}>
-                                            <Text style={styles.bulletPoint}>•</Text>
-                                            <Text style={styles.insightText}>{idea}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
 
                             {/* Community Sentiment Poll */}
                             <View style={styles.pollSection}>

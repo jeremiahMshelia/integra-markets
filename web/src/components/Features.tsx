@@ -12,7 +12,7 @@ const features = [
     {
         icon: TrendingUp,
         title: 'Sentiment Analysis',
-        description: 'VADER and FinBERT models analyze headlines with confidence scores.',
+        description: 'Specialized sentiment engines analyze headlines with confidence scores.',
         color: 'text-[#4ECCA3]'
     },
     {

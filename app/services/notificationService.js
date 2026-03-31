@@ -352,17 +352,6 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
   notificationListener = Notifications.addNotificationReceivedListener(notification => {
     console.log('Notification received:', notification);
 
-    // Show alert for immediate feedback - wrapped in try-catch to prevent crashes
-    try {
-      const title = notification?.request?.content?.title;
-      const body = notification?.request?.content?.body;
-      if (title && body) {
-        Alert.alert(title, body);
-      }
-    } catch (alertError) {
-      console.warn('Failed to show notification alert:', alertError);
-    }
-
     if (onNotificationReceived) {
       try {
         onNotificationReceived(notification);

@@ -59,7 +59,7 @@ class NewsDataSources:
             'Accept-Language': 'en-US,en;q=0.5',
         }
 
-        # ── Direct RSS feeds (expanded for Crypto & Macro) ──────────
+        # ── Direct RSS feeds (expanded for Crypto, Macro & Geopolitics) ──
         self.direct_feeds = {
             "oilprice": {
                 "url": "https://oilprice.com/rss/main",
@@ -90,7 +90,17 @@ class NewsDataSources:
                 "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
                 "source": "CNBC",
                 "category": "economy",
-            }
+            },
+            "cnbc_world": {
+                "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362",
+                "source": "CNBC World",
+                "category": "geopolitics",
+            },
+            "reuters_markets": {
+                "url": "https://news.google.com/rss/search?q=site:reuters.com+markets+when:2d&hl=en-US&gl=US&ceid=US:en",
+                "source": "Reuters",
+                "category": "markets",
+            },
         }
 
         # ── Google News targeted queries by commodity ────────────────
@@ -110,6 +120,10 @@ class NewsDataSources:
             "tin_zinc": "tin zinc metal commodity price",
             # Agriculture
             "grains": "wheat corn soybeans commodity futures",
+            # Macro / Geopolitics (always-on baseline)
+            "fed_central_banks": "Federal Reserve interest rate monetary policy",
+            "geopolitics_energy": "geopolitics oil sanctions strait shipping",
+            "global_macro": "global economy trade war tariffs GDP",
         }
 
         # ── Google News targeted queries by region ───────────────────
@@ -131,6 +145,13 @@ class NewsDataSources:
             'wheat', 'corn', 'soybeans', 'cotton', 'coffee', 'sugar',
             'commodity', 'commodities', 'futures',
             'dollar', 'euro', 'currency', 'forex',
+            # Macro / Geopolitics / Central Banks
+            'federal reserve', 'fed ', 'interest rate', 'monetary policy',
+            'central bank', 'ecb', 'bank of england', 'bank of japan',
+            'sanctions', 'tariff', 'trade war', 'geopolit',
+            'strait', 'shipping', 'supply chain',
+            'iran', 'saudi', 'opec+', 'yuan', 'renminbi',
+            'gdp', 'inflation', 'recession', 'stimulus',
         ]
 
     async def __aenter__(self):

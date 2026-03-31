@@ -1,10 +1,6 @@
-import axios from 'axios';
 import Constants from 'expo-constants';
 
-// Groq API configuration
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-// Use environment variable for API key
-const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || Constants.expoConfig?.extra?.groqApiKey || '';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8000';
 
 // System prompt optimized for commodities trading analysis
 const COMMODITIES_SYSTEM_PROMPT = `You are an AI assistant specialized in commodities markets analysis. You help traders understand market dynamics, price movements, and news impacts on commodities like crude oil, natural gas, gold, and others.
@@ -26,9 +22,7 @@ Important guidelines:
 
 class GroqService {
     constructor() {
-        this.apiKey = GROQ_API_KEY;
-        // Updated to use currently supported model
-        this.model = 'llama3-70b-8192'; // Llama 3 70B with 8k context
+        this.model = 'llama3-70b-8192';
     }
 
     async sendMessage(messages, newsContext = null, onStreamUpdate = null) {
@@ -52,24 +46,22 @@ class GroqService {
             // Add user messages
             formattedMessages.push(...messages);
 
-            const response = await axios.post(
-                GROQ_API_URL,
-                {
-                    model: this.model,
+            // Call backend proxy instead of Groq directly
+            const response = await fetch(`${API_BASE_URL}/api/ai/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     messages: formattedMessages,
-                    temperature: 0.7,
-                    max_tokens: 1000,
-                    stream: false
-                },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${this.apiKey}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
+                    commodity: newsContext?.commodity || null
+                })
+            });
 
-            const rawContent = response.data.choices[0].message.content;
+            if (!response.ok) {
+                throw new Error(`API error ${response.status}`);
+            }
+
+            const data = await response.json();
+            const rawContent = data.response || data.data?.response || "I'm sorry, I couldn't process that request.";
             const cleanedContent = this.cleanResponse(rawContent);
 
             // If streaming callback provided, simulate typewriter effect
@@ -94,14 +86,6 @@ class GroqService {
                 return {
                     success: false,
                     error: 'Rate limit reached. Please try again in a moment.'
-                };
-            }
-
-            // Handle missing API key
-            if (!this.apiKey) {
-                return {
-                    success: false,
-                    error: 'API key not configured. Please add EXPO_PUBLIC_GROQ_API_KEY to your .env file.'
                 };
             }
 

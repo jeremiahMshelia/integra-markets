@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import logging
@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 from pydantic import BaseModel
 from typing import Optional
+import time
+import asyncio
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +102,63 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting middleware
+class RateLimiter:
+    def __init__(self):
+        self.requests = defaultdict(list)  # {key: [timestamps]}
+        self.lock = asyncio.Lock()
+    
+    async def is_allowed(self, key: str, max_requests: int, window_seconds: int) -> bool:
+        """Check if request is allowed under rate limit"""
+        async with self.lock:
+            now = time.time()
+            # Remove old requests outside window
+            self.requests[key] = [t for t in self.requests[key] if now - t < window_seconds]
+            
+            if len(self.requests[key]) >= max_requests:
+                return False
+            
+            self.requests[key].append(now)
+            return True
+    
+    async def get_remaining(self, key: str, max_requests: int, window_seconds: int) -> int:
+        """Get remaining requests allowed"""
+        async with self.lock:
+            now = time.time()
+            self.requests[key] = [t for t in self.requests[key] if now - t < window_seconds]
+            return max(0, max_requests - len(self.requests[key]))
+
+rate_limiter = RateLimiter()
+
+# Rate limit decorator
+def rate_limit(max_requests: int = 60, window_seconds: int = 60):
+    """Rate limiting decorator for endpoints"""
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            # Get request from kwargs or args
+            request = None
+            for arg in args:
+                if hasattr(arg, 'client'):
+                    request = arg
+                    break
+            
+            if request:
+                # Get client IP or user ID
+                client_ip = request.client.host if request.client else "unknown"
+                user_id = request.headers.get("X-User-ID", client_ip)
+                key = f"{user_id}:{client_ip}"
+                
+                if not await rate_limiter.is_allowed(key, max_requests, window_seconds):
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"Rate limit exceeded. Try again in {window_seconds} seconds.",
+                        headers={"Retry-After": str(window_seconds)}
+                    )
+            
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 # Get Supabase URL and Key from environment variables
 supabase_url: str = os.getenv("SUPABASE_URL")
@@ -254,6 +314,63 @@ def analyze_sentiment(request: SentimentRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+# Chat endpoint for mobile app
+class ChatRequest(BaseModel):
+    messages: list
+    commodity: Optional[str] = None
+
+@app.post('/api/ai/chat')
+async def ai_chat(request: Request, chat_request: ChatRequest):
+    """Chat with AI using Groq - 10 requests per minute"""
+    # Rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    key = f"chat:{client_ip}"
+    if not await rate_limiter.is_allowed(key, 10, 60):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Try again in 60 seconds.",
+            headers={"Retry-After": "60"}
+        )
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        return {"response": "AI chat is not available. Please configure GROQ_API_KEY.", "tool_results": []}
+    
+    try:
+        import httpx
+        
+        # Prepare messages with system prompt
+        system_prompt = "You are an AI assistant specialized in commodities markets analysis. You help traders understand market dynamics, price movements, and news impacts. Provide educational insights, not financial advice."
+        
+        if chat_request.commodity:
+            system_prompt += f" Current context: {chat_request.commodity} commodity."
+        
+        messages = [{"role": "system", "content": system_prompt}] + chat_request.messages
+        
+        # Call Groq API
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {groq_api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 1000
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            return {
+                "response": data["choices"][0]["message"]["content"],
+                "tool_results": []
+            }
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        return {"response": f"I'm currently unavailable. Error: {str(e)}", "tool_results": []}
 
 if __name__ == "__main__":
     import uvicorn

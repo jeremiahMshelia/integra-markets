@@ -70,12 +70,12 @@ const IntegraLoadingPage = ({ onLoadingComplete }) => {
                     // Call onLoadingComplete when progress reaches 100%
                     setTimeout(() => {
                         onLoadingComplete?.();
-                    }, 500); // Small delay for smooth transition
+                    }, 300); // Small delay for smooth transition
                     return 100;
                 }
-                return prev + 1;
+                return prev + 2;
             });
-        }, 50);
+        }, 30);
 
         return () => clearInterval(timer);
     }, [onLoadingComplete]);

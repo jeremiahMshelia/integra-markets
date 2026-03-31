@@ -87,7 +87,7 @@ const AISentimentModal = ({ visible, onClose, newsItem }) => {
             {loading && (
               <View style={styles.loadingContainer}>
                 <MaterialIcons name="auto-awesome" size={48} color={colors.accentData} />
-                <Text style={styles.loadingText}>Processing with FinBERT & VADER...</Text>
+                <Text style={styles.loadingText}>Processing with our analysis engine...</Text>
               </View>
             )}
 
@@ -149,7 +149,7 @@ const AISentimentModal = ({ visible, onClose, newsItem }) => {
                 )}
 
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>VADER Analysis</Text>
+                  <Text style={styles.sectionTitle}>Detailed Sentiment</Text>
                   <View style={styles.vaderContainer}>
                     <Text style={styles.vaderScore}>Compound Score: {vaderData?.compound?.toFixed(3) || 'N/A'}</Text>
                     <Text style={styles.vaderBreakdown}>

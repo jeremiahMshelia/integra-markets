@@ -211,7 +211,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
         },
         {
             title: 'Sentiment Analysis',
-            content: 'Our FinBERT model analyzes the text to determine bullish, bearish, or neutral sentiment with confidence scores. Higher percentages indicate stronger conviction.'
+            content: 'Our sentiment engine analyzes the text to determine bullish, bearish, or neutral sentiment with confidence scores. Higher percentages indicate stronger conviction.'
         },
         {
             title: 'Key Sentiment Drivers',
@@ -262,8 +262,44 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
     useEffect(() => {
         if (isOpen && article) {
             fetchPollData();
+            fetchSentimentAnalysis();
         }
     }, [isOpen, article?.title]);
+
+    // Fetch sentiment analysis from backend (includes Groq trader insights)
+    const fetchSentimentAnalysis = async () => {
+        if (!article?.title) return;
+        
+        const text = `${article.title} ${article.summary || ''}`.slice(0, 2000);
+        
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://integra-markets-9zz1.onrender.com';
+            const response = await fetch(`${apiUrl}/api/sentiment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    text, 
+                    commodity: article.commodity || null 
+                })
+            });
+            const data = await response.json();
+            
+            if (data.trader_insights) {
+                // Update article with trader_insights from API
+                setArticleWithInsights(data.trader_insights);
+            }
+        } catch (error) {
+            console.error('Failed to fetch sentiment analysis:', error);
+        }
+    };
+
+    // State for trader insights from API
+    const [apiTraderInsights, setApiTraderInsights] = useState<any>(null);
+
+    // Update local state with insights
+    const setArticleWithInsights = (insights: any) => {
+        setApiTraderInsights(insights);
+    };
 
     const fetchPollData = async () => {
         if (!article?.title) return;
@@ -377,28 +413,28 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
     const confidence = (article.sentiment_score || 0.5).toFixed(2);
     const commodity = detectCommodity(article.title + ' ' + (article.summary || ''));
 
-    // Use backend trader_insights if available, otherwise generate
-    const insights = article.trader_insights;
-    const hasGroqInsights = insights?.success && insights?.trader_summary;
+    // Use API trader_insights if fetched, otherwise use article's trader_insights
+    const combinedInsights = apiTraderInsights || article.trader_insights;
+    const hasGroqInsights = combinedInsights?.success && combinedInsights?.trader_summary;
     
     // Display trader insights - use Groq if available, otherwise generate
-    const traderInsights = hasGroqInsights 
-        ? [insights!.trader_summary!]
+    const traderInsightsList = hasGroqInsights 
+        ? [combinedInsights!.trader_summary!]
         : generateTraderInsights(sentimentProbs, keyDrivers);
     if (!hasGroqInsights && article.market_impact) {
-        traderInsights.unshift(article.market_impact);
+        traderInsightsList.unshift(article.market_impact);
     }
 
     // Use backend trade_ideas if available (centori format: array of objects), otherwise generate
     let tradeIdeas: string[];
-    if (article.trade_ideas && article.trade_ideas.length > 0) {
+    if (combinedInsights?.trade_ideas && combinedInsights.trade_ideas.length > 0) {
         // Convert centori's trade_ideas format to display strings
-        tradeIdeas = article.trade_ideas.map((idea: any) => {
+        tradeIdeas = combinedInsights.trade_ideas.map((idea: any) => {
             if (typeof idea === 'string') return idea;
             return `${idea.direction || ''}: ${idea.rationale || ''} (${idea.risk_management || ''})`;
         });
-    } else if (hasGroqInsights && insights?.action_considerations) {
-        tradeIdeas = insights.action_considerations;
+    } else if (hasGroqInsights && combinedInsights?.action_considerations) {
+        tradeIdeas = combinedInsights.action_considerations;
     } else {
         tradeIdeas = generateTradeIdeas(sentimentProbs, commodity);
     }
@@ -524,43 +560,6 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                     </div>
                                 </div>
 
-                                {/* What this means for Traders */}
-                                <div>
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-1 h-4 bg-[#4ECCA3] rounded-full" />
-                                        <h4 className="text-white font-semibold text-sm">What this means for Traders</h4>
-                                        {hasGroqInsights && insights?.key_driver && (
-                                            <span className="ml-auto text-xs bg-[#4ECCA3]/20 text-[#4ECCA3] px-2 py-0.5 rounded">
-                                                {insights.key_driver}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="space-y-2">
-                                        {traderInsights.map((insight, idx) => (
-                                            <div key={idx} className="flex items-start gap-2">
-                                                <span className="text-zinc-500">•</span>
-                                                <span className="text-[13px] text-[#EEEEEE]">{insight}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Trade Ideas */}
-                                <div>
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-1 h-4 bg-[#4ECCA3] rounded-full" />
-                                        <h4 className="text-white font-semibold text-sm">Trade Ideas</h4>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {tradeIdeas.map((idea, idx) => (
-                                            <div key={idx} className="flex items-start gap-2">
-                                                <span className="text-zinc-500">•</span>
-                                                <span className="text-[13px] text-[#EEEEEE]">{idea}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
                                 <div className="bg-[#121212] rounded-xl p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <h4 className="text-white font-semibold text-sm">SENTIMENT POLL</h4>
@@ -572,7 +571,23 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
 
                                     {!userVote ? (
                                         // Vote buttons
-                                        <div className="flex gap-2">
+                                        <div>
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 4 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -4 }}
+                                                className="flex items-center justify-center gap-1.5 mb-3"
+                                            >
+                                                <motion.span
+                                                    animate={{ x: [0, -4, 0] }}
+                                                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                                                    className="text-sm"
+                                                >
+                                                    👉
+                                                </motion.span>
+                                                <span className="text-xs text-zinc-500 font-medium tracking-wide">Vote now!</span>
+                                            </motion.div>
+                                            <div className="flex gap-2">
                                             <button
                                                 onClick={() => handleVote('BULLISH')}
                                                 disabled={loadingVote}
@@ -597,6 +612,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                                 <TrendingDown size={16} className="text-[#F05454]" />
                                                 <span className="text-[#F05454] text-sm font-medium">Bearish</span>
                                             </button>
+                                            </div>
                                         </div>
                                     ) : (
                                         // Poll results
@@ -652,7 +668,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                                 </div>
                                                 <div className="space-y-2 text-sm text-zinc-400">
                                                     {[
-                                                        { role: 'Physical crude traders', pct: 0.30 },
+                                                        { role: 'Physical traders', pct: 0.30 },
                                                         { role: 'Financial traders', pct: 0.38 },
                                                         { role: 'Analysts', pct: 0.15 },
                                                         { role: 'Hedge funds', pct: 0.10 },

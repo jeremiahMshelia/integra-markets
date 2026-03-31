@@ -29,7 +29,7 @@ export default function HowItWorks() {
                         </div>
                         <div>
                             <p className="text-[18px] text-zinc-400 leading-relaxed font-light">
-                                <span className="text-white font-normal">VADER</span> is a fast, lightweight model that understands the emotion in short texts like headlines and tweets. It scores sentiment from -1 (very negative) to +1 (very positive).
+                                Integra runs low-latency sentiment engines designed for fast-moving news and social feeds, helping traders quickly spot shifts that can move prices in real time.
                             </p>
                         </div>
                     </motion.div>
@@ -47,7 +47,7 @@ export default function HowItWorks() {
                         </div>
                         <div>
                             <p className="text-[18px] text-zinc-400 leading-relaxed font-light">
-                                <span className="text-white font-normal">FinBERT</span> is a financial domain language model that reads longer articles and understands how sentiment impacts markets and trading.
+                                A specialized financial language layer analyzes longer articles and reports, turning complex market narratives into clear, tradeable insights.
                             </p>
                         </div>
                     </motion.div>
@@ -65,7 +65,7 @@ export default function HowItWorks() {
                         </div>
                         <div>
                             <p className="text-[18px] text-zinc-400 leading-relaxed font-light">
-                                Integra also uses <span className="text-white font-normal">proprietary machine learning models</span> that learn from market signals and user sentiment over time meaning the more it's used, the smarter it gets.
+                                These signals are enhanced by adaptive learning systems that combine market data and user behavior, continuously improving the accuracy and timing of trade opportunities.
                             </p>
                         </div>
                     </motion.div>
