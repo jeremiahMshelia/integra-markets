@@ -28,7 +28,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.pipscobar.integra-markets",
-      "buildNumber": "56",
+      "buildNumber": "57",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
