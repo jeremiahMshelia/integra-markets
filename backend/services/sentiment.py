@@ -113,7 +113,7 @@ class SentimentAnalyzer:
                 # Use our smart analyzer (preprocessing + VADER + ML)
                 smart_result = smart_analyze(text)
                 results["finbert"] = smart_result
-                logger.info(f"Using smart sentiment: {smart_result.get('method', 'unknown')}")
+                logger.debug(f"Using smart sentiment: {smart_result.get('method', 'unknown')}")
             else:
                 # Fallback to basic VADER-based analysis
                 logger.info("Using VADER-only fallback")

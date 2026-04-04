@@ -544,9 +544,12 @@ class NewsService:
         source = (article.get("source") or "").strip()
         commodity = (article.get("commodity") or "").strip()
         
-        # Check if raw text is just the title or too short
+        content = (article.get("content") or "").strip()
+        
+        # If the provided summary is just the title or is missing, try to use the full content instead
         norm_raw = self._normalize_for_comparison(raw) if raw else ""
         norm_title = self._normalize_for_comparison(title)
+        
         is_title_dup = (
             not raw 
             or len(raw) < 30 
@@ -554,13 +557,14 @@ class NewsService:
             or (norm_title and norm_title in norm_raw and len(norm_raw) < len(norm_title) * 1.3)
         )
         
+        if is_title_dup and content and len(content) > 50:
+            raw = content
+            is_title_dup = False
+            
         if is_title_dup:
-            # Build a contextual summary from the title itself
-            if commodity:
-                return f"{title}. A development in the {commodity.lower()} market worth monitoring."
-            elif source:
-                return f"{title}. Analysis from {source}."
-            return f"{title}."
+            # If we still genuinely have no content or summary, return empty 
+            # so UI doesn't look clumsy.
+            return ""
         
         # Clean up common noise from RSS feeds
         text = raw

@@ -560,7 +560,14 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                     </div>
                                 </div>
 
-                                <div className="bg-[#121212] rounded-xl p-4">
+                                <motion.div 
+                                    animate={{ 
+                                        boxShadow: ['0 0 0px 0px rgba(78, 204, 163, 0)', '0 0 10px 0px rgba(78, 204, 163, 0.4)', '0 0 0px 0px rgba(78, 204, 163, 0)'],
+                                        borderColor: ['rgba(42, 42, 42, 1)', 'rgba(78, 204, 163, 0.9)', 'rgba(42, 42, 42, 1)']
+                                    }}
+                                    transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
+                                    className="bg-[#121212] rounded-xl p-4 border"
+                                >
                                     <div className="flex items-center justify-between mb-2">
                                         <h4 className="text-white font-semibold text-sm">SENTIMENT POLL</h4>
                                         <button onClick={() => { setTourMode('single'); setTourStep(5); setShowTour(true); }}>
@@ -571,48 +578,28 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
 
                                     {!userVote ? (
                                         // Vote buttons
-                                        <div>
-                                            <motion.div
-                                                initial={{ opacity: 0, y: 4 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -4 }}
-                                                className="flex items-center justify-center gap-1.5 mb-3"
-                                            >
-                                                <motion.span
-                                                    animate={{ x: [0, -4, 0] }}
-                                                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-                                                    className="text-sm"
-                                                >
-                                                    👉
-                                                </motion.span>
-                                                <span className="text-xs text-zinc-500 font-medium tracking-wide">Vote now!</span>
-                                            </motion.div>
-                                            <div className="flex gap-2">
+                                        <div className="flex gap-2">
                                             <button
                                                 onClick={() => handleVote('BULLISH')}
                                                 disabled={loadingVote}
                                                 className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#4ECCA3]/10 border border-[#4ECCA3]/30 rounded-xl hover:bg-[#4ECCA3]/20 transition-colors"
                                             >
-                                                <TrendingUp size={16} className="text-[#4ECCA3]" />
-                                                <span className="text-[#4ECCA3] text-sm font-medium">Bullish</span>
+                                                <span className="text-[#4ECCA3] text-[13px] font-medium">Bullish</span>
                                             </button>
                                             <button
                                                 onClick={() => handleVote('NEUTRAL')}
                                                 disabled={loadingVote}
                                                 className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#EAB308]/10 border border-[#EAB308]/30 rounded-xl hover:bg-[#EAB308]/20 transition-colors"
                                             >
-                                                <ArrowRight size={16} className="text-[#EAB308]" />
-                                                <span className="text-[#EAB308] text-sm font-medium">Neutral</span>
+                                                <span className="text-[#EAB308] text-[13px] font-medium">Neutral</span>
                                             </button>
                                             <button
                                                 onClick={() => handleVote('BEARISH')}
                                                 disabled={loadingVote}
                                                 className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#F05454]/10 border border-[#F05454]/30 rounded-xl hover:bg-[#F05454]/20 transition-colors"
                                             >
-                                                <TrendingDown size={16} className="text-[#F05454]" />
-                                                <span className="text-[#F05454] text-sm font-medium">Bearish</span>
+                                                <span className="text-[#F05454] text-[13px] font-medium">Bearish</span>
                                             </button>
-                                            </div>
                                         </div>
                                     ) : (
                                         // Poll results
@@ -688,7 +675,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                             </div>
                                         </div>
                                     )}
-                                </div>
+                                </motion.div>
                             </div>
                         </div>
 

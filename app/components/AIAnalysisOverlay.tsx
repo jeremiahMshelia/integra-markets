@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert, Linking } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert, Linking, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useBookmarks } from '../providers/BookmarkProvider';
@@ -80,6 +80,37 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     const [tourStep, setTourStep] = useState(0);
     const [tourMode, setTourMode] = useState<'full' | 'single'>('full');
     const TOUR_STORAGE_KEY = '@integra_analysis_tour_completed';
+
+    // Animated glowing border for the poll
+    const borderAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (isVisible) {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(borderAnim, {
+                        toValue: 1,
+                        duration: 1800,
+                        easing: Easing.inOut(Easing.ease),
+                        useNativeDriver: false,
+                    }),
+                    Animated.timing(borderAnim, {
+                        toValue: 0,
+                        duration: 1800,
+                        easing: Easing.inOut(Easing.ease),
+                        useNativeDriver: false,
+                    }),
+                ])
+            ).start();
+        } else {
+            borderAnim.setValue(0);
+        }
+    }, [isVisible]);
+
+    const borderRayColor = borderAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['rgba(51, 51, 51, 1)', 'rgba(78, 204, 163, 0.9)'], // Dark grey to bright teal
+    });
 
     // Tour guide content (no emojis)
     const tourSteps = [
@@ -970,7 +1001,13 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                             </View>
 
                             {/* Community Sentiment Poll */}
-                            <View style={styles.pollSection}>
+                            <Animated.View style={[styles.pollSection, { 
+                                borderColor: borderRayColor, 
+                                shadowColor: borderRayColor, 
+                                shadowOffset: { width: 0, height: 0 }, 
+                                shadowRadius: 10, 
+                                shadowOpacity: borderAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.4] }) 
+                            }]}>
                                 <View style={styles.pollHeader}>
                                     <Text style={styles.pollTitle}>Sentiment Poll</Text>
                                     <TouchableOpacity onPress={() => {
@@ -986,25 +1023,22 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                 {!userVote ? (
                                     <View style={styles.pollOptions}>
                                         <TouchableOpacity
-                                            style={[styles.pollOptionSmall, styles.pollBullishSmall]}
+                                            style={[styles.pollOptionSmall, styles.pollBullishSmall, { paddingVertical: 12, justifyContent: 'center' }]}
                                             onPress={() => handleVote('BULLISH')}
                                         >
-                                            <MaterialIcons name="trending-up" size={14} color="#4ECCA3" />
-                                            <Text style={[styles.pollOptionTextSmall, { color: '#4ECCA3' }]}>Bullish</Text>
+                                            <Text style={[styles.pollOptionTextSmall, { color: '#4ECCA3', fontSize: 13, textAlign: 'center' }]}>Bullish</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
-                                            style={[styles.pollOptionSmall, styles.pollNeutralSmall]}
+                                            style={[styles.pollOptionSmall, styles.pollNeutralSmall, { paddingVertical: 12, justifyContent: 'center' }]}
                                             onPress={() => handleVote('NEUTRAL')}
                                         >
-                                            <MaterialIcons name="trending-flat" size={14} color="#EAB308" />
-                                            <Text style={[styles.pollOptionTextSmall, { color: '#EAB308' }]}>Neutral</Text>
+                                            <Text style={[styles.pollOptionTextSmall, { color: '#EAB308', fontSize: 13, textAlign: 'center' }]}>Neutral</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
-                                            style={[styles.pollOptionSmall, styles.pollBearishSmall]}
+                                            style={[styles.pollOptionSmall, styles.pollBearishSmall, { paddingVertical: 12, justifyContent: 'center' }]}
                                             onPress={() => handleVote('BEARISH')}
                                         >
-                                            <MaterialIcons name="trending-down" size={14} color="#F05454" />
-                                            <Text style={[styles.pollOptionTextSmall, { color: '#F05454' }]}>Bearish</Text>
+                                            <Text style={[styles.pollOptionTextSmall, { color: '#F05454', fontSize: 13, textAlign: 'center' }]}>Bearish</Text>
                                         </TouchableOpacity>
                                     </View>
                                 ) : (
@@ -1081,7 +1115,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                         </View>
                                     </View>
                                 )}
-                            </View>
+                            </Animated.View>
                         </ScrollView>
                     </View>
                 </View>
