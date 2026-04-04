@@ -17,19 +17,25 @@ const supabaseAnonKey =
 
 // Validate config
 if (!supabaseUrl || supabaseUrl.startsWith('$')) {
-  console.error('[Supabase] ERROR: EXPO_PUBLIC_SUPABASE_URL is not set!');
+  console.warn('[Supabase] Warning: EXPO_PUBLIC_SUPABASE_URL is not set. Using fallback.');
 }
 if (!supabaseAnonKey || supabaseAnonKey.startsWith('$')) {
-  console.error('[Supabase] ERROR: EXPO_PUBLIC_SUPABASE_ANON_KEY is not set!');
+  console.warn('[Supabase] Warning: EXPO_PUBLIC_SUPABASE_ANON_KEY is not set. Using fallback.');
 }
 
 // Debug logging (redacted for security)
 console.log('[Supabase] URL:', supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'NOT SET');
 console.log('[Supabase] Key present:', !!supabaseAnonKey && supabaseAnonKey.length > 10);
 
-// Fallback for development (only if env vars are truly missing)
-const finalUrl = supabaseUrl || 'https://zhdcpiopihqwcmicjpca.supabase.co';
-const finalKey = supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpoZGNwaW9waWhxd2NtaWNqcGNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2NzA5OTcsImV4cCI6MjA4MjI0Njk5N30.0cY0mfJbRMmMuPnAH4kkxlZzlhgT0gt-RFl3ky40vfw';
+let finalUrl = supabaseUrl;
+if (!finalUrl || finalUrl.startsWith('$')) {
+  finalUrl = 'https://zhdcpiopihqwcmicjpca.supabase.co';
+}
+
+let finalKey = supabaseAnonKey;
+if (!finalKey || finalKey.startsWith('$')) {
+  finalKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpoZGNwaW9waWhxd2NtaWNqcGNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2NzA5OTcsImV4cCI6MjA4MjI0Njk5N30.0cY0mfJbRMmMuPnAH4kkxlZzlhgT0gt-RFl3ky40vfw';
+}
 
 export const supabase = createClient(finalUrl, finalKey, {
   auth: {
