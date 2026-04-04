@@ -4,49 +4,57 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configure how notifications are handled when the app is running
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+} catch (e) {
+  console.warn('[Notifications] Failed to set handler:', e);
+}
 
 // Set up iOS notification categories for better Settings integration
 if (Platform.OS === 'ios') {
-  Notifications.setNotificationCategoryAsync('MARKET_ALERT', [
-    {
-      identifier: 'VIEW_DETAILS',
-      buttonTitle: 'View Details',
-      options: {
-        opensAppToForeground: true,
+  try {
+    Notifications.setNotificationCategoryAsync('MARKET_ALERT', [
+      {
+        identifier: 'VIEW_DETAILS',
+        buttonTitle: 'View Details',
+        options: {
+          opensAppToForeground: true,
+        },
       },
-    },
-    {
-      identifier: 'DISMISS',
-      buttonTitle: 'Dismiss',
-      options: {
-        isDestructive: true,
+      {
+        identifier: 'DISMISS',
+        buttonTitle: 'Dismiss',
+        options: {
+          isDestructive: true,
+        },
       },
-    },
-  ]);
+    ]);
 
-  Notifications.setNotificationCategoryAsync('BREAKING_NEWS', [
-    {
-      identifier: 'READ_MORE',
-      buttonTitle: 'Read More',
-      options: {
-        opensAppToForeground: true,
+    Notifications.setNotificationCategoryAsync('BREAKING_NEWS', [
+      {
+        identifier: 'READ_MORE',
+        buttonTitle: 'Read More',
+        options: {
+          opensAppToForeground: true,
+        },
       },
-    },
-    {
-      identifier: 'SHARE',
-      buttonTitle: 'Share',
-      options: {
-        opensAppToForeground: false,
+      {
+        identifier: 'SHARE',
+        buttonTitle: 'Share',
+        options: {
+          opensAppToForeground: false,
+        },
       },
-    },
-  ]);
+    ]);
+  } catch (e) {
+    console.warn('[Notifications] Failed to set categories:', e);
+  }
 }
 
 // Keys for storing notification preferences

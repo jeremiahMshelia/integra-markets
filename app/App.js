@@ -13,7 +13,6 @@ import {
   Alert,
   Image,
   Platform,
-  DevSettings,
   Modal,
   ActivityIndicator,
   Linking,
