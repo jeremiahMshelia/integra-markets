@@ -1164,11 +1164,17 @@ class NewsService:
         except Exception as e:
             logger.warning(f"Could not enrich articles with images: {str(e)}")
         
-        # ── AI-powered summary cleanup via Groq ─────────────────────
+        # ── Summary cleanup (local only — Groq is reserved for on-demand /news/article-summary) ──
+        # Calling Groq here fires every time the notification scheduler runs, burning the rate limit.
+        # Local fallback produces clean, complete sentences without any API cost.
         try:
-            await self._improve_summaries_with_groq(all_articles)
+            for article in all_articles:
+                if self._needs_summary_fix(article):
+                    fixed = self._generate_local_summary(article)
+                    if fixed:
+                        article["summary"] = fixed
         except Exception as e:
-            logger.warning(f"Groq summary improvement failed (non-fatal): {str(e)}")
+            logger.warning(f"Local summary cleanup failed (non-fatal): {str(e)}")
         
         result = {
             "articles": all_articles,

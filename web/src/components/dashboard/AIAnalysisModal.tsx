@@ -530,7 +530,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                                 setSummaryLoading(false);
                                             }
                                         }}
-                                        disabled={summaryLoading}
+                                        disabled={summaryLoading || !!expandedSummary}
                                         className="flex items-center gap-1 self-end mt-2 ml-auto transition-colors disabled:opacity-40"
                                         title="Load full article summary"
                                     >

@@ -939,7 +939,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                 {/* Refresh: fetches full article paragraphs — no AI, no rate limits */}
                                 <TouchableOpacity
                                     style={styles.refreshSummaryButton}
-                                    disabled={summaryLoading || !(newsData.sourceUrl || newsData.url)}
+                                    disabled={summaryLoading || !!expandedSummary || !(newsData.sourceUrl || newsData.url)}
                                     onPress={async () => {
                                         const articleUrl = newsData.sourceUrl || newsData.url || '';
                                         if (!articleUrl) return;
