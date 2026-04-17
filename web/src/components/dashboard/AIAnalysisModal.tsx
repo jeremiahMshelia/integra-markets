@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Copy, Bookmark, Info, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
+import { X, Copy, Bookmark, Info, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase';
 
@@ -195,6 +195,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
     const [loadingVote, setLoadingVote] = useState(false);
     const [showTour, setShowTour] = useState(false);
     const [tourStep, setTourStep] = useState(0);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     // Tour steps (no emojis)
     const [tourMode, setTourMode] = useState<'full' | 'single'>('full');
@@ -264,7 +265,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
             fetchPollData();
             fetchSentimentAnalysis();
         }
-    }, [isOpen, article?.title]);
+    }, [isOpen, article?.title, refreshKey]);
 
     // Fetch sentiment analysis from backend (includes Groq trader insights)
     const fetchSentimentAnalysis = async () => {
@@ -506,6 +507,13 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                         <h4 className="text-white font-semibold text-sm">Summary</h4>
                                     </div>
                                     <p className="text-[#EEEEEE] text-[13px] leading-relaxed">{article.summary}</p>
+                                    <button
+                                        onClick={() => setRefreshKey(k => k + 1)}
+                                        className="flex items-center gap-1 self-end mt-2 ml-auto text-zinc-500 hover:text-zinc-300 transition-colors"
+                                        title="Reload full summary"
+                                    >
+                                        <RefreshCw size={14} />
+                                    </button>
                                 </div>
 
                                 {/* Sentiment Bars */}

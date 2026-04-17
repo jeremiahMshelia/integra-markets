@@ -623,7 +623,8 @@ const App = () => {
                 sourceUrl: data.article_url,
                 source: data.source || 'News',
                 sentiment: data.sentiment || 'NEUTRAL',
-                commodity: data.commodity || ''
+                commodity: data.commodity || '',
+                _fromNotification: true, // prevents poll from auto-restoring a previous vote
               };
               setSelectedArticle(syntheticArticle);
               setShowAIAnalysis(true);

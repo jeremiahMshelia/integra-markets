@@ -725,7 +725,7 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onArticlePress }) => {
               >
                 <View style={[styles.alertIcon, { backgroundColor: getSentimentColor(alert.sentiment) + '20' }]}>
                   <MaterialIcons
-                    name={alert.sentiment === 'BULLISH' ? 'trending-up' : alert.sentiment === 'BEARISH' ? 'trending-down' : 'article'}
+                    name={alert.sentiment === 'BULLISH' ? 'trending-up' : alert.sentiment === 'BEARISH' ? 'trending-down' : 'east'}
                     size={20}
                     color={getSentimentColor(alert.sentiment)}
                   />

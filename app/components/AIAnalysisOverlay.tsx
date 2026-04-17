@@ -74,6 +74,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
         totalVotes: number;
     } | null>(null);
     const [loading, setLoading] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     // Tour guide state
     const [showTour, setShowTour] = useState(false);
@@ -207,6 +208,8 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
 
     const fetchPollData = async () => {
         if (!newsData?.title) return;
+        // Don't restore a previous vote for articles opened from push notifications
+        if ((newsData as any)?._fromNotification) return;
 
         // Generate a consistent ID for the article (using title hash or similar if no ID provided)
         // For now using title as ID since it's unique enough for this demo
@@ -797,7 +800,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
         };
         analyze();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isVisible, newsData?.title, newsData?.summary]);
+    }, [isVisible, newsData?.title, newsData?.summary, refreshKey]);
 
     useEffect(() => {
         if (!isVisible) {
@@ -927,6 +930,17 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                     <Text style={styles.sectionTitle}>Summary</Text>
                                 </View>
                                 <Text style={styles.summaryText}>{analysisData.summary}</Text>
+                                <TouchableOpacity
+                                    style={styles.refreshSummaryButton}
+                                    onPress={() => setRefreshKey(k => k + 1)}
+                                    disabled={loading}
+                                >
+                                    <MaterialIcons
+                                        name="refresh"
+                                        size={18}
+                                        color={loading ? '#444' : '#A0A0A0'}
+                                    />
+                                </TouchableOpacity>
                             </View>
 
                             {/* Sentiment Section */}
@@ -1093,7 +1107,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                                 <Text style={styles.whoIsVotingTitle}>Who is voting?</Text>
                                             </View>
                                             {[
-                                                { role: 'Physical crude traders', count: Math.ceil(pollData.total * 0.30) },
+                                                { role: 'Physical traders', count: Math.ceil(pollData.total * 0.30) },
                                                 { role: 'Financial traders', count: Math.ceil(pollData.total * 0.38) },
                                                 { role: 'Analysts', count: Math.ceil(pollData.total * 0.15) },
                                                 { role: 'Hedge funds', count: Math.ceil(pollData.total * 0.10) },
@@ -1382,6 +1396,12 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: '#EEEEEE',
         lineHeight: 22,
+    },
+    refreshSummaryButton: {
+        alignSelf: 'flex-end',
+        padding: 4,
+        marginTop: 6,
+        opacity: 0.7,
     },
     pollSection: {
         backgroundColor: '#1A1A1A',

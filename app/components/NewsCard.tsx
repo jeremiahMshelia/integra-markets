@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard, Image } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { SingleStar } from './CustomStarIcon';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import * as Haptics from 'expo-haptics';
@@ -266,7 +266,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       case 'BEARISH':
         return <Feather name="trending-down" size={14} color={color} />;
       case 'NEUTRAL':
-        return <Feather name="arrow-right" size={14} color={color} />;
+        return <MaterialIcons name="east" size={14} color={color} />;
       default:
         return <Feather name="minus" size={14} color={color} />;
     }
