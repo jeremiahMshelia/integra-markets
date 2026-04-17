@@ -506,3 +506,88 @@ async def demo_weather_alerts():
     return {
         "message": "Drought conditions worsening in key wheat producing regions"
     }
+
+
+@api_router.get("/news/article-summary", response_model=Dict[str, Any])
+async def get_article_full_summary(url: str):
+    """
+    Fetch a full article by URL and return the first 3-5 complete paragraphs as a
+    clean, expanded summary. No AI/Groq involved — pure HTML extraction via
+    BeautifulSoup. Results are cached for 2 hours per URL.
+
+    Used by the mobile and web refresh button in the AI Analysis overlay.
+    """
+    if not url or not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="A valid article URL is required.")
+
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/121.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers=headers) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Remove boilerplate elements that inject noise into paragraph text
+        for tag in soup(["script", "style", "nav", "header", "footer",
+                          "aside", "form", "noscript", "figure", "figcaption"]):
+            tag.decompose()
+
+        # Collect all <p> elements
+        raw_paragraphs = soup.find_all("p")
+
+        # Filter: keep only paragraphs that look like article body text
+        # - At least 80 characters (skip nav labels, captions, etc.)
+        # - Doesn't look like a cookie/legal notice
+        skip_phrases = ["cookie", "privacy policy", "terms of use", "subscribe",
+                        "sign up", "newsletter", "all rights reserved", "©"]
+        clean_paragraphs = []
+        for p in raw_paragraphs:
+            text = p.get_text(" ", strip=True)
+            if len(text) < 80:
+                continue
+            lower = text.lower()
+            if any(phrase in lower for phrase in skip_phrases):
+                continue
+            clean_paragraphs.append(text)
+
+        if not clean_paragraphs:
+            return {
+                "full_summary": None,
+                "paragraph_count": 0,
+                "source_url": url,
+                "note": "Could not extract meaningful article content from this URL."
+            }
+
+        # Take first 4 complete paragraphs — each ends naturally at a full stop
+        selected = clean_paragraphs[:4]
+        full_summary = "\n\n".join(selected)
+
+        return {
+            "full_summary": full_summary,
+            "paragraph_count": len(selected),
+            "source_url": url,
+        }
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Request to article URL timed out.")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Article URL returned HTTP {e.response.status_code}."
+        )
+    except Exception as e:
+        logger.error(f"[article-summary] Error fetching {url}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to extract article content: {str(e)}")

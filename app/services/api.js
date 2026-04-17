@@ -87,6 +87,16 @@ export const dashboardApi = {
       throw error;
     }
   },
+
+  /**
+   * Fetches the full article body from a URL and returns the first
+   * 3-5 complete paragraphs as a clean expanded summary (no AI, no rate limits).
+   * @param {string} url - Direct article URL
+   */
+  async getArticleSummary(url) {
+    if (!url) throw new Error('Article URL is required');
+    return request(`/news/article-summary?url=${encodeURIComponent(url)}`);
+  },
 };
 
 export const sentimentApi = {

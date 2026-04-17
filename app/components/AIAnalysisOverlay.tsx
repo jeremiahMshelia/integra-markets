@@ -75,6 +75,8 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     } | null>(null);
     const [loading, setLoading] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [expandedSummary, setExpandedSummary] = useState<string | null>(null);
+    const [summaryLoading, setSummaryLoading] = useState(false);
 
     // Tour guide state
     const [showTour, setShowTour] = useState(false);
@@ -805,10 +807,12 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     useEffect(() => {
         if (!isVisible) {
             setUserVote(null);
+            setExpandedSummary(null); // reset expanded summary when overlay closes
             return;
         }
-        // When a new article is opened in the overlay, reset any previous vote
+        // When a new article is opened, reset vote and expanded summary
         setUserVote(null);
+        setExpandedSummary(null);
     }, [isVisible, newsData?.title]);
 
     if (!newsData) return null;
@@ -929,17 +933,35 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                     <View style={styles.sectionIndicator} />
                                     <Text style={styles.sectionTitle}>Summary</Text>
                                 </View>
-                                <Text style={styles.summaryText}>{analysisData.summary}</Text>
+                                <Text style={styles.summaryText}>
+                                    {expandedSummary || analysisData.summary}
+                                </Text>
+                                {/* Refresh: fetches full article paragraphs — no AI, no rate limits */}
                                 <TouchableOpacity
                                     style={styles.refreshSummaryButton}
-                                    onPress={() => setRefreshKey(k => k + 1)}
-                                    disabled={loading}
+                                    disabled={summaryLoading || !(newsData.sourceUrl || newsData.url)}
+                                    onPress={async () => {
+                                        const articleUrl = newsData.sourceUrl || newsData.url || '';
+                                        if (!articleUrl) return;
+                                        try {
+                                            setSummaryLoading(true);
+                                            const result = await dashboardApi.getArticleSummary(articleUrl);
+                                            if (result?.full_summary) {
+                                                setExpandedSummary(result.full_summary);
+                                            } else {
+                                                Alert.alert('No extra content', 'Could not extract more text from this article.');
+                                            }
+                                        } catch {
+                                            Alert.alert('Failed', 'Could not load full article. Try again later.');
+                                        } finally {
+                                            setSummaryLoading(false);
+                                        }
+                                    }}
                                 >
-                                    <MaterialIcons
-                                        name="refresh"
-                                        size={18}
-                                        color={loading ? '#444' : '#A0A0A0'}
-                                    />
+                                    {summaryLoading
+                                        ? <ActivityIndicator size="small" color="#A0A0A0" />
+                                        : <MaterialIcons name="refresh" size={18} color={expandedSummary ? '#4ECCA3' : '#A0A0A0'} />
+                                    }
                                 </TouchableOpacity>
                             </View>
 

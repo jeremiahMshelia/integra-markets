@@ -196,6 +196,8 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
     const [showTour, setShowTour] = useState(false);
     const [tourStep, setTourStep] = useState(0);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [expandedSummary, setExpandedSummary] = useState<string | null>(null);
+    const [summaryLoading, setSummaryLoading] = useState(false);
 
     // Tour steps (no emojis)
     const [tourMode, setTourMode] = useState<'full' | 'single'>('full');
@@ -506,13 +508,36 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                         <div className="w-1 h-4 bg-[#4a9eff] rounded-full" />
                                         <h4 className="text-white font-semibold text-sm">Summary</h4>
                                     </div>
-                                    <p className="text-[#EEEEEE] text-[13px] leading-relaxed">{article.summary}</p>
+                                    <p className="text-[#EEEEEE] text-[13px] leading-relaxed whitespace-pre-line">
+                                        {expandedSummary || article.summary}
+                                    </p>
                                     <button
-                                        onClick={() => setRefreshKey(k => k + 1)}
-                                        className="flex items-center gap-1 self-end mt-2 ml-auto text-zinc-500 hover:text-zinc-300 transition-colors"
-                                        title="Reload full summary"
+                                        onClick={async () => {
+                                            const url = article.url || article.sourceUrl || '';
+                                            if (!url) return;
+                                            try {
+                                                setSummaryLoading(true);
+                                                const API = process.env.NEXT_PUBLIC_API_URL || '';
+                                                const res = await fetch(`${API}/api/news/article-summary?url=${encodeURIComponent(url)}`);
+                                                if (!res.ok) throw new Error('failed');
+                                                const data = await res.json();
+                                                if (data?.full_summary) {
+                                                    setExpandedSummary(data.full_summary);
+                                                }
+                                            } catch {
+                                                // silently fail — user still sees original summary
+                                            } finally {
+                                                setSummaryLoading(false);
+                                            }
+                                        }}
+                                        disabled={summaryLoading}
+                                        className="flex items-center gap-1 self-end mt-2 ml-auto transition-colors disabled:opacity-40"
+                                        title="Load full article summary"
                                     >
-                                        <RefreshCw size={14} />
+                                        {summaryLoading
+                                            ? <RefreshCw size={14} className="animate-spin text-zinc-400" />
+                                            : <RefreshCw size={14} className={expandedSummary ? 'text-[#4ECCA3]' : 'text-zinc-500 hover:text-zinc-300'} />
+                                        }
                                     </button>
                                 </div>
 
