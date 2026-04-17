@@ -513,7 +513,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
                                     </p>
                                     <button
                                         onClick={async () => {
-                                            const url = article.url || article.sourceUrl || '';
+                                            const url = article.url || '';
                                             if (!url) return;
                                             try {
                                                 setSummaryLoading(true);
