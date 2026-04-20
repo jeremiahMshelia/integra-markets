@@ -542,17 +542,37 @@ async def get_article_full_summary(url: str):
 
         # Remove boilerplate elements that inject noise into paragraph text
         for tag in soup(["script", "style", "nav", "header", "footer",
-                          "aside", "form", "noscript", "figure", "figcaption"]):
+                          "aside", "form", "noscript", "figure", "figcaption",
+                          "iframe", "ins", "button"]):
             tag.decompose()
 
-        # Collect all <p> elements
-        raw_paragraphs = soup.find_all("p")
+        # Try to find the article body container first — this avoids scanning
+        # sidebar/related-content paragraphs that pollute the result
+        content_container = (
+            soup.find("article") or
+            soup.find("div", class_=lambda c: c and any(
+                x in c.lower() for x in ["article-body", "article-content",
+                                          "post-body", "post-content",
+                                          "entry-content", "story-body",
+                                          "article__body", "content-body"]
+            )) or
+            soup.find("main") or
+            soup  # fallback: search entire page
+        )
 
-        # Filter: keep only paragraphs that look like article body text
-        # - At least 80 characters (skip nav labels, captions, etc.)
-        # - Doesn't look like a cookie/legal notice
-        skip_phrases = ["cookie", "privacy policy", "terms of use", "subscribe",
-                        "sign up", "newsletter", "all rights reserved", "©"]
+        raw_paragraphs = content_container.find_all("p")
+
+        # Broad skip list: keeps out advertisers, disclaimers, and off-topic content
+        skip_phrases = [
+            "cookie", "privacy policy", "terms of use", "subscribe",
+            "sign up", "newsletter", "all rights reserved", "©",
+            "advertiser", "advertiser disclosure", "offers on this page",
+            "may affect", "certificate of deposit", "cd rate", "apy",
+            "annual percentage yield", "savings account", "bank account",
+            "this is a sponsored", "paid partnership", "affiliate",
+            "click here", "read more", "related article", "editor's note",
+            "correction:", "disclosure:", "disclaimer:", "powered by",
+        ]
         clean_paragraphs = []
         for p in raw_paragraphs:
             text = p.get_text(" ", strip=True)

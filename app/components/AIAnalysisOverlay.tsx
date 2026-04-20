@@ -1527,6 +1527,7 @@ const styles = StyleSheet.create({
     },
     // Small rounded poll buttons (matching news card badges)
     pollOptionSmall: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         borderRadius: 8,
