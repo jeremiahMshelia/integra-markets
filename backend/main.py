@@ -39,6 +39,12 @@ try:
 except ImportError:
     news_available = False
 
+try:
+    from api.api_keys import router as api_keys_router
+    api_keys_available = True
+except ImportError:
+    api_keys_available = False
+
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
 
 # Lifespan events
@@ -57,6 +63,8 @@ if market_data_available:
     app.include_router(market_data_router)
 if news_available:
     app.include_router(news_router)
+if api_keys_available:
+    app.include_router(api_keys_router)
 
 # Add CORS middleware to allow requests from your React Native app
 app.add_middleware(
