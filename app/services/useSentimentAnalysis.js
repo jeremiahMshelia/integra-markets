@@ -4,7 +4,9 @@
  */
 import { useState, useCallback } from 'react';
 
-const API_BASE_URL = 'https://integra-markets-backend.fly.dev/api';
+const _API_ROOT =
+  process.env.EXPO_PUBLIC_API_URL || 'https://integra-markets-backend.fly.dev';
+const API_BASE_URL = `${_API_ROOT.replace(/\/$/, '')}/api`;
 
 export const useSentimentAnalysis = () => {
   const [result, setResult] = useState(null);
