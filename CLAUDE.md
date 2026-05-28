@@ -73,10 +73,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   `yarn.lock`). npm is the intended manager; the other two are stale.
   Don't regenerate them — if you change deps, update `package-lock.json`
   only.
-- **Multiple backend entrypoints** — `backend/main.py` is canonical.
-  `main_production.py`, `main_integrated.py`, `main_simple_nlp.py` are
-  alternate deploy-mode entrypoints; only touch them if you understand
-  why they exist.
+- **Multiple backend entrypoints — `main_simple_nlp.py` is canonical**
+  (verified empirically: 25 routes including all `/api/sentiment`,
+  `/api/lexicon`, `/api/news/*`, `/api/dashboard/sentiment-engine`,
+  `/api/prediction-market/*`). `main.py` is a thin stub with only 8
+  routes (`/`, `/health`, `/analyze-sentiment`, 5 `/notifications/*`) —
+  it does NOT load most production endpoints. `main_integrated.py` and
+  `main_production.py` are older alternate entries; only touch them if
+  you understand why they exist. Production deployments should run
+  `uvicorn main_simple_nlp:app`, not `main:app`.
 - **`AIAnalysisOverlay` is currently disabled** (commit `85d01aea`) as
   part of the Build 26 stability rollback. Don't re-enable it without
   also addressing the incompatible dependencies that caused the disable.
