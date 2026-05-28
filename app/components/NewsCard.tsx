@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SingleStar } from './CustomStarIcon';
+import PolymarketIcon from './PolymarketIcon';
 import { useBookmarks } from '../providers/BookmarkProvider';
+import { getPreferredSourceUrl } from '../utils/polymarketLinks';
 
 interface NewsItem {
   id?: number;
@@ -12,11 +14,16 @@ interface NewsItem {
   date?: string;
   source?: string;
   sourceUrl?: string;
+  eventUrl?: string;
+  polymarketUrl?: string;
   sentiment?: string;
   sentimentScore?: string;
   timeAgo?: string;
   commodities?: string[];
   marketImpact?: string;
+  polymarketContext?: {
+    slug?: string;
+  };
 }
 
 interface NewsCardProps {
@@ -27,6 +34,8 @@ interface NewsCardProps {
 export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   const { addNewsBookmark, removeBookmark, isBookmarked, newsBookmarks } = useBookmarks();
   const isCurrentlyBookmarked = isBookmarked(item.title, 'news');
+  const isPolymarket = item.source?.toLowerCase() === 'polymarket';
+  const preferredSourceUrl = getPreferredSourceUrl(item);
 
   const handleBookmarkToggle = async () => {
     try {
@@ -42,7 +51,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
           title: item.title,
           summary: item.summary || item.content || '',
           source: item.source || 'Unknown',
-          sourceUrl: item.sourceUrl,
+          sourceUrl: preferredSourceUrl || undefined,
           sentiment: (item.sentiment?.toUpperCase() as "BULLISH" | "BEARISH" | "NEUTRAL") || 'NEUTRAL',
           sentimentScore: parseFloat(item.sentimentScore || '0.5'),
           commodities: Array.isArray(item.commodities) ? item.commodities : undefined,
@@ -57,10 +66,10 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   };
   const handleSourcePress = async () => {
     // First check if we have a valid URL
-    if (item.sourceUrl && item.sourceUrl !== '#') {
+    if (preferredSourceUrl) {
       try {
         // Ensure the URL has a protocol
-        let url = item.sourceUrl;
+        let url = preferredSourceUrl;
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
           url = 'https://' + url;
         }
@@ -77,7 +86,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         // Provide a more informative message
         Alert.alert(
           'Unable to Open Link',
-          `Could not open the source website. You can search for "${item.title}" on ${item.source || 'the web'} to find the article.`,
+          `Could not open the source website. You can search for "${item.title}" on ${item.source || 'the web'} to find the article or event.`,
           [{ text: 'OK' }]
         );
       }
@@ -93,7 +102,7 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
 
   const handleShare = async () => {
     const shareMessage = `${item.title}\n\n${item.summary || item.content || ''}\n\nSource: ${item.source || 'Unknown'}`;
-    const shareUrl = item.sourceUrl && item.sourceUrl !== '#' ? item.sourceUrl : '';
+    const shareUrl = preferredSourceUrl || '';
     const fullShareText = shareUrl ? `${shareMessage}\n\nRead more: ${shareUrl}` : shareMessage;
     
     if (Platform.OS === 'ios') {
@@ -181,10 +190,10 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   
   const handleCopyLink = async (content: string) => {
     try {
-      if (item.sourceUrl && item.sourceUrl !== '#') {
+      if (preferredSourceUrl) {
         // Copy just the URL if available
-        await Clipboard.setString(item.sourceUrl);
-        Alert.alert('Link Copied', 'Article link copied to clipboard.');
+        await Clipboard.setString(preferredSourceUrl);
+        Alert.alert('Link Copied', `${isPolymarket ? 'Event' : 'Article'} link copied to clipboard.`);
       } else {
         // Copy the full text if no URL
         await Clipboard.setString(content);
@@ -237,19 +246,27 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
     <View style={styles.card}>
       {/* Header with sentiment and action buttons */}
       <View style={styles.header}>
-        {item.sentiment && (
-          <View style={styles.sentimentBadge}>
-            <View style={styles.sentimentIconContainer}>
-              {renderSentimentIcon(item.sentiment)}
+        <View style={styles.headerLeft}>
+          {item.sentiment && (
+            <View style={styles.sentimentBadge}>
+              <View style={styles.sentimentIconContainer}>
+                {renderSentimentIcon(item.sentiment)}
+              </View>
+              <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
+                {item.sentiment.toUpperCase()}
+              </Text>
+              <Text style={[styles.sentimentScore, { color: getSentimentColor(item.sentiment) }]}>
+                {item.sentimentScore || '0.50'}
+              </Text>
             </View>
-            <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
-              {item.sentiment.toUpperCase()}
-            </Text>
-            <Text style={[styles.sentimentScore, { color: getSentimentColor(item.sentiment) }]}>
-              {item.sentimentScore || '0.50'}
-            </Text>
-          </View>
-        )}
+          )}
+          {isPolymarket && (
+            <View style={styles.polymarketBadge}>
+              <PolymarketIcon size={18} rounded={false} style={undefined} />
+              <Text style={styles.polymarketText}>Polymarket</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.actionButtons}>
           <TouchableOpacity onPress={handleBookmarkToggle} style={styles.bookmarkButton}>
             <Feather 
@@ -280,10 +297,10 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         <View style={styles.sourceContainer}>
           {item.source && (
             <TouchableOpacity onPress={handleSourcePress} style={styles.sourceButton}>
-              <Text style={[styles.sourceText, item.sourceUrl && item.sourceUrl !== '#' ? styles.sourceTextLink : null]}>
+              <Text style={[styles.sourceText, preferredSourceUrl ? styles.sourceTextLink : null]}>
                 {item.source}
               </Text>
-              {item.sourceUrl && item.sourceUrl !== '#' && (
+              {preferredSourceUrl && (
                 <Feather name="external-link" size={14} color="#4a9eff" style={styles.linkIcon} />
               )}
             </TouchableOpacity>
@@ -323,9 +340,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    flex: 1,
+    marginRight: 8,
+  },
   sentimentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  polymarketBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  polymarketText: {
+    color: '#8FA7FF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   sentimentIconContainer: {
     marginRight: 6,
