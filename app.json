@@ -31,6 +31,11 @@
       "category": "finance",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSCalendarsUsageDescription": "This app may use your calendar to schedule market event reminders.",
+        "NSCalendarsFullAccessUsageDescription": "This app may use your calendar to schedule market event reminders.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "This app may add market event reminders to your calendar.",
+        "NSRemindersUsageDescription": "This app may set reminders for market events you bookmark.",
+        "NSRemindersFullAccessUsageDescription": "This app may set reminders for market events you bookmark.",
         "NSCameraUsageDescription": "This app uses the camera to capture financial documents and receipts.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select financial documents and receipts.",
         "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication.",
