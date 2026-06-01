@@ -1,0 +1,96 @@
+---
+title: "Create an API key"
+api: "POST https://api.integramarkets.app/api/keys"
+description: "Mint a new API key. The full plaintext key is returned exactly once — store it immediately."
+---
+
+Mints a new API key for the authenticated user. The plaintext key is
+returned **once** in the response body; the server stores only an
+11-character prefix and a SHA-256 hash, so a lost key cannot be recovered
+— [revoke and create a new one](/api-reference/keys-revoke).
+
+<Info>
+  Each user may have at most **10 active keys**. The 11th `POST` returns
+  `429`. Revoke an unused key first.
+</Info>
+
+## Request
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token of the dashboard session, not a `ik_live_` key. See
+  [Authentication](/authentication).
+</ParamField>
+
+### Body
+
+<ParamField body="user_id" type="string" required>
+  The user that will own the key. (Will be derived from the session JWT
+  in a future release — see the TODO in
+  [PR #4](https://github.com/jeremiahMshelia/integra-markets/pull/4).)
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Human-readable label shown in the dashboard, e.g. `"production backend"`.
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  Stable identifier for the key — use this with
+  [`DELETE /api/keys/{id}`](/api-reference/keys-revoke).
+</ResponseField>
+
+<ResponseField name="key" type="string">
+  The full plaintext key, e.g. `ik_live_xN8z4a…`. **Shown once.**
+</ResponseField>
+
+<ResponseField name="prefix" type="string">
+  The first 11 characters of the key, safe to log and display in the
+  dashboard.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Echoes the `name` you supplied.
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO-8601 timestamp.
+</ResponseField>
+
+## Example
+
+<RequestExample>
+
+```bash cURL
+curl https://api.integramarkets.app/api/keys \
+  -H "Authorization: Bearer $DASHBOARD_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "9f1b3a52-…",
+    "name": "production backend"
+  }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 201 Created
+{
+  "id": "key_01HXYZ…",
+  "key": "ik_live_xN8z4aQ7tU2vR9pE5sB1cM3dF",
+  "prefix": "ik_live_xN8",
+  "name": "production backend",
+  "created_at": "2026-06-01T12:34:56Z"
+}
+```
+
+```json 429 Too Many Requests
+{
+  "detail": "Quota exceeded — at most 10 active keys per user."
+}
+```
+
+</ResponseExample>

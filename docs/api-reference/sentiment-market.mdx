@@ -1,0 +1,54 @@
+---
+title: "Market sentiment feed"
+api: "POST https://api.integramarkets.app/api/news/analysis"
+description: "Batch-score a feed of headlines and roll them up into a market-wide bullish/bearish signal per commodity."
+---
+
+<Note>
+  This page is a stub. The endpoint exists and the schema below reflects
+  the current backend, but examples and edge cases are still being filled
+  in. Use [`POST /api/sentiment`](/api-reference/sentiment-analyze) for
+  single-text classification in the meantime.
+</Note>
+
+Where [`POST /api/sentiment`](/api-reference/sentiment-analyze) classifies
+a single piece of text, this endpoint accepts a batch of headlines and
+returns both the per-headline scores and a market-wide rollup grouped by
+commodity.
+
+## Request
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token. See [Authentication](/authentication).
+</ParamField>
+
+### Body
+
+<ParamField body="articles" type="array" required>
+  Array of objects, each with at minimum a `text` field. Optional
+  per-article `commodity`, `source`, and `published_at` (ISO-8601).
+</ParamField>
+
+<ParamField body="commodities" type="array">
+  Optional filter — restrict the rollup to these commodities (e.g.
+  `["crude_oil", "natural_gas"]`).
+</ParamField>
+
+## Response
+
+<ResponseField name="articles" type="array">
+  One entry per input article, in the same order. Each entry has the same
+  shape as the [single-article response](/api-reference/sentiment-analyze).
+</ResponseField>
+
+<ResponseField name="rollup" type="object">
+  Aggregate signal per commodity: weighted sentiment score, article count,
+  and confidence band.
+</ResponseField>
+
+## Related
+
+- [`GET /api/lexicon/commodities`](/api-reference/sentiment-analyze) — view the active commodity rule set.
+- [`POST /api/sentiment`](/api-reference/sentiment-analyze) — single-text classification.

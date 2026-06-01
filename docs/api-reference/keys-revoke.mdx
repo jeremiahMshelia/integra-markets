@@ -1,0 +1,69 @@
+---
+title: "Revoke an API key"
+api: "DELETE https://api.integramarkets.app/api/keys/{id}"
+description: "Permanently revoke an API key. Subsequent calls using the key return 401."
+---
+
+Permanently revokes a key. The hash is deleted, so the plaintext token
+can no longer authenticate against any endpoint. Idempotent — revoking an
+already-revoked key returns `200`.
+
+<Warning>
+  There is no un-revoke. To replace a revoked key, mint a new one with
+  [`POST /api/keys`](/api-reference/keys-create).
+</Warning>
+
+## Request
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token of the dashboard session. See [Authentication](/authentication).
+</ParamField>
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The key's stable `id` — from
+  [`GET /api/keys`](/api-reference/keys-list) or the response of
+  [`POST /api/keys`](/api-reference/keys-create). **Not** the plaintext
+  token or prefix.
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  Echoes the key id you revoked.
+</ResponseField>
+
+<ResponseField name="revoked_at" type="string">
+  ISO-8601 timestamp of the revocation.
+</ResponseField>
+
+## Example
+
+<RequestExample>
+
+```bash cURL
+curl -X DELETE https://api.integramarkets.app/api/keys/key_01HXYZ \
+  -H "Authorization: Bearer $DASHBOARD_TOKEN"
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "id": "key_01HXYZ…",
+  "revoked_at": "2026-06-01T18:30:00Z"
+}
+```
+
+```json 404 Not Found
+{
+  "detail": "No key with that id belongs to this user."
+}
+```
+
+</ResponseExample>

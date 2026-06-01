@@ -1,0 +1,89 @@
+---
+title: "List API keys"
+api: "GET https://api.integramarkets.app/api/keys"
+description: "List the authenticated user's active API keys. Prefixes only — plaintext is never returned."
+---
+
+Returns every active key for a user, by their 11-character prefix.
+Revoked keys are excluded.
+
+## Request
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token of the dashboard session. See [Authentication](/authentication).
+</ParamField>
+
+### Query parameters
+
+<ParamField query="user_id" type="string" required>
+  The user whose keys you want to list. (Will be derived from the session
+  JWT in a future release.)
+</ParamField>
+
+## Response
+
+<ResponseField name="keys" type="array">
+  Array of key descriptors. Plaintext is never returned — for that, see
+  [`POST /api/keys`](/api-reference/keys-create).
+</ResponseField>
+
+Each element has:
+
+<ResponseField name="id" type="string">
+  Stable identifier — pass to [`DELETE /api/keys/{id}`](/api-reference/keys-revoke).
+</ResponseField>
+
+<ResponseField name="prefix" type="string">
+  First 11 characters of the key, e.g. `ik_live_xN8`.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The label supplied at creation time.
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO-8601 timestamp.
+</ResponseField>
+
+<ResponseField name="last_used_at" type="string">
+  ISO-8601 timestamp of the most recent successful verification, or `null`
+  if the key has never been used.
+</ResponseField>
+
+## Example
+
+<RequestExample>
+
+```bash cURL
+curl "https://api.integramarkets.app/api/keys?user_id=9f1b3a52-…" \
+  -H "Authorization: Bearer $DASHBOARD_TOKEN"
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "keys": [
+    {
+      "id": "key_01HXYZ…",
+      "prefix": "ik_live_xN8",
+      "name": "production backend",
+      "created_at": "2026-06-01T12:34:56Z",
+      "last_used_at": "2026-06-01T18:02:11Z"
+    },
+    {
+      "id": "key_01HABC…",
+      "prefix": "ik_live_pQ4",
+      "name": "local dev",
+      "created_at": "2026-05-28T09:10:00Z",
+      "last_used_at": null
+    }
+  ]
+}
+```
+
+</ResponseExample>

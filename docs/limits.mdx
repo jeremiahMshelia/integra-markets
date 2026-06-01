@@ -1,0 +1,45 @@
+---
+title: "Limits"
+description: "Default rate limits, monthly quotas, and best-practice retry guidance."
+---
+
+Limits keep the service stable and your usage predictable. Actual values
+may vary by [plan](/pricing) or deployment.
+
+## Default rate limits
+
+Per API key, per minute:
+
+| Endpoint class | Requests / min |
+| --- | --- |
+| Ingest (`POST /api/sentiment`, batch endpoints) | 120 |
+| Read / query (sentiment GETs, lexicon, market data) | 300 |
+
+Short bursts above these limits may be accepted by the token bucket.
+
+### Response headers
+
+When you're within the window, every response includes:
+
+| Header | Meaning |
+| --- | --- |
+| `X-RateLimit-Limit` | Total requests allowed in the current window |
+| `X-RateLimit-Remaining` | Requests remaining in the current window |
+| `Retry-After` | Seconds until the window resets (sent on `429`) |
+
+## Monthly quotas
+
+Per tenant. Quotas reset on the first day of each calendar month, UTC.
+
+- **Articles processed** — your plan's monthly article count (e.g. 100k / 1M / 3M)
+- **Active connectors** — number of vendor connectors you can have enabled
+- **Seats** — team members with dashboard access
+
+When a quota is exhausted, the API returns `429 Too Many Requests` and
+defers further processing to the next period.
+
+## Best practices
+
+- **Idempotency.** Pass an `Idempotency-Key` header on ingest requests so retries are safe.
+- **Backoff.** Implement exponential backoff with jitter for `429` and `5xx`. The SDKs do this automatically.
+- **Observability.** Monitor your usage in the dashboard's **Developer → Usage** page.
