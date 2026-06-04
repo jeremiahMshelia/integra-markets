@@ -70,6 +70,28 @@ load_dotenv(env_path)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ---- Sentiment-engine tuning constants -------------------------------------
+# Verified on Financial Phrasebank (4,846 sentences) on 2026-06-03 by
+# scripts/tune_sentiment.py. Do not change without re-running that script
+# and updating tests/test_sentiment_accuracy.py's accuracy floor.
+#
+#   plain VADER, +/-0.33 threshold:                             58.7%
+#   pre-PR Integra (rulebook + +/-0.12 threshold):              54.3%
+#   + Henry + SentiBignomics + +/-0.33 threshold:               69.4%
+#   grid-best (blend=0.5, threshold=0.33, henry_scale=2.0):     70.2%
+#
+# Rationale for shipping with these specific values:
+#   - threshold=0.33 is the canonical VADER convention and gets within
+#     1pp of the grid-best while being easier to reason about.
+#   - blend=0.5 keeps the commodity rulebook contributing meaningfully on
+#     commodity-heavy headlines where it fires (FPB doesn't exercise it).
+#   - henry_scale=2.0 outperforms Korab's 1.5 by 0.8pp on FPB.
+HENRY_SCALE: float = 2.0
+SENTIBIG_SCALE: float = 0.1
+SENTIMENT_THRESHOLD: float = 0.33
+SENTIMENT_BLEND_VADER: float = 0.5  # weight on VADER vs rulebook when rules fire
+SENTIMENT_RULE_COEF: float = 0.22   # per-match increment in analyze_fundamental_direction
+
 # Initialize VADER analyzer
 vader_analyzer = None
 article_summarizer = None
@@ -91,8 +113,23 @@ async def lifespan(app: FastAPI):
                 logger.info("Downloading VADER lexicon...")
                 nltk.download('vader_lexicon', quiet=True)
             
-            # Initialize VADER
+            # Initialize VADER and extend its general lexicon with finance-specific terms.
+            # See backend/services/lexicons/README.md for sources and tuning rationale.
             vader_analyzer = SentimentIntensityAnalyzer()
+            try:
+                from services.lexicons import HENRY, SENTI_BIG_NOMICS
+                vader_analyzer.lexicon.update(
+                    {k: v * SENTIBIG_SCALE for k, v in SENTI_BIG_NOMICS.items()}
+                )
+                vader_analyzer.lexicon.update(
+                    {k: v * (HENRY_SCALE / 1.5) for k, v in HENRY.items()}
+                )
+                logger.info(
+                    "VADER lexicon extended: +%d SentiBignomics, +%d Henry (effective size %d)",
+                    len(SENTI_BIG_NOMICS), len(HENRY), len(vader_analyzer.lexicon),
+                )
+            except ImportError as e:
+                logger.warning("finance lexicons not available, using plain VADER: %s", e)
             logger.info("VADER sentiment analyzer initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize VADER: {e}")
@@ -1760,7 +1797,7 @@ def analyze_fundamental_direction(text: str, commodity: Optional[str]) -> Dict[s
     for entry in rulebook[normalized]["bearish"]:
         if re.search(entry["pattern"], text_lower):
             bearish_matches.append(entry["signal"])
-    score = 0.22 * len(bullish_matches) - 0.22 * len(bearish_matches)
+    score = SENTIMENT_RULE_COEF * len(bullish_matches) - SENTIMENT_RULE_COEF * len(bearish_matches)
     score = _clamp(score, -0.9, 0.9)
     if score > 0:
         bias = "BULLISH"
@@ -1798,13 +1835,18 @@ def analyze_market_sentiment(text: str, commodity: Optional[str] = None, scores:
     fundamental = analyze_fundamental_direction(text, commodity)
     has_rules = bool(fundamental["matched_signals"])
     combined_score = compound
-    method = "vader"
+    # VADER now scores against an extended finance lexicon (Henry + SentiBignomics),
+    # so the pure-VADER path is much more informative than before this PR.
+    method = "vader_v2"
     if has_rules:
-        combined_score = (compound * 0.4) + (fundamental["directional_score"] * 0.6)
-        method = "commodity_vader"
-    if combined_score >= 0.12:
+        combined_score = (
+            compound * SENTIMENT_BLEND_VADER
+            + fundamental["directional_score"] * (1 - SENTIMENT_BLEND_VADER)
+        )
+        method = "commodity_vader_v2"
+    if combined_score >= SENTIMENT_THRESHOLD:
         sentiment = "BULLISH"
-    elif combined_score <= -0.12:
+    elif combined_score <= -SENTIMENT_THRESHOLD:
         sentiment = "BEARISH"
     else:
         sentiment = "NEUTRAL"
