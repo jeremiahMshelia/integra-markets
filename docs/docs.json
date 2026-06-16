@@ -58,6 +58,19 @@
             "pages": ["sdks/python", "sdks/typescript"]
           }
         ]
+      },
+      {
+        "tab": "Legal",
+        "groups": [
+          {
+            "group": "Beta",
+            "pages": [
+              "legal/terms",
+              "legal/privacy",
+              "legal/ccpa"
+            ]
+          }
+        ]
       }
     ]
   },

@@ -126,6 +126,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Beta disclosure middleware. Stamps every response with headers that:
+#   - identify the service as beta
+#   - reaffirm "not financial advice" on every call
+#   - expose the policy version so customers can pin their integration
+# These are read by the mobile app + dashboard to render BETA banners
+# and by API customers building compliance pipelines.
+INTEGRA_BETA = True
+INTEGRA_POLICY_VERSION = "1.0-beta"
+
+
+@app.middleware("http")
+async def beta_disclosure_headers(request, call_next):
+    response = await call_next(request)
+    if INTEGRA_BETA:
+        response.headers["X-Integra-Beta"] = "true"
+        response.headers["X-Integra-Disclaimer"] = "Informational only; not financial advice."
+        response.headers["X-Integra-Policy-Version"] = INTEGRA_POLICY_VERSION
+    return response
+
 # Initialize Supabase
 supabase_url = os.getenv("SUPABASE_URL")
 supabase_key = os.getenv("SUPABASE_KEY")
@@ -220,6 +239,82 @@ def health_check():
         "vader_available": vader_analyzer is not None,
         "timestamp": datetime.datetime.now().isoformat()
     }
+
+# Beta acknowledgement endpoint. The mobile app calls this once after the
+# user taps "I agree" on the beta disclaimer modal at first sign-in. The
+# row records: who agreed, when, which policy/terms versions, and the
+# device that agreed (for audit). Without an acknowledgement on file, the
+# backend may refuse downstream paid actions (enforced in the route
+# handler that introduces paid functionality, not here).
+class BetaAcknowledgmentRequest(BaseModel):
+    user_id: str = Field(..., min_length=1)
+    terms_version: str = Field(..., description="Version of Beta Terms accepted")
+    privacy_version: str = Field(..., description="Version of Privacy Policy accepted")
+    device_identifier: Optional[str] = Field(None, description="Hashed device ID, optional")
+    locale: Optional[str] = Field(None, description="App locale at time of agreement, e.g. en-US")
+
+
+@app.post('/api/account/beta-acknowledgment')
+def record_beta_acknowledgment(request: BetaAcknowledgmentRequest):
+    """Records the user's acceptance of Beta Terms + Privacy Policy.
+
+    Idempotent: re-posting with the same user_id + versions returns the
+    existing record's timestamp. Used by the mobile app's first-launch
+    flow and by the dashboard's first-sign-in modal.
+    """
+    if supabase is None:
+        # Without Supabase we can still accept and log; this lets local
+        # dev work without a database. Production must have Supabase.
+        logger.warning("beta acknowledgement received but Supabase unavailable")
+        return {
+            "user_id": request.user_id,
+            "acknowledged_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "terms_version": request.terms_version,
+            "privacy_version": request.privacy_version,
+            "persisted": False,
+        }
+    try:
+        existing = (
+            supabase.table("beta_acknowledgments")
+            .select("acknowledged_at")
+            .eq("user_id", request.user_id)
+            .eq("terms_version", request.terms_version)
+            .eq("privacy_version", request.privacy_version)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            return {
+                "user_id": request.user_id,
+                "acknowledged_at": existing.data[0]["acknowledged_at"],
+                "terms_version": request.terms_version,
+                "privacy_version": request.privacy_version,
+                "persisted": True,
+                "newly_recorded": False,
+            }
+        inserted = (
+            supabase.table("beta_acknowledgments")
+            .insert({
+                "user_id": request.user_id,
+                "terms_version": request.terms_version,
+                "privacy_version": request.privacy_version,
+                "device_identifier": request.device_identifier,
+                "locale": request.locale,
+            })
+            .execute()
+        )
+        return {
+            "user_id": request.user_id,
+            "acknowledged_at": inserted.data[0]["acknowledged_at"] if inserted.data else None,
+            "terms_version": request.terms_version,
+            "privacy_version": request.privacy_version,
+            "persisted": True,
+            "newly_recorded": True,
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("failed to record beta acknowledgement: %s", exc)
+        raise HTTPException(status_code=500, detail="failed to record acknowledgement")
+
 
 # Models status
 @app.get('/api/models/status')

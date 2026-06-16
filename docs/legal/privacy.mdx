@@ -1,0 +1,364 @@
+---
+title: "Privacy Policy"
+description: "How Integra Markets collects, uses, and protects information during the beta period."
+---
+
+<Warning>
+  Integra Markets is in **beta**. This product is offered as an informational
+  tool only and is not financial advice. This policy reflects the beta posture
+  and will be updated when we exit beta. Substantial changes will be notified
+  to you at least 30 days before taking effect.
+</Warning>
+
+**Effective date:** 2026-06-05
+**Version:** 1.0 (Beta)
+**Service availability:** United States and Canada only
+
+This policy describes the data Integra Markets ("Integra", "we", "us")
+collects through our mobile app, web dashboard, and developer API, how we
+use it, how long we keep it, and your rights. By using Integra Markets you
+agree to this policy and to our [Beta Terms of Service](/legal/terms).
+
+We do not currently offer Integra Markets to residents of the European
+Economic Area, the United Kingdom, or other jurisdictions outside the
+United States and Canada. If you are accessing the service from outside
+these regions, the service is not directed at you and your data is not
+knowingly processed.
+
+## 1. Information We Collect
+
+We collect three distinct categories of information. They are stored
+separately and never combined except where this policy expressly permits.
+
+### 1.1 Scraped News Content
+
+What we read so the sentiment engine can produce labels:
+
+- News article URLs, headlines, body text, publication timestamps, and
+  publisher domains
+- Prediction-market event metadata from Polymarket and Kalshi public APIs
+- Commodity price snapshots from Alpha Vantage
+- Outputs of our own engine: classification (bullish / bearish / neutral),
+  confidence scores, matched keywords, and model version tags
+
+This category contains no information about you as a user. Where a public
+article incidentally names a natural person (e.g. an executive in an
+earnings report), we do not enrich or cross-reference that information.
+
+**Source:** RSS feeds, partner APIs with commercial terms, and crawlers
+that honour `robots.txt` and publisher opt-out signals. Publisher
+takedown or training-exclusion requests sent to **contact@integramarkets.app**
+are honoured within 30 days.
+
+### 1.2 User Account Data
+
+Information about you as a user of the mobile app or web dashboard.
+
+| Category | Specific elements |
+| --- | --- |
+| Identity | Email address, display name, Apple/Google federated ID (if you use those), hashed device identifier |
+| Authentication | Access and refresh tokens generated at sign-in |
+| In-app activity | Articles you bookmark, sentiment votes you cast, articles you save |
+| Preferences | Commodities you follow, alert thresholds, notification preferences |
+| Push notifications | Device push token issued by your OS |
+| Billing (paid users only) | Stripe customer identifier and tokenized payment method. The full card number is processed by Stripe and never touches Integra Markets infrastructure |
+| Security | Sign-in event timestamps, source IP (truncated to a /24 subnet after 90 days), User-Agent |
+| Support | Any messages you send us via support channels |
+
+**What we don't collect:** We do not collect your continuous location,
+contacts, calendar, photos, or microphone unless you opt in to a specific
+feature that requires them, and we explain the purpose at the moment of
+the prompt.
+
+### 1.3 API Metadata
+
+Telemetry generated when you call the Integra Markets API.
+
+| Category | Specific elements |
+| --- | --- |
+| Credential | API key prefix (e.g. `ik_live_xN8`) and SHA-256 hash. The full plaintext key is shown to you once at creation and never stored thereafter |
+| Per-request log | Timestamp, endpoint path, HTTP method, response code, response time, source IP (truncated to a /24 subnet after 90 days), User-Agent |
+| Aggregate | Per-key per-day request counters |
+| Audit | Key creation, revocation, and last-used events |
+
+If your API key is provisioned to a corporate entity, this telemetry is
+treated as business-to-business operational data. If your API key is
+provisioned to you personally, the user rights in § 5 apply to your
+metadata.
+
+## 2. Algorithmic Data Processing — How AI Uses Data for Sentiment Models
+
+Integra Markets is built around a sentiment engine that reads news
+articles and labels them. This section explains exactly what feeds the
+model.
+
+### 2.1 What the Sentiment Engine Reads
+
+The model's input is the **Scraped News Content** in § 1.1 — specifically
+the article headline, body text (where available), publisher domain, and
+commodity context.
+
+**Your User Account Data is never used as a model input.** Your
+bookmarks, votes, demographics, and preferences are not features in the
+sentiment model.
+
+### 2.2 How the Engine Produces Labels
+
+We combine two methods:
+
+1. A **rule-based scorer** using a finance-domain lexicon (NLTK VADER
+   extended with the Henry 2008 and SentiBigNomics dictionaries) plus
+   per-commodity directional rules.
+2. A **small learning model** (PyTorch MLP plus a keyword bandit) that is
+   trained on the engine's own prior predictions versus subsequent 24-hour
+   commodity price moves from Alpha Vantage.
+
+The current production accuracy on the Financial Phrasebank benchmark
+(4,846 sentences) is approximately **69%**, comparable to inter-annotator
+agreement between human financial analysts on the same dataset.
+
+### 2.3 Optional Contribution to Model Improvement
+
+If you cast an explicit sentiment vote on an article in the mobile app,
+you may choose to allow that vote — together with the public text of the
+article you voted on — to be added to our training set. We treat your
+vote as ground truth for that article only. We do not train the model on
+your bookmarks, saves, reading dwell time, or any other passive
+behaviour. If you do not vote, no data from your account enters the
+model.
+
+**This setting defaults to OFF for all new accounts.** You may turn it on
+at **Profile → Privacy → Improve the model**, and you may turn it off at
+any time. Turning it off stops all future contributions immediately.
+Contributions you made while the setting was on remain reflected in
+already-trained model versions; we exclude your contributions from the
+next full retraining cycle. Before votes enter the training pipeline,
+we strip account identifiers and session metadata so that the training
+set does not contain account-level information.
+
+### 2.4 What the Model Does Not Do
+
+- It is **not personalised** to you. The same article returns the same
+  label to every caller of the same API version.
+- It is **not an automated decision** that produces legal or similarly
+  significant effects about any natural person. Sentiment outputs are
+  informational analyses of public news. Where an enterprise API customer
+  integrates our outputs into systems that make decisions affecting
+  natural persons, that customer is an independent controller for that
+  downstream processing and is responsible for any human-review or
+  meaningful-information obligations that apply to their use.
+- It does **not infer** your protected characteristics (race, religion,
+  political views, health, sexuality, etc.) and does not use any such
+  inference as a feature.
+
+### 2.5 Model Versioning
+
+Each version is tagged in the API response under the `method` field
+(e.g. `commodity_vader_v2`). Major versions are retained and served for
+a minimum of six months after a successor ships, so API customers can
+pin a stable version.
+
+## 3. Data Retention and Automated Deletion Schedules
+
+We retain data for the minimum period needed to deliver the service or
+to satisfy a specific legal obligation. The schedules below are enforced
+by automated jobs.
+
+### 3.1 User Account Data
+
+| Data | Active retention | Backup | Deletion trigger |
+| --- | --- | --- | --- |
+| Email, name, federated ID | Life of account | 90 days post-deletion | Account deletion + 30-day cooldown (see § 3.4) |
+| Access token | 24 hours | None | Expiry, sign-out, password change |
+| Refresh token | 30 days | None | Rotation, sign-out, password change |
+| Bookmarks, saves, votes | Life of account | 90 days post-deletion | Account deletion |
+| Push token | 180 days since last successful delivery | None | Rotation by OS, app uninstall, 180-day inactivity |
+| Watched commodities, alert thresholds | 24 months rolling | None | Account deletion or your in-app request |
+| Billing records | 7 years from transaction | 7 years | Statutory IRS retention |
+| Sign-in events | 18 months | None | Time-based purge |
+| Sign-in source IP | 90 days full precision; truncated to /24 for 12 further months | None | Time-based purge |
+| Support correspondence | 3 years from ticket closure | None | Time-based purge |
+
+### 3.2 API Metadata
+
+| Data | Active retention | Backup | Deletion trigger |
+| --- | --- | --- | --- |
+| API key prefix + hash | Life of key | 90 days post-revocation | Customer revocation, or contract termination + 30 days |
+| Per-request telemetry | 90 days | 90 days | Time-based purge |
+| API caller source IP | 90 days full precision; truncated to /24 for 12 further months | None | Time-based purge |
+| Aggregated counters | 24 months | 90 days | Time-based purge |
+| Billing-relevant usage | 7 years | 7 years | Statutory retention |
+| Audit log | 24 months | 90 days | Time-based purge |
+
+### 3.3 Scraped News Content
+
+| Data | Active retention | Backup | Deletion trigger |
+| --- | --- | --- | --- |
+| Article URL / headline / body | 18 months rolling | 90 days | Time-based purge; or publisher takedown request honoured within 30 days |
+| Sentiment classifications | 36 months | 90 days | Time-based purge |
+| Aggregate sentiment indices | Indefinite (statistical aggregates) | 90 days | Not subject to deletion |
+| Training reward records | 24 months | 90 days | Time-based purge |
+| Keyword bandit statistics | 24 months rolling | 90 days | Time-based purge |
+| Model weights and lexicon snapshots | Indefinite (version-pinned artefacts) | 90 days | Not subject to deletion; reproducibility requirement |
+
+### 3.4 Account Deletion — Step by Step
+
+You can delete your account inside the mobile app at **Profile → Account
+→ Delete account**.
+
+1. **Day 0:** You type `DELETE` to confirm. Your account is suspended
+   (no notifications, no sign-in).
+2. **Day 0–30:** Cooldown. You can tap **Restore** in the in-app banner
+   to cancel.
+3. **Day 30:** A scheduled job deletes your `auth.users` row. Database
+   cascades remove all linked rows immediately.
+4. **Day 30–120:** Encrypted database backups still hold your data and
+   expire on a rolling 90-day basis.
+5. **Day 120:** All of your User Account Data is unrecoverable.
+
+If you contributed sentiment votes to model training (see § 2.3), your
+prior contributions remain reflected in model versions trained before
+your deletion. We exclude your contributions from the next retraining
+cycle. We cannot extract individual contributions from already-trained
+weights; that limitation is a known property of small neural networks.
+
+Statutory holds (billing records, fraud-prevention logs) override the
+above for those specific elements only.
+
+## 4. Service Territory and International Data
+
+Integra Markets is available in the **United States and Canada only**.
+We do not knowingly offer the service to residents of other
+jurisdictions during the beta period.
+
+All Consumer Data and API Metadata is stored and processed in US regions
+(Google Cloud Run `us-central1`; Supabase `us-east-1`). We do not
+transfer Consumer Data outside the US during the beta period, except to
+the following operationally necessary US-based sub-processors: Stripe
+(billing), Alpha Vantage (market data), and standard observability /
+incident-response vendors.
+
+When Integra Markets becomes available outside the US, this policy will
+be updated to include the corresponding cross-border transfer
+mechanisms (EU SCCs, UK IDTA, EU-US Data Privacy Framework certifications
+where applicable), and you will be notified at least 30 days before the
+new terms take effect.
+
+A current list of sub-processors is at
+[https://integramarkets.app/legal/subprocessors](https://integramarkets.app/legal/subprocessors).
+
+## 5. Your Rights and How to Exercise Them
+
+### 5.1 Rights Available to All Users
+
+| Right | How |
+| --- | --- |
+| Know what we collect about you | This policy + in-app **Profile → Privacy → Download my data** (JSON within 45 days) |
+| Correct your data | In-app profile editor (immediate) |
+| Delete your data | In-app deletion flow (see § 3.4) |
+| Port your data | Same JSON export as Know |
+| Opt out of model training contribution | **Profile → Privacy → Improve the model** (default OFF for new accounts) |
+| Contact us about anything privacy-related | **contact@integramarkets.app** |
+
+We respond to verified requests within **45 days** of receipt. Where
+complex, we may extend by up to 45 additional days and will notify you
+in writing.
+
+### 5.2 California Residents (CCPA / CPRA)
+
+If you reside in California, you have additional rights under the
+California Consumer Privacy Act and California Privacy Rights Act.
+
+**Sale and sharing.** We do not sell your personal information for
+monetary consideration, and we do not share it for cross-context
+behavioural advertising. We do not exchange personal information for
+any other valuable consideration in a manner that would constitute a
+"sale" or "sharing" under the CCPA. We honour Global Privacy Control
+(GPC) signals as a valid opt-out request for any "sharing" that may be
+construed to occur.
+
+**Sensitive personal information.** Account credentials and your Stripe
+customer reference are "sensitive personal information" under
+§ 1798.140(ae). We use these only for the business purposes permitted
+by § 1798.121(a) — providing the service you requested, billing, fraud
+prevention, and security — and not to infer characteristics about you.
+
+**Right to Limit.** Because our use is limited to those permitted
+business purposes, the Right to Limit Use does not change how we
+handle your sensitive personal information. You may nevertheless submit
+a request at **contact@integramarkets.app** and we will confirm our
+use.
+
+**"Do Not Sell or Share My Personal Information"** — see
+[/legal/ccpa](/legal/ccpa).
+
+**Verification.** We may verify your identity by confirming control of
+the email address on your account before fulfilling any request.
+
+### 5.3 Other US State Residents
+
+Residents of Virginia, Colorado, Connecticut, Utah, Texas, Oregon,
+Montana, and Delaware have rights under their state privacy laws,
+including the rights to access, correct, delete, port, and opt out of
+certain processing. Submit requests to **contact@integramarkets.app**.
+
+We honour the Global Privacy Control (GPC) browser signal as a valid
+universal opt-out where required by state law.
+
+## 6. Security
+
+We maintain reasonable administrative, technical, and physical
+safeguards designed to protect your information:
+
+- **Encryption in transit:** TLS 1.3 minimum, HSTS enforced
+- **Encryption at rest:** AES-256 for the database, object storage, and
+  backups
+- **Access control:** Multi-factor authentication required for all
+  administrative access; role-based access for production systems
+- **Network segmentation:** Consumer Data, API Metadata, and Scraped
+  News Content stored in separate database schemas with distinct
+  service accounts
+- **Logging:** Immutable audit log of administrative actions, retained
+  24 months
+- **Incident response:** In the event of a confirmed breach affecting
+  your personal information, we will notify you and applicable
+  regulators in accordance with the timelines required by applicable
+  state law (e.g. California Civil Code § 1798.82, Massachusetts
+  201 CMR 17, New York SHIELD Act).
+- **Vulnerability management:** Annual third-party penetration test
+  scheduled
+
+No system is perfectly secure. We will continue to improve our security
+program as Integra Markets matures past beta.
+
+## 7. Children
+
+Integra Markets is not directed at children under 18. Account creation
+requires confirmation that you are at least 18 years old. We do not
+knowingly collect data from anyone under 13 (COPPA) and do not knowingly
+process data from 13–17 year olds under any state regime (notably
+California AADC, Maryland MAPA, Connecticut). Reports of suspected
+under-age accounts to **contact@integramarkets.app** result in account
+deletion within 7 days.
+
+## 8. Changes to This Policy
+
+We review this policy at least every 12 months and after any material
+change to our processing activities. Material changes are notified to
+you in-app and by email **at least 30 days before** the new terms take
+effect. The current version is always at
+[https://integramarkets.app/legal/privacy](https://integramarkets.app/legal/privacy).
+
+## 9. Contact
+
+All privacy, security, data-subject-request, and publisher-takedown
+correspondence: **contact@integramarkets.app**
+
+We monitor this address Monday through Friday during US business hours
+and aim to acknowledge receipt within two business days. Substantive
+responses follow within the SLAs stated in § 5.
+
+---
+
+**Document version:** 1.0 (Beta)
+**Next scheduled review:** 2027-06-05
