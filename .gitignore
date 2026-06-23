@@ -115,6 +115,4 @@ test_*.py
 -integra-markets/
 -integra-markets-backup/
 .vercel
-=======
 .env
->>>>>>> f2d25cbf7f69a5db58e3f49250cfd8f8586b26bb
