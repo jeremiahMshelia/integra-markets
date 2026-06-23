@@ -15,8 +15,10 @@ import ProfileScreen from './app/components/ProfileScreen';
 import IntegraLoadingPage from './app/components/IntegraLoadingPage';
 import ErrorBoundary from './app/components/ErrorBoundary';
 import { BookmarkProvider } from './app/providers/BookmarkProvider';
+import PendingDeletionBanner from './app/components/PendingDeletionBanner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync } from './app/services/notificationService';
+import { getPendingDeletion } from './app/services/accountService';
 
 // Ensure __DEV__ is defined
 if (typeof global.__DEV__ === 'undefined') {
@@ -27,6 +29,7 @@ const MainApp = () => {
   const [activeTab, setActiveTab] = useState('Today');
   const [isLoading, setIsLoading] = useState(true);
   const [agentActive, setAgentActive] = useState(true);
+  const [pendingDeletionExpiresAt, setPendingDeletionExpiresAt] = useState(null);
 
   const checkFirstLaunch = async () => {
     try {
@@ -41,9 +44,16 @@ const MainApp = () => {
     }
   };
 
+  const refreshPendingDeletion = async () => {
+    const result = await getPendingDeletion();
+    if (result.ok) {
+      setPendingDeletionExpiresAt(result.data ? result.data.expires_at : null);
+    }
+  };
+
   useEffect(() => {
-    // Simulate loading time
     checkFirstLaunch();
+    refreshPendingDeletion();
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 2000);
@@ -62,7 +72,14 @@ const MainApp = () => {
       case 'Alerts':
         return <AlertsScreen />;
       case 'Profile':
-        return <ProfileScreen />;
+        return (
+          <ProfileScreen
+            onAccountDeletionScheduled={(expiresAt) => {
+              setPendingDeletionExpiresAt(expiresAt);
+              setActiveTab('Today');
+            }}
+          />
+        );
       default:
         return <TodayDashboard agentActive={agentActive} />;
     }
@@ -73,7 +90,14 @@ const MainApp = () => {
       <BookmarkProvider>
         <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#121212" />
-        
+
+        {pendingDeletionExpiresAt ? (
+          <PendingDeletionBanner
+            expiresAt={pendingDeletionExpiresAt}
+            onRestored={() => setPendingDeletionExpiresAt(null)}
+          />
+        ) : null}
+
         {/* Main Content */}
         <View style={styles.content}>
           {renderContent()}
