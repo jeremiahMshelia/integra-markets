@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Lint + Jest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - run: npm ci --legacy-peer-deps
+      - run: npm run lint
+      - run: npm test -- --ci
+
+  backend:
+    name: Backend pytest (sentiment >=65%)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install backend deps
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install pytest
+      - name: Download VADER lexicon
+        run: python -c "import nltk; nltk.download('vader_lexicon')"
+      - name: Run tests if any exist
+        run: |
+          if [ -d tests ] && ls tests/test_*.py >/dev/null 2>&1; then
+            pytest tests/ -v
+          else
+            echo "No backend tests yet — skipping (will fail once PR #9 adds tests/test_sentiment_accuracy.py)"
+          fi
+
+  build64-invariants:
+    name: Build 64 stability checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: SafeAppWrapper present
+        run: find app -name "SafeAppWrapper*" 2>/dev/null | grep -q . || (echo "::error::SafeAppWrapper missing — Build 20/64 regression risk" && exit 1)
+      - name: iOS 18.6 polyfill present
+        run: test -f patches/ios-18-6-crash-fix.js || (echo "::error::iOS 18.6 patch removed" && exit 1)
+      - name: Critical deps pinned
+        run: |
+          for d in "@react-native-community/blur" "react-native-safe-area-context" "buffer"; do
+            grep -q "\"$d\"" package.json || (echo "::error::Missing dep $d (Build 64 baseline)" && exit 1)
+          done
+      - name: New architecture stays OFF
+        run: |
+          if grep -q '"newArchEnabled":[[:space:]]*true' app.json; then
+            echo "::error::newArchEnabled=true is a documented crash trigger"
+            exit 1
+          fi
+      - name: Version sync (app.json <-> package.json)
+        run: |
+          A=$(node -p "require('./app.json').expo.version")
+          P=$(node -p "require('./package.json').version")
+          [ "$A" = "$P" ] || (echo "::error::version mismatch: app.json=$A package.json=$P" && exit 1)

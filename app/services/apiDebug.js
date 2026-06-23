@@ -2,8 +2,9 @@
  * Debug API Helper to troubleshoot connection issues
  */
 
-const API_BASE_URL = 'https://integra-markets-backend.fly.dev';
-const API_URL = `${API_BASE_URL}/api`;
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || 'https://integra-markets-backend.fly.dev';
+const API_URL = `${API_BASE_URL.replace(/\/$/, '')}/api`;
 
 export const testConnection = async () => {
   console.log('===== API CONNECTION DEBUG =====');

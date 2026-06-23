@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/apiClient';
 import useAlertPreferences from '../hooks/useAlertPreferences';
 import { isBreakingNews, sortNewsWithBreaking } from '../utils/newsUtils';
+import { getPreferredSourceUrl } from '../utils/polymarketLinks';
 import BreakingNewsIndicator from './BreakingNewsIndicator';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -262,7 +263,10 @@ const NewsFeed = ({
           summary: summary,
           content: item.content || summary,
           source: item.source || 'Unknown',
-          sourceUrl: item.url || item.source_url || '#',
+          sourceUrl: getPreferredSourceUrl(item) || '#',
+          eventUrl: item.event_url || item.eventUrl || item.polymarket_url || item.polymarketUrl,
+          eventSlug: item.event_slug || item.eventSlug || item.slug || item.polymarket_slug || item.polymarketSlug,
+          polymarketContext: item.polymarket_context || item.polymarketContext,
           timeAgo: formatTimeAgo(articleDate),
           publishedAt: articleDate.toISOString(),
           sentiment: (item.sentiment || 'NEUTRAL').toUpperCase(),

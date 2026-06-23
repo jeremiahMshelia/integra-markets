@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'react-native';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { userService } from '../services/userService';
+import DeleteAccountModal from './DeleteAccountModal';
 
 // Use the same color palette as the main app
 const colors = {
@@ -56,7 +57,7 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onNavigateToBookmarks }) {
+export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onNavigateToBookmarks, onAccountDeletionScheduled }) {
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
@@ -65,6 +66,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   const [profileError, setProfileError] = useState(null);
   const [resolvedProfile, setResolvedProfile] = useState(userProfile || null);
   const [uploading, setUploading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const pickImage = async () => {
     try {
@@ -588,8 +590,38 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
             </TouchableOpacity>
           </View>
         </View>
+
+        <View style={[styles.section, { marginTop: 20 }]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleContainer}>
+              <MaterialIcons name="person-off" color={colors.accentNegative} size={20} />
+              <Text style={styles.sectionTitle}>Account</Text>
+            </View>
+          </View>
+
+          <View style={styles.settingsList}>
+            <TouchableOpacity
+              style={[styles.settingItem, { borderBottomWidth: 0 }]}
+              onPress={() => setShowDeleteModal(true)}
+            >
+              <View style={styles.logoutContainer}>
+                <MaterialIcons name="delete-forever" color={colors.accentNegative} size={20} />
+                <Text style={[styles.settingText, { color: colors.accentNegative, marginLeft: 8 }]}>Delete account</Text>
+              </View>
+              <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
+            </TouchableOpacity>
+          </View>
+        </View>
         </ScrollView>
       )}
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onDeleted={(expiresAt) => {
+          setShowDeleteModal(false);
+          if (onAccountDeletionScheduled) onAccountDeletionScheduled(expiresAt);
+        }}
+      />
     </SafeAreaView>
   );
 }

@@ -4,9 +4,9 @@
  * Implements robust error handling and retry logic
  */
 
-// Use local backend for development
-const API_BASE_URL = 'http://localhost:8000';  // Local development backend
-const API_URL = `${API_BASE_URL}/api`;
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = `${API_BASE_URL.replace(/\/$/, '')}/api`;
 
 // Common API configuration
 const API_CONFIG = {
@@ -453,6 +453,7 @@ export const dashboardApi = {
         status: 'success',
         data: marketData.data || {},
         news: newsData,
+        requestedCommodities: commodities,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
@@ -463,6 +464,37 @@ export const dashboardApi = {
         data: {},
         news: [],
         error: error.message
+      };
+    }
+  },
+
+  getSentimentEngine: async (commodities = [], options = {}) => {
+    try {
+      const response = await fetchWithRetry(`${API_URL}/dashboard/sentiment-engine`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          commodities,
+          max_headlines: options.maxHeadlines || 15,
+          refresh_if_empty: options.refreshIfEmpty !== false,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`API error: ${response.status} - ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Sentiment engine dashboard API error:', error);
+      return {
+        overall_sentiment: 'NEUTRAL',
+        confidence: 0.5,
+        commodities: [],
+        error: error.message,
       };
     }
   }
@@ -512,6 +544,77 @@ export const sentimentApi = {
         impact: 'MEDIUM',
         keywords: [],
         error: error.message
+      };
+    }
+  },
+
+  getCommodityLexiconCatalog: async () => {
+    try {
+      const response = await fetchWithRetry(`${API_URL}/lexicon/commodities`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Commodity lexicon catalog error:', error);
+      return {
+        count: 0,
+        commodities: [],
+        error: error.message,
+      };
+    }
+  },
+
+  getCommodityLexicon: async (commodity) => {
+    try {
+      const response = await fetchWithRetry(`${API_URL}/lexicon/commodities/${encodeURIComponent(commodity)}`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Commodity lexicon detail error:', error);
+      return {
+        commodity,
+        bullish_rules: [],
+        bearish_rules: [],
+        error: error.message,
+      };
+    }
+  },
+
+  explainLexicon: async (text, commodity = null, includeRulebook = false) => {
+    try {
+      const response = await fetchWithRetry(`${API_URL}/lexicon/explain`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          commodity,
+          include_rulebook: includeRulebook,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Lexicon explain API error:', error);
+      return {
+        text,
+        commodity,
+        sentiment: 'NEUTRAL',
+        confidence: 0.5,
+        market_context: { matched_signals: [] },
+        keywords: [],
+        tickers: [],
+        error: error.message,
       };
     }
   }
