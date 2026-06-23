@@ -3,9 +3,10 @@
  * Fetches comprehensive analysis including sentiment, insights, and market impact
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { extractPolymarketSlug, getPreferredSourceUrl } from '../utils/polymarketLinks';
 
-const API_BASE_URL = 'https://integra-markets-backend.fly.dev';
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || 'https://integra-markets-backend.fly.dev';
 
 class NewsAnalysisService {
     constructor() {
@@ -28,12 +29,15 @@ class NewsAnalysisService {
 
         try {
             console.log('Fetching analysis for:', article.title);
+            const isPolymarket = article.source?.toLowerCase?.() === 'polymarket';
             
             // Combine title and summary for better analysis
             const fullText = `${article.title}. ${article.summary || ''}`;
             
             // Fetch sentiment analysis
-            const sentimentPromise = this.fetchSentiment(fullText);
+            const sentimentPromise = isPolymarket
+                ? this.fetchOverallSentiment(article)
+                : this.fetchSentiment(fullText);
             
             // Fetch AI insights (using chat endpoint for now)
             const insightsPromise = this.fetchAIInsights(article);
@@ -49,15 +53,17 @@ class NewsAnalysisService {
             ]);
             
             // Combine all data into comprehensive analysis
-            const analysis = {
-                summary: this.generateSummary(article, sentiment),
-                finBertSentiment: this.transformSentiment(sentiment),
-                keyDrivers: this.extractKeyDrivers(article, sentiment),
-                marketImpact: this.calculateMarketImpact(sentiment, marketData),
-                traderInsights: this.generateTraderInsights(article, sentiment, insights),
-                originalArticle: article,
-                timestamp: new Date().toISOString()
-            };
+            const analysis = isPolymarket && sentiment?.overall_sentiment
+                ? this.buildPolymarketAnalysis(article, sentiment, insights, marketData)
+                : {
+                    summary: this.generateSummary(article, sentiment),
+                    finBertSentiment: this.transformSentiment(sentiment),
+                    keyDrivers: this.extractKeyDrivers(article, sentiment),
+                    marketImpact: this.calculateMarketImpact(sentiment, marketData),
+                    traderInsights: this.generateTraderInsights(article, sentiment, insights),
+                    originalArticle: article,
+                    timestamp: new Date().toISOString()
+                };
             
             // Cache the result
             this.cache.set(cacheKey, {
@@ -72,6 +78,33 @@ class NewsAnalysisService {
             
             // Return fallback analysis
             return this.getFallbackAnalysis(article);
+        }
+    }
+
+    async fetchOverallSentiment(article) {
+        try {
+            const preferredSourceUrl = getPreferredSourceUrl(article);
+            const response = await fetch(`${API_BASE_URL}/api/news/overall-sentiment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    topic_text: article.title,
+                    commodity: article.commodities?.[0] || null,
+                    max_headlines: 20,
+                    refresh_if_empty: true,
+                    event_url: preferredSourceUrl,
+                    event_slug: article.eventSlug || article.event_slug || extractPolymarketSlug(article)
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Overall sentiment API error: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching overall sentiment:', error);
+            return null;
         }
     }
     
@@ -253,6 +286,75 @@ class NewsAnalysisService {
         
         console.log('Transformed sentiment result:', result);
         return result;
+    }
+
+    buildPolymarketAnalysis(article, overallSentiment, aiInsights, marketData) {
+        const sentimentLabel = overallSentiment.overall_sentiment || 'NEUTRAL';
+        const confidence = overallSentiment.confidence || 0.5;
+        const finBertSentiment = this.transformSentiment({
+            sentiment: sentimentLabel,
+            confidence,
+            scores: {
+                compound: sentimentLabel === 'BULLISH' ? confidence : sentimentLabel === 'BEARISH' ? -confidence : 0,
+                neutral: Math.max(0.1, 1 - confidence)
+            }
+        });
+
+        const driverTexts = [
+            ...(overallSentiment.matched_signals || []).map(signal => ({
+                text: String(signal).toLowerCase(),
+                score: confidence
+            })),
+            ...(overallSentiment.target_assets || []).map(asset => ({
+                text: String(asset).toLowerCase(),
+                score: 0.8
+            }))
+        ];
+
+        const seen = new Set();
+        const keyDrivers = driverTexts.filter(driver => {
+            if (seen.has(driver.text)) return false;
+            seen.add(driver.text);
+            return true;
+        }).slice(0, 8);
+
+        const articleWithTargets = {
+            ...article,
+            commodities: overallSentiment.target_assets || article.commodities || [],
+            marketImpact: confidence > 0.72 ? 'HIGH' : confidence > 0.58 ? 'MEDIUM' : 'LOW'
+        };
+
+        const traderInsights = [];
+        traderInsights.push(
+            `Overall sentiment for ${(overallSentiment.primary_target || 'the market').toUpperCase()} is ${sentimentLabel.toLowerCase()} across ${overallSentiment.headline_count || 0} relevant headlines`
+        );
+
+        if (overallSentiment.target_assets?.length) {
+            traderInsights.push(`Target assets: ${overallSentiment.target_assets.join(', ')}`);
+        }
+
+        if (overallSentiment.matched_signals?.length) {
+            traderInsights.push(`Key drivers: ${overallSentiment.matched_signals.slice(0, 3).join(', ')}`);
+        }
+
+        const aiDerivedInsights = this.generateTraderInsights(articleWithTargets, {
+            sentiment: sentimentLabel,
+            confidence
+        }, aiInsights);
+
+        return {
+            summary: overallSentiment.summary || article.summary || article.title,
+            finBertSentiment,
+            keyDrivers: keyDrivers.length ? keyDrivers : this.extractKeyDrivers(articleWithTargets, null),
+            marketImpact: this.calculateMarketImpact({ sentiment: sentimentLabel, confidence }, marketData),
+            traderInsights: [...traderInsights, ...aiDerivedInsights].slice(0, 5),
+            originalArticle: article,
+            timestamp: new Date().toISOString(),
+            overallSentiment,
+            eventUrl: overallSentiment.event_url || getPreferredSourceUrl(article),
+            eventSlug: overallSentiment.event_slug || extractPolymarketSlug(article),
+            sourceUrl: overallSentiment.source_url || getPreferredSourceUrl(article)
+        };
     }
     
     /**

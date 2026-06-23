@@ -23,8 +23,9 @@ module.exports = {
     '!app/**/*.d.ts',
     '!app/**/node_modules/**',
   ],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/app/$1',
+    '^react-native$': '<rootDir>/node_modules/react-native',
   },
   watchPathIgnorePatterns: [
     '<rootDir>/.worktrees/',

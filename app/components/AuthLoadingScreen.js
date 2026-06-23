@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { BlurView as ExpoBlurView } from 'expo-blur';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import IntegraIcon from './IntegraIcon';
 import { authService } from '../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -79,7 +80,20 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [fullName, setFullName] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [appleAvailable, setAppleAvailable] = useState(false);
     const progressAnim = new Animated.Value(0);
+
+    // Check Apple Sign-In availability once on mount. The button is hidden
+    // on Android, web, and iOS < 13 where the native sheet doesn't exist.
+    useEffect(() => {
+        let cancelled = false;
+        authService.isAppleSignInAvailable().then((available) => {
+            if (!cancelled) setAppleAvailable(available);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         if (currentScreen === 'loading') {
@@ -184,9 +198,53 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
         }
     };
 
-    // Social auth removed - using only email/password authentication
+    const handleAppleSignIn = async () => {
+        setIsLoading(true);
+        try {
+            const result = await authService.signInWithApple();
+            setIsLoading(false);
+            if (result.success) {
+                onAuthComplete({
+                    id: Date.now().toString(),
+                    email: '',
+                    fullName: '',
+                    username: 'apple_user',
+                    authMethod: 'apple',
+                    isNewUser: false,
+                });
+            } else if (result.error && result.error !== 'cancelled') {
+                Alert.alert('Sign in Failed', result.error);
+            }
+        } catch (error) {
+            setIsLoading(false);
+            console.error('Apple sign-in error:', error);
+            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+        }
+    };
 
-    // Google auth removed - using only email/password authentication
+    const handleGoogleSignIn = async () => {
+        setIsLoading(true);
+        try {
+            const result = await authService.signInWithGoogle();
+            setIsLoading(false);
+            if (result.success) {
+                onAuthComplete({
+                    id: Date.now().toString(),
+                    email: '',
+                    fullName: '',
+                    username: 'google_user',
+                    authMethod: 'google',
+                    isNewUser: false,
+                });
+            } else if (result.error) {
+                Alert.alert('Sign in Failed', result.error);
+            }
+        } catch (error) {
+            setIsLoading(false);
+            console.error('Google sign-in error:', error);
+            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+        }
+    };
 
     const handleSkip = () => {
         Alert.alert(
@@ -294,13 +352,32 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                         </View>
 
                         <View style={styles.emailOptions}>
+                            {appleAvailable && (
+                                <AppleAuthentication.AppleAuthenticationButton
+                                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                                    cornerRadius={12}
+                                    style={styles.appleAuthButton}
+                                    onPress={handleAppleSignIn}
+                                />
+                            )}
+
+                            <TouchableOpacity
+                                style={[styles.socialButton, styles.googleButton]}
+                                onPress={handleGoogleSignIn}
+                                disabled={isLoading}
+                            >
+                                <MaterialCommunityIcons name="google" size={22} color={colors.googleRed} />
+                                <Text style={styles.googleButtonText}>Continue with Google</Text>
+                            </TouchableOpacity>
+
                             <View style={styles.dividerContainer}>
                                 <View style={styles.divider} />
-                                <Text style={styles.dividerText}>Sign in to your account</Text>
+                                <Text style={styles.dividerText}>or</Text>
                                 <View style={styles.divider} />
                             </View>
 
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.emailButton}
                                 onPress={() => setCurrentScreen('login')}
                                 disabled={isLoading}
@@ -309,7 +386,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                 <Text style={styles.emailButtonText}>Sign in with Email</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.signupButton}
                                 onPress={() => setCurrentScreen('signup')}
                                 disabled={isLoading}
@@ -564,6 +641,11 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         marginBottom: 12,
         gap: 12,
+    },
+    appleAuthButton: {
+        width: '100%',
+        height: 50,
+        marginBottom: 12,
     },
     appleButton: {
         backgroundColor: '#000000',

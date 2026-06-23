@@ -5,7 +5,6 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { safeApiCall, logError, checkOnlineStatus } from './errorHandler';
 
 // Safely access environment variables to prevent iOS 18.6 crashes
 // Prefer env/Expo config, fallback to production Fly.io URL
@@ -253,6 +252,33 @@ class APIClient {
             include_preprocessing: true,
             include_finbert: true,
         });
+    }
+
+    // --- Polymarket Connectors & Sentiment ---
+
+    async validatePolymarketConnector(connector) {
+        return this.post('/prediction-market/connectors/polymarket/validate', {
+            connector,
+        });
+    }
+
+    async createPolymarketConnector(connector) {
+        return this.post('/prediction-market/connectors/polymarket', connector);
+    }
+
+    async listPolymarketConnectors(userId) {
+        return this.get(`/prediction-market/connectors/polymarket/${encodeURIComponent(userId)}`);
+    }
+
+    async deletePolymarketConnector(connectorId, userId = null) {
+        const query = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+        return this.request(`/prediction-market/connectors/polymarket/${encodeURIComponent(connectorId)}${query}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async getPolymarketSentiment(payload) {
+        return this.post('/prediction-market/polymarket/sentiment', payload);
     }
 
     // --- Health Check ---

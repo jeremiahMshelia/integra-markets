@@ -9,7 +9,7 @@ from aiohttp import AsyncResolver, TCPConnector, ClientTimeout, ClientError
 import feedparser
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import logging
@@ -105,7 +105,8 @@ class NewsDataSources:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
+            # Avoid brotli-only responses when the local environment lacks brotli support.
+            'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
             'Cache-Control': 'max-age=0',
             'Sec-Ch-Ua': '"Not A(Brand";v="99", "Chrome";v="120"',
@@ -197,8 +198,13 @@ class NewsDataSources:
     async def fetch_reuters_commodities(self) -> List[Dict]:
         """Fetch Reuters commodities news via RSS feed"""
         try:
-            # Reuters commodities news feed
-            url = "https://www.reuters.com/markets/commodities"
+            # Reuters does not expose a stable free commodities RSS feed here, so use
+            # a Google News RSS query constrained to Reuters commodity coverage.
+            url = (
+                "https://news.google.com/rss/search?"
+                "q=site%3Areuters.com%20(commodities%20OR%20oil%20OR%20gold%20OR%20wheat%20OR%20gas)"
+                "&hl=en-US&gl=US&ceid=US:en"
+            )
             
             try:
                 content = await self._get_text_with_retry(url, verify_ssl=False)  # Skip SSL for test
@@ -237,7 +243,7 @@ class NewsDataSources:
                         'title': entry.title,
                         'summary': getattr(entry, 'summary', ''),
                         'url': entry.link,
-                        'published': self._parse_date(entry.published),
+                        'published': self._parse_date(getattr(entry, 'published', '')),
                         'category': 'commodities'
                     })
             
@@ -499,6 +505,9 @@ class NewsDataSources:
     def _parse_date(self, date_string: str) -> datetime:
         """Parse various date formats to datetime object"""
         try:
+            if not date_string:
+                return datetime.now(timezone.utc)
+
             # Try parsing different date formats
             formats = [
                 '%a, %d %b %Y %H:%M:%S %Z',  # RFC 2822
@@ -509,15 +518,18 @@ class NewsDataSources:
             
             for fmt in formats:
                 try:
-                    return datetime.strptime(date_string, fmt)
+                    parsed = datetime.strptime(date_string, fmt)
+                    if parsed.tzinfo is None:
+                        return parsed.replace(tzinfo=timezone.utc)
+                    return parsed.astimezone(timezone.utc)
                 except ValueError:
                     continue
                     
             # If all formats fail, return current time
-            return datetime.now()
+            return datetime.now(timezone.utc)
             
         except Exception:
-            return datetime.now()
+            return datetime.now(timezone.utc)
 
     async def fetch_investing_news(self) -> List[Dict]:
         """Fetch news from Investing.com RSS feeds"""
