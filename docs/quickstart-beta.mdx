@@ -1,0 +1,230 @@
+---
+title: "Beta Quickstart"
+description: "Query the Integra sentiment archive and ask the agent natural-language questions about commodity sentiment."
+---
+
+The Integra Beta API gives you read access to a structured archive of
+commodity-news sentiment plus a built-in AI agent that can answer
+questions over it. This page walks through your first calls.
+
+The beta runs against `https://api.integramarkets.app`. Replace the
+example domain in any snippet below if you're hitting a staging
+deploy.
+
+## 1. Get an API key
+
+Sign in at [integramarkets.app/dashboard](https://www.integramarkets.app/dashboard)
+and visit the **API Keys** tab. Click **New Key** and copy the value —
+it's shown once. The key starts with `imk_`.
+
+All examples on this page assume:
+
+```bash
+export INTEGRA_API_KEY="imk_live_..."
+```
+
+Every endpoint expects this as a bearer token:
+
+```
+Authorization: Bearer $INTEGRA_API_KEY
+```
+
+## 2. List the commodities we cover
+
+```bash
+curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  https://api.integramarkets.app/v1/commodities
+```
+
+```json
+{
+  "commodities": ["copper", "crude oil", "lng", "natural gas", "wheat"]
+}
+```
+
+## 3. Get current sentiment for a commodity
+
+```bash
+curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  https://api.integramarkets.app/v1/sentiment/crude%20oil/now
+```
+
+```json
+{
+  "commodity": "crude oil",
+  "latest": {
+    "sentiment": "bearish",
+    "score": -0.34,
+    "observed_at": "2026-06-24T14:22:11Z"
+  },
+  "rolling_24h": {
+    "avg_score": -0.21,
+    "sample_size": 18
+  }
+}
+```
+
+## 4. Pull a sentiment time series
+
+`from` and `to` are ISO 8601 UTC timestamps. Default window is the
+last 7 days; max page size is 1000.
+
+```bash
+curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  "https://api.integramarkets.app/v1/sentiment/lng/history?from=2026-06-01T00:00:00Z&to=2026-06-24T00:00:00Z&limit=200"
+```
+
+## 5. Daily aggregates (chart-ready)
+
+Pre-bucketed by UTC date, with day-over-day momentum and bull/bear/
+neutral counts. Up to one year of history per call.
+
+```bash
+curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  "https://api.integramarkets.app/v1/sentiment/lng/daily?days=30"
+```
+
+```json
+{
+  "commodity": "lng",
+  "from": "2026-05-25",
+  "to": "2026-06-24",
+  "days": 30,
+  "series": [
+    {"date": "2026-05-25", "avg_score": -0.11, "article_count": 4,
+     "bullish_count": 1, "bearish_count": 2, "neutral_count": 1, "momentum": null},
+    {"date": "2026-05-26", "avg_score": 0.18, "article_count": 7,
+     "bullish_count": 4, "bearish_count": 1, "neutral_count": 2, "momentum": 0.29}
+  ]
+}
+```
+
+## 6. Resolved prediction markets
+
+The cross-market overlay product. Lists Kalshi (and, soon,
+Polymarket) markets enriched with metadata.
+
+```bash
+curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  "https://api.integramarkets.app/v1/markets/overlay?provider=kalshi&status=settled&limit=10"
+```
+
+## 7. Ask the agent a question
+
+Free-form natural language. The agent calls the same archive
+endpoints internally and returns a synthesized answer with citations.
+
+```bash
+curl -X POST -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  https://api.integramarkets.app/v1/agent/ask \
+  -d '{
+    "question": "What is the dominant narrative around LNG this week, and how does it compare to two weeks ago?"
+  }'
+```
+
+The response includes the answer, the tool calls the agent made, and
+which model produced it. Latency runs 3–10 seconds depending on how
+many tool calls the agent decides it needs.
+
+## 8. Use a pre-built template
+
+Three templates ship by default. Hit them with no question at all and
+they use sensible defaults; pass `variables` to override.
+
+```bash
+# Short/medium/long-term reading of today's crude oil sentiment
+curl -X POST -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  https://api.integramarkets.app/v1/agent/ask \
+  -d '{"template": "interpret_today", "commodity": "crude oil"}'
+
+# 30-day LNG sentiment trajectory with the three biggest swings
+curl -X POST -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  https://api.integramarkets.app/v1/agent/ask \
+  -d '{"template": "trend_30d", "commodity": "lng"}'
+
+# News-sentiment vs. prediction-market divergence
+curl -X POST -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  https://api.integramarkets.app/v1/agent/ask \
+  -d '{"template": "divergence_check", "variables": {"commodity": "crude oil", "threshold": 0.2}}'
+```
+
+List all available templates:
+
+```bash
+curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  https://api.integramarkets.app/v1/agent/templates
+```
+
+## 9. Python and TypeScript
+
+The same calls in your two most likely languages.
+
+```python
+import requests, os
+
+API = "https://api.integramarkets.app"
+H = {"Authorization": f"Bearer {os.environ['INTEGRA_API_KEY']}"}
+
+# Sentiment series
+series = requests.get(f"{API}/v1/sentiment/crude oil/daily?days=30", headers=H).json()
+
+# Agent ask
+answer = requests.post(
+    f"{API}/v1/agent/ask",
+    headers={**H, "Content-Type": "application/json"},
+    json={"template": "trend_30d", "commodity": "lng"},
+).json()
+print(answer["answer"])
+```
+
+```typescript
+const API = "https://api.integramarkets.app";
+const H = { Authorization: `Bearer ${process.env.INTEGRA_API_KEY}` };
+
+const series = await fetch(`${API}/v1/sentiment/crude%20oil/daily?days=30`, {
+  headers: H,
+}).then((r) => r.json());
+
+const answer = await fetch(`${API}/v1/agent/ask`, {
+  method: "POST",
+  headers: { ...H, "Content-Type": "application/json" },
+  body: JSON.stringify({ template: "trend_30d", commodity: "lng" }),
+}).then((r) => r.json());
+
+console.log(answer.answer);
+```
+
+## Beta limits
+
+The beta is free during a 30-day evaluation window. There are no
+hard caps published yet; we monitor for abuse and will reach out
+before throttling. When subscriptions launch, the beta key migrates
+to the **Pulse** tier automatically.
+
+## Field reference
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `sentiment` | enum | One of `bullish`, `bearish`, `neutral`. |
+| `score` | float | Continuous value on [-1, 1]. Negative = bearish, positive = bullish. |
+| `confidence` | float | Model confidence on [0, 1]. |
+| `momentum` | float | Day-over-day change in `avg_score`. Positive = improving. |
+| `article_count` | int | Number of source articles contributing to the bucket. |
+
+## What's not in the beta yet
+
+- **Monitor mode** (stored alert rules with webhook delivery) ships
+  next. Beta users get early access.
+- **Custom-agent tool manifest** for plugging Integra data into
+  your own LangChain / MCP / Anthropic agents ships with the
+  Terminal tier.
+- **Polymarket overlay** is in the pipeline but Kalshi is the only
+  prediction-market provider on the beta.
+
+If you need any of these now, email
+[contact@integramarkets.app](mailto:contact@integramarkets.app) — we
+prioritize beta-user requests.

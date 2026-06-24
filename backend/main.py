@@ -64,6 +64,18 @@ except ImportError:
     news_user_available = False
 
 try:
+    from api.sentiment_history import router as sentiment_history_router
+    sentiment_history_available = True
+except ImportError:
+    sentiment_history_available = False
+
+try:
+    from api.agent_ask import router as agent_ask_router
+    agent_ask_available = True
+except ImportError:
+    agent_ask_available = False
+
+try:
     from services.learning_loop import attach_supabase as _attach_loop_supabase
     learning_loop_available = True
 except ImportError:
@@ -121,6 +133,10 @@ if metrics_available:
     app.include_router(metrics_router)
 if news_user_available:
     app.include_router(news_user_router)
+if sentiment_history_available:
+    app.include_router(sentiment_history_router)
+if agent_ask_available:
+    app.include_router(agent_ask_router)
 
 # CORS — explicit allow-list of origins that may call the API from a
 # browser. allow_origins=["*"] + allow_credentials=True is invalid per

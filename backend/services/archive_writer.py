@@ -162,7 +162,44 @@ def persist_articles(
         logger.warning("archive_writer: sentiment_scores upsert failed: %s", exc)
         return {"documents": len(doc_rows), "scores": 0, "error": str(exc)}
 
-    return {"documents": len(doc_rows), "scores": len(score_rows)}
+    # Step 3: also populate entity_mentions for whichever rows had a
+    # commodity in raw_payload, so the public read API has commodity-keyed
+    # data without a separate NER pass. This is intentionally simple — one
+    # row per (document, commodity). Richer entity extraction can land in
+    # a later PR without breaking this path.
+    entity_rows: List[Dict[str, Any]] = []
+    score_by_doc = {row["document_id"]: row for row in score_rows}
+    for doc_row in doc_rows:
+        doc_id = doc_row.get("id")
+        payload = doc_row.get("raw_payload") or {}
+        commodity = (payload.get("commodity") or "").strip().lower()
+        if not commodity or not doc_id:
+            continue
+        score = score_by_doc.get(doc_id)
+        entity_rows.append({
+            "document_id": doc_id,
+            "entity": commodity,
+            "entity_type": "commodity",
+            "sentiment": (score or {}).get("sentiment"),
+            "score": (score or {}).get("score"),
+            "confidence": (score or {}).get("confidence"),
+            "model_version": model_version,
+        })
+
+    if entity_rows:
+        try:
+            supabase.table("entity_mentions").insert(entity_rows).execute()
+        except Exception as exc:  # noqa: BLE001
+            # Non-fatal: scores already persisted. Likely a duplicate-insert
+            # race; entity_mentions has no unique constraint by design (one
+            # doc can be re-extracted under multiple model versions).
+            logger.debug("archive_writer: entity_mentions insert skipped: %s", exc)
+
+    return {
+        "documents": len(doc_rows),
+        "scores": len(score_rows),
+        "entities": len(entity_rows),
+    }
 
 
 def persist_prediction_market_snapshot(
