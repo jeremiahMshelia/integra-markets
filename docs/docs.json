@@ -3,8 +3,8 @@
   "theme": "mint",
   "name": "Integra Markets API",
   "logo": {
-    "light": "/logo/light.jpg",
-    "dark": "/logo/dark.jpg",
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
     "href": "https://integramarkets.app"
   },
   "colors": {

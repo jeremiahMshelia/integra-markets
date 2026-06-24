@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 100" fill="none" role="img" aria-label="Integra Markets">
+  <!-- Icon: rounded square containing the letter i, brand green -->
+  <rect x="8" y="14" width="74" height="74" rx="15" stroke="#4ade80" stroke-width="6.5"/>
+  <circle cx="45" cy="36" r="5" fill="#4ade80"/>
+  <rect x="40.5" y="46" width="9" height="30" rx="2" fill="#4ade80"/>
+
+  <!-- Wordmark: white integra, muted grey Markets -->
+  <text x="100" y="69"
+        font-family="Inter, 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="48" font-weight="700" fill="#ffffff" letter-spacing="-1.5">integra</text>
+  <text x="247" y="69"
+        font-family="Inter, 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="46" font-weight="400" fill="#9ca3af" letter-spacing="-0.5">Markets</text>
+</svg>
