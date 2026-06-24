@@ -1396,7 +1396,23 @@ async def get_news_feed(request: NewsRequest):
                 enhanced_articles.append(enhanced_article)
         
         logger.info(f"Fetched and processed {len(enhanced_articles)} news articles")
-        
+
+        # Write-through to the historical archive. Idempotent on
+        # (source, url_hash) so re-fetches don't duplicate; new (model_name,
+        # model_version) pairs are required to re-score the archive later.
+        # Wrapped in try/except so archive write failures never break the
+        # live API response.
+        try:
+            from services.archive_writer import persist_articles
+            result = persist_articles(supabase, enhanced_articles)
+            logger.info(
+                "archive write-through: documents=%s scores=%s",
+                result.get("documents"),
+                result.get("scores"),
+            )
+        except Exception as archive_exc:  # noqa: BLE001
+            logger.warning("archive write-through skipped: %s", archive_exc)
+
         # Calculate enhancement statistics
         enhanced_count = sum(1 for article in enhanced_articles if article.get('enhanced', False))
         RECENT_NEWS_CACHE["timestamp"] = datetime.datetime.now().isoformat()

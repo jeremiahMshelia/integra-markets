@@ -495,9 +495,20 @@ class NewsDataSources:
                     continue
             
             logger.info(f"Fetched {len(all_articles)} Trading Economics articles")
-            source_tracker.update_status('Trading Economics', success=True)
+            # TradingEconomics RSS has been observed returning zero items
+            # (feed deprecated or rate-limited). Mark the source as failing
+            # so the dashboard doesn't claim it's healthy when it's not.
+            if not all_articles:
+                source_tracker.update_status(
+                    'Trading Economics',
+                    success=False,
+                    error='RSS endpoints returned zero items (feed may be deprecated; '
+                          'consider scraping tradingeconomics.com/calendar or moving to the paid REST API)',
+                )
+            else:
+                source_tracker.update_status('Trading Economics', success=True)
             return all_articles
-            
+
         except Exception as e:
             logger.error(f"Error fetching Trading Economics news: {e}")
             source_tracker.update_status('Trading Economics', success=False, error=str(e))
