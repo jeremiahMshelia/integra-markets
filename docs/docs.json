@@ -2,6 +2,11 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Integra Markets API",
+  "logo": {
+    "light": "/logo/light.jpg",
+    "dark": "/logo/dark.jpg",
+    "href": "https://integramarkets.app"
+  },
   "colors": {
     "primary": "#4ECCA3",
     "light": "#7FE6C0",
