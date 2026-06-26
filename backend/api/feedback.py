@@ -9,10 +9,12 @@ gets a supervised experience injected immediately (without waiting for a
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from services.supabase_jwt import verify_supabase_jwt
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +25,14 @@ EXPLICIT_VOTE_ACTIONS = {"agree", "disagree", "like", "dislike"}
 
 
 class FeedbackRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    # user_id is derived from the verified Supabase JWT; any value sent
+    # in the body is ignored. Kept Optional for backwards compatibility
+    # with older mobile builds.
+    user_id: Optional[str] = Field(
+        None,
+        description="Deprecated; ignored. user_id is derived from the auth token.",
+        deprecated=True,
+    )
     article_id: str = Field(..., min_length=1)
     action: str
     prediction_id: Optional[str] = None
@@ -49,9 +58,15 @@ def _action_reward(action: str, predicted_sentiment: Optional[str], vote: Option
 
 
 @router.post("")
-async def submit_feedback(payload: FeedbackRequest) -> dict:
+async def submit_feedback(
+    payload: FeedbackRequest,
+    auth: Dict[str, Any] = Depends(verify_supabase_jwt),
+) -> dict:
     if payload.action not in ALLOWED_ACTIONS:
         raise HTTPException(status_code=400, detail=f"unknown action: {payload.action}")
+
+    # Always trust the authenticated user_id over whatever the client sends.
+    user_id = auth["user_id"]
 
     from services.learning_loop import get_learning_loop  # local import to avoid cycle
     from services._supabase import get_supabase_client
@@ -65,7 +80,7 @@ async def submit_feedback(payload: FeedbackRequest) -> dict:
                 supabase.table("user_feedback")
                 .insert(
                     {
-                        "user_id": payload.user_id,
+                        "user_id": user_id,
                         "article_id": payload.article_id,
                         "prediction_id": payload.prediction_id,
                         "action": payload.action,

@@ -76,6 +76,18 @@ except ImportError:
     agent_ask_available = False
 
 try:
+    from api.divergence import router as divergence_router
+    divergence_available = True
+except ImportError:
+    divergence_available = False
+
+try:
+    from jobs import scheduler as background_scheduler
+    background_scheduler_available = True
+except ImportError:
+    background_scheduler_available = False
+
+try:
     from services.learning_loop import attach_supabase as _attach_loop_supabase
     learning_loop_available = True
 except ImportError:
@@ -112,10 +124,24 @@ async def startup_event():
         )
         _outcome_evaluator.start()
 
+    # Background jobs: news_fetcher (keeps archive populated) +
+    # divergence_monitor (fires push alerts on sentiment vs market gaps).
+    # Disable in tests by setting INTEGRA_DISABLE_SCHEDULER=true.
+    if background_scheduler_available and os.environ.get("INTEGRA_DISABLE_SCHEDULER", "").lower() not in ("1", "true", "yes"):
+        try:
+            background_scheduler.start_all()
+        except Exception as exc:  # noqa: BLE001
+            print(f"scheduler start failed: {exc}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     if _outcome_evaluator is not None:
         await _outcome_evaluator.stop()
+    if background_scheduler_available:
+        try:
+            background_scheduler.stop_all()
+        except Exception:  # noqa: BLE001
+            pass
     await close_db()
 
 # Mount routers conditionally
@@ -137,6 +163,8 @@ if sentiment_history_available:
     app.include_router(sentiment_history_router)
 if agent_ask_available:
     app.include_router(agent_ask_router)
+if divergence_available:
+    app.include_router(divergence_router)
 
 # CORS — explicit allow-list of origins that may call the API from a
 # browser. allow_origins=["*"] + allow_credentials=True is invalid per

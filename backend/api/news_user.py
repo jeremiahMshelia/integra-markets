@@ -14,8 +14,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from services.supabase_jwt import verify_supabase_jwt
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +25,12 @@ router = APIRouter(prefix="/api/news", tags=["news-user"])
 
 
 class UserNewsRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    # user_id is derived from the verified Supabase JWT; any body value is ignored.
+    user_id: Optional[str] = Field(
+        None,
+        description="Deprecated; ignored. user_id is derived from the auth token.",
+        deprecated=True,
+    )
     commodities: Optional[List[str]] = None
     regions: Optional[List[str]] = None
     keywords: Optional[List[str]] = None
@@ -35,7 +42,11 @@ class UserNewsRequest(BaseModel):
 
 
 @router.post("/user-based")
-async def user_based_news(payload: UserNewsRequest) -> Dict[str, Any]:
+async def user_based_news(
+    payload: UserNewsRequest,
+    auth: Dict[str, Any] = Depends(verify_supabase_jwt),
+) -> Dict[str, Any]:
+    user_id = auth["user_id"]
     try:
         from user_news_service import UserNewsService  # type: ignore
     except ImportError as exc:
@@ -58,7 +69,7 @@ async def user_based_news(payload: UserNewsRequest) -> Dict[str, Any]:
         logger.exception("user_news_service failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
-    await _log_predictions(payload.user_id, result.get("articles", []))
+    await _log_predictions(user_id, result.get("articles", []))
     return result
 
 

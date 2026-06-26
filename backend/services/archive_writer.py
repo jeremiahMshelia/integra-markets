@@ -162,13 +162,18 @@ def persist_articles(
         logger.warning("archive_writer: sentiment_scores upsert failed: %s", exc)
         return {"documents": len(doc_rows), "scores": 0, "error": str(exc)}
 
-    # Step 3: also populate entity_mentions for whichever rows had a
-    # commodity in raw_payload, so the public read API has commodity-keyed
-    # data without a separate NER pass. This is intentionally simple — one
-    # row per (document, commodity). Richer entity extraction can land in
-    # a later PR without breaking this path.
+    # Step 3: populate entity_mentions for BOTH commodity AND topic detections.
+    #
+    # Commodity rows: when raw_payload.commodity is set, one row per (doc, commodity).
+    # Topic rows: run the topic_taxonomy keyword detector on each article's
+    # title+content and emit one row per matching topic. The divergence service
+    # reads topic rows; the public sentiment endpoints read commodity rows.
+    #
+    # Wrapped so detection failures cannot block the sentiment-archive write above.
     entity_rows: List[Dict[str, Any]] = []
     score_by_doc = {row["document_id"]: row for row in score_rows}
+
+    # 3a. Commodity entity rows.
     for doc_row in doc_rows:
         doc_id = doc_row.get("id")
         payload = doc_row.get("raw_payload") or {}
@@ -185,6 +190,41 @@ def persist_articles(
             "confidence": (score or {}).get("confidence"),
             "model_version": model_version,
         })
+
+    # 3b. Topic entity rows (keyword-based detection over title+summary).
+    try:
+        from services.topic_taxonomy import detect_topics
+
+        article_by_url_hash: Dict[str, Dict[str, Any]] = {}
+        for article in articles:
+            url = (article.get("source_url") or article.get("url") or "").strip()
+            if url:
+                article_by_url_hash[_url_hash(url)] = article
+
+        for doc_row in doc_rows:
+            doc_id = doc_row.get("id")
+            url_hash = doc_row.get("url_hash")
+            if not doc_id or not url_hash:
+                continue
+            article = article_by_url_hash.get(url_hash) or {}
+            text_for_match = " ".join([
+                str(article.get("title") or ""),
+                str(article.get("summary") or ""),
+            ])
+            detected = detect_topics(text_for_match)
+            score = score_by_doc.get(doc_id)
+            for topic_key in detected:
+                entity_rows.append({
+                    "document_id": doc_id,
+                    "entity": topic_key,
+                    "entity_type": "topic",
+                    "sentiment": (score or {}).get("sentiment"),
+                    "score": (score or {}).get("score"),
+                    "confidence": (score or {}).get("confidence"),
+                    "model_version": model_version,
+                })
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("archive_writer: topic detection skipped: %s", exc)
 
     if entity_rows:
         try:

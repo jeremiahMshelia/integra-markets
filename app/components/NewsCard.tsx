@@ -24,6 +24,11 @@ interface NewsItem {
   polymarketContext?: {
     slug?: string;
   };
+  // Divergence enrichment (added by TodayDashboard from /v1/markets/divergence).
+  // Optional — undefined for articles whose topic has no prediction-market match.
+  divergenceProvider?: 'polymarket' | 'kalshi';
+  divergenceStatus?: 'ALIGNED' | 'DIVERGENCE' | 'NO_DATA';
+  divergenceDelta?: number; // signed, -1..+1; +ve = news more bullish than market
 }
 
 interface NewsCardProps {
@@ -292,6 +297,21 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         </Text>
       )}
 
+      {/* Divergence footer — only renders if upstream enriched this article
+          with a divergence reading (sentiment vs. prediction-market gap). */}
+      {item.divergenceStatus === 'DIVERGENCE' && item.divergenceProvider && typeof item.divergenceDelta === 'number' && (
+        <View style={styles.divergenceFooter}>
+          <Feather name="alert-triangle" size={12} color="#fbbf24" />
+          <Text style={styles.divergenceText}>
+            {item.divergenceProvider === 'polymarket' ? 'Polymarket' : 'Kalshi'}
+            {' '}
+            {item.divergenceDelta > 0 ? 'underpricing' : 'overpricing'}
+            {' '}
+            by {Math.round(Math.abs(item.divergenceDelta) * 100)}pt
+          </Text>
+        </View>
+      )}
+
       {/* Footer with source and share */}
       <View style={styles.footer}>
         <View style={styles.sourceContainer}>
@@ -360,6 +380,22 @@ const styles = StyleSheet.create({
     color: '#8FA7FF',
     fontSize: 12,
     fontWeight: '600',
+    marginLeft: 6,
+  },
+  divergenceFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(251, 191, 36, 0.08)',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  divergenceText: {
+    color: '#fbbf24',
+    fontSize: 12,
+    fontWeight: '500',
     marginLeft: 6,
   },
   sentimentIconContainer: {

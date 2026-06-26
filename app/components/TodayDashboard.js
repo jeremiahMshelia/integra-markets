@@ -19,7 +19,7 @@ const [marketData, setMarketData] = useState(null);
   const [aiOverlayVisible, setAiOverlayVisible] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
 
-  const filterOptions = ['All', 'Bullish', 'Neutral', 'Bearish'];
+  const filterOptions = ['All', 'Bullish', 'Neutral', 'Bearish', 'Divergence'];
 
   const trackedCommodities = ['OIL', 'GOLD', 'WHEAT', 'NAT GAS'];
 
@@ -157,6 +157,7 @@ const [marketData, setMarketData] = useState(null);
 
   const filteredNews = newsData.filter(item => {
     if (selectedFilter === 'All') return true;
+    if (selectedFilter === 'Divergence') return item.divergenceStatus === 'DIVERGENCE';
     return item.sentiment === selectedFilter.toUpperCase();
   });
 

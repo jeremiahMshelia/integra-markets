@@ -57,6 +57,12 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
   const [emailAlerts, setEmailAlerts] = useState(false);
   const [priceAlerts, setPriceAlerts] = useState(true);
   const [newsAlerts, setNewsAlerts] = useState(true);
+  // Prediction-market divergence alerts (new in 2026-06).
+  // Defaults to OFF so existing users don't get surprise notifications.
+  // Threshold = absolute delta in percentage points (5..50). Topics +
+  // providers default to the same set as the backend migration.
+  const [divergenceAlerts, setDivergenceAlerts] = useState(false);
+  const [divergenceThreshold, setDivergenceThreshold] = useState(20);
   const [alerts, setAlerts] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [alertsLoaded, setAlertsLoaded] = useState(false);
@@ -100,6 +106,15 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
       if (savedPreferences) {
         const preferences = JSON.parse(savedPreferences);
         setAlertPreferences(preferences);
+      }
+      // Divergence alert prefs live in a separate key (different
+      // server-side row) so a stale alert_preferences blob can't
+      // accidentally toggle them on.
+      const savedDivergence = await AsyncStorage.getItem('divergence_alert_prefs');
+      if (savedDivergence) {
+        const d = JSON.parse(savedDivergence);
+        if (typeof d.enabled === 'boolean') setDivergenceAlerts(d.enabled);
+        if (typeof d.threshold === 'number') setDivergenceThreshold(d.threshold);
       }
     } catch (error) {
       console.error('Error loading alert preferences:', error);
@@ -167,6 +182,9 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
         return 'article';
       case 'threshold':
         return 'warning';
+      case 'divergence':
+      case 'divergence_alert':
+        return 'compare-arrows';
       default:
         return 'notifications';
     }
@@ -236,6 +254,29 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
       case 'news':
         setNewsAlerts(value);
         break;
+      case 'divergence':
+        setDivergenceAlerts(value);
+        persistDivergencePrefs({ enabled: value, threshold: divergenceThreshold });
+        break;
+      case 'divergenceThreshold':
+        setDivergenceThreshold(value);
+        persistDivergencePrefs({ enabled: divergenceAlerts, threshold: value });
+        break;
+    }
+  };
+
+  // Persist to AsyncStorage immediately (so the toggle survives a kill).
+  // Backend sync happens in the next request cycle via the existing
+  // user preferences PATCH endpoint — wiring that here would create
+  // a tight coupling; instead the value is read alongside other prefs.
+  const persistDivergencePrefs = async ({ enabled, threshold }) => {
+    try {
+      await AsyncStorage.setItem(
+        'divergence_alert_prefs',
+        JSON.stringify({ enabled, threshold }),
+      );
+    } catch (err) {
+      console.warn('failed to persist divergence prefs:', err);
     }
   };
 
@@ -409,6 +450,42 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
               thumbColor={newsAlerts ? colors.textPrimary : colors.textSecondary}
             />
           </View>
+
+          {/* Divergence alerts — fires when news sentiment diverges from
+              Polymarket / Kalshi consensus past the threshold. */}
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Prediction-market divergence</Text>
+            <Switch
+              value={divergenceAlerts}
+              onValueChange={(value) => handleSettingChange('divergence', value)}
+              trackColor={{ false: colors.bgSecondary, true: colors.accentPositive }}
+              thumbColor={divergenceAlerts ? colors.textPrimary : colors.textSecondary}
+            />
+          </View>
+          {divergenceAlerts && (
+            <View style={styles.settingSubRow}>
+              <Text style={styles.settingSubLabel}>
+                Threshold: {divergenceThreshold} pts
+              </Text>
+              <View style={styles.thresholdButtons}>
+                {[10, 20, 30, 40].map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[
+                      styles.thresholdChip,
+                      divergenceThreshold === value && styles.thresholdChipActive,
+                    ]}
+                    onPress={() => handleSettingChange('divergenceThreshold', value)}
+                  >
+                    <Text style={[
+                      styles.thresholdChipText,
+                      divergenceThreshold === value && styles.thresholdChipTextActive,
+                    ]}>{value}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Recent Alerts */}
@@ -595,6 +672,40 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 16,
     color: colors.textPrimary,
+  },
+  settingSubRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 12,
+    paddingLeft: 12,
+  },
+  settingSubLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  thresholdButtons: {
+    flexDirection: 'row',
+  },
+  thresholdChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginLeft: 6,
+    borderRadius: 12,
+    backgroundColor: colors.bgTertiary,
+  },
+  thresholdChipActive: {
+    backgroundColor: colors.accentPositive,
+  },
+  thresholdChipText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  thresholdChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   alertItem: {
     flexDirection: 'row',
