@@ -1,16 +1,47 @@
 {
   "name": "@integra-markets/sdk",
   "version": "0.1.0",
-  "description": "OpenAPI client for @integra-markets/sdk",
-  "author": "OpenAPI-Generator",
+  "description": "Official TypeScript client for the Integra Markets API — commodity sentiment + prediction-market connectors.",
+  "author": {
+    "name": "Integra Markets",
+    "email": "contact@integramarkets.app",
+    "url": "https://integramarkets.app"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://docs.integramarkets.app",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GIT_USER_ID/GIT_REPO_ID.git"
+    "url": "git+https://github.com/jeremiahMshelia/integra-markets.git",
+    "directory": "sdk/typescript"
   },
+  "bugs": {
+    "url": "https://github.com/jeremiahMshelia/integra-markets/issues"
+  },
+  "keywords": [
+    "integra",
+    "integra-markets",
+    "sentiment",
+    "commodities",
+    "polymarket",
+    "kalshi",
+    "prediction-markets",
+    "finance"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
   "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc && tsc -p tsconfig.esm.json",
     "prepare": "npm run build"

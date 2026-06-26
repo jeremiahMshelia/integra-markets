@@ -31,17 +31,45 @@ REQUIRES = [
 setup(
     name=NAME,
     version=VERSION,
-    description="Integra Markets API",
-    author="OpenAPI Generator community",
-    author_email="team@openapitools.org",
-    url="",
-    keywords=["OpenAPI", "OpenAPI-Generator", "Integra Markets API"],
+    description="Official Python client for the Integra Markets API — commodity sentiment + prediction-market connectors.",
+    author="Integra Markets",
+    author_email="contact@integramarkets.app",
+    url="https://github.com/jeremiahMshelia/integra-markets",
+    project_urls={
+        "Homepage": "https://integramarkets.app",
+        "Documentation": "https://docs.integramarkets.app",
+        "Source": "https://github.com/jeremiahMshelia/integra-markets",
+        "Issues": "https://github.com/jeremiahMshelia/integra-markets/issues",
+    },
+    license="Apache-2.0",
+    keywords=["integra", "integra-markets", "sentiment", "commodities", "polymarket", "kalshi", "prediction-markets", "finance"],
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Financial and Insurance Industry",
+        "License :: OSI Approved :: Apache Software License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Topic :: Office/Business :: Financial",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    ],
     install_requires=REQUIRES,
     packages=find_packages(exclude=["test", "tests"]),
     include_package_data=True,
     long_description_content_type='text/markdown',
     long_description="""\
-    Commodity-aware sentiment analysis API with prediction-market connectors.
-    """,  # noqa: E501
+Official Python client for the Integra Markets API.
+
+Integra Markets provides commodity-aware sentiment analysis and
+prediction-market connectors (Polymarket, Kalshi). Use this SDK to
+score news against tuned finance lexicons, query the historical
+sentiment archive, and join news sentiment to resolved prediction
+markets.
+
+Documentation: https://docs.integramarkets.app
+""",
     package_data={"integra_markets": ["py.typed"]},
 )

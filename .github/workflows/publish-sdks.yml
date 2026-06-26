@@ -1,0 +1,121 @@
+name: Publish SDKs
+
+# Fires only on tags shaped like sdk-v0.1.0, sdk-v0.2.0-beta.1, etc.
+# Tag the repo (`git tag sdk-v0.1.0 && git push origin sdk-v0.1.0`)
+# AFTER bumping the version in:
+#   sdk/python/setup.py
+#   sdk/python/pyproject.toml
+#   sdk/typescript/package.json
+# All three must match the tag (e.g. 0.1.0). The first publish must be
+# done manually so package names are reserved on PyPI and npm; from
+# then on this workflow handles every subsequent release.
+#
+# Required repository secrets:
+#   PYPI_API_TOKEN   pypi.org → Account Settings → API tokens (scope: project)
+#   NPM_TOKEN        npmjs.com → Access Tokens → Automation token
+
+on:
+  push:
+    tags:
+      - "sdk-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build without publishing (useful for verification)"
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-sdks-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pypi:
+    name: Publish Python SDK to PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tooling
+        run: pip install --upgrade build twine
+
+      - name: Verify version matches tag
+        if: startsWith(github.ref, 'refs/tags/sdk-v')
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/sdk-v}"
+          PKG_VERSION=$(grep -E '^VERSION\s*=' sdk/python/setup.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::tag version ($TAG_VERSION) != setup.py version ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Build sdist + wheel
+        working-directory: sdk/python
+        run: python -m build
+
+      - name: Check artifacts
+        working-directory: sdk/python
+        run: twine check dist/*
+
+      - name: Publish (dry run)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        working-directory: sdk/python
+        run: |
+          echo "Dry run — would publish:"
+          ls -la dist/
+
+      - name: Publish to PyPI
+        if: github.event_name == 'push' || github.event.inputs.dry_run == 'false'
+        working-directory: sdk/python
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/*
+
+  npm:
+    name: Publish TypeScript SDK to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify version matches tag
+        if: startsWith(github.ref, 'refs/tags/sdk-v')
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/sdk-v}"
+          PKG_VERSION=$(node -p "require('./sdk/typescript/package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::tag version ($TAG_VERSION) != package.json version ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        working-directory: sdk/typescript
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        working-directory: sdk/typescript
+        run: npm run build
+
+      - name: Publish (dry run)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        working-directory: sdk/typescript
+        run: npm publish --dry-run --access public
+
+      - name: Publish to npm
+        if: github.event_name == 'push' || github.event.inputs.dry_run == 'false'
+        working-directory: sdk/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

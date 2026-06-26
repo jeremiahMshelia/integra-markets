@@ -1,13 +1,27 @@
 [project]
 name = "integra_markets"
 version = "0.1.0"
-description = "Integra Markets API"
+description = "Official Python client for the Integra Markets API — commodity sentiment + prediction-market connectors."
 authors = [
-  {name = "OpenAPI Generator Community",email = "team@openapitools.org"},
+  {name = "Integra Markets", email = "contact@integramarkets.app"},
 ]
 readme = "README.md"
-keywords = ["OpenAPI", "OpenAPI-Generator", "Integra Markets API"]
+license = {text = "Apache-2.0"}
+keywords = ["integra", "integra-markets", "sentiment", "commodities", "polymarket", "kalshi", "prediction-markets", "finance"]
 requires-python = ">=3.9"
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Office/Business :: Financial",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 
 dependencies = [
   "urllib3 (>=2.1.0,<3.0.0)",
@@ -17,7 +31,10 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/GIT_USER_ID/GIT_REPO_ID"
+Homepage = "https://integramarkets.app"
+Documentation = "https://docs.integramarkets.app"
+Source = "https://github.com/jeremiahMshelia/integra-markets"
+Issues = "https://github.com/jeremiahMshelia/integra-markets/issues"
 
 [tool.poetry]
 requires-poetry = ">=2.0"
