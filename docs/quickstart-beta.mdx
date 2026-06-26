@@ -29,7 +29,29 @@ Every endpoint expects this as a bearer token:
 Authorization: Bearer $INTEGRA_API_KEY
 ```
 
-## 2. List the commodities we cover
+## 2. Install the SDK (optional)
+
+You can call every endpoint with plain `curl` or any HTTP client. If you
+prefer a typed SDK, we publish official clients for Python and
+TypeScript that wrap the same endpoints:
+
+<CodeGroup>
+
+```bash Python
+pip install integra-markets
+```
+
+```bash TypeScript
+npm install @integra-markets/sdk
+```
+
+</CodeGroup>
+
+The SDK examples in this guide use these packages. If you want to skip
+straight to raw HTTP, the curl examples below work without installing
+anything.
+
+## 3. List the commodities we cover
 
 ```bash
 curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
@@ -42,7 +64,7 @@ curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
 }
 ```
 
-## 3. Get current sentiment for a commodity
+## 4. Get current sentiment for a commodity
 
 ```bash
 curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
@@ -64,7 +86,7 @@ curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
 }
 ```
 
-## 4. Pull a sentiment time series
+## 5. Pull a sentiment time series
 
 `from` and `to` are ISO 8601 UTC timestamps. Default window is the
 last 7 days; max page size is 1000.
@@ -74,7 +96,7 @@ curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
   "https://api.integramarkets.app/v1/sentiment/lng/history?from=2026-06-01T00:00:00Z&to=2026-06-24T00:00:00Z&limit=200"
 ```
 
-## 5. Daily aggregates (chart-ready)
+## 6. Daily aggregates (chart-ready)
 
 Pre-bucketed by UTC date, with day-over-day momentum and bull/bear/
 neutral counts. Up to one year of history per call.
@@ -99,7 +121,7 @@ curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
 }
 ```
 
-## 6. Resolved prediction markets
+## 7. Resolved prediction markets
 
 The cross-market overlay product. Lists Kalshi (and, soon,
 Polymarket) markets enriched with metadata.
@@ -109,7 +131,7 @@ curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
   "https://api.integramarkets.app/v1/markets/overlay?provider=kalshi&status=settled&limit=10"
 ```
 
-## 7. Ask the agent a question
+## 8. Ask the agent a question
 
 Free-form natural language. The agent calls the same archive
 endpoints internally and returns a synthesized answer with citations.
@@ -127,7 +149,7 @@ The response includes the answer, the tool calls the agent made, and
 which model produced it. Latency runs 3–10 seconds depending on how
 many tool calls the agent decides it needs.
 
-## 8. Use a pre-built template
+## 9. Use a pre-built template
 
 Three templates ship by default. Hit them with no question at all and
 they use sensible defaults; pass `variables` to override.
@@ -159,44 +181,63 @@ curl -H "Authorization: Bearer $INTEGRA_API_KEY" \
   https://api.integramarkets.app/v1/agent/templates
 ```
 
-## 9. Python and TypeScript
+## 10. Using the SDK
 
-The same calls in your two most likely languages.
+If you installed one of the official SDKs in step 2, the same calls
+look like this.
 
-```python
-import requests, os
+<CodeGroup>
 
-API = "https://api.integramarkets.app"
-H = {"Authorization": f"Bearer {os.environ['INTEGRA_API_KEY']}"}
+```python Python
+import os
+from integra_markets import ApiClient, Configuration
+from integra_markets.api import SentimentHistoryApi, AgentApi
 
-# Sentiment series
-series = requests.get(f"{API}/v1/sentiment/crude oil/daily?days=30", headers=H).json()
+config = Configuration(
+    host="https://api.integramarkets.app",
+    access_token=os.environ["INTEGRA_API_KEY"],
+)
 
-# Agent ask
-answer = requests.post(
-    f"{API}/v1/agent/ask",
-    headers={**H, "Content-Type": "application/json"},
-    json={"template": "trend_30d", "commodity": "lng"},
-).json()
-print(answer["answer"])
+with ApiClient(config) as client:
+    sentiment_api = SentimentHistoryApi(client)
+    agent_api = AgentApi(client)
+
+    # Sentiment time series
+    series = sentiment_api.sentiment_daily(commodity="lng", days=30)
+    print(f"30-day LNG: {len(series.series)} days, latest momentum {series.series[-1].momentum}")
+
+    # Agent ask with a template
+    answer = agent_api.ask(ask_request={"template": "trend_30d", "commodity": "lng"})
+    print(answer.answer)
 ```
 
-```typescript
-const API = "https://api.integramarkets.app";
-const H = { Authorization: `Bearer ${process.env.INTEGRA_API_KEY}` };
+```typescript TypeScript
+import { Configuration, SentimentHistoryApi, AgentApi } from "@integra-markets/sdk";
 
-const series = await fetch(`${API}/v1/sentiment/crude%20oil/daily?days=30`, {
-  headers: H,
-}).then((r) => r.json());
+const config = new Configuration({
+  basePath: "https://api.integramarkets.app",
+  accessToken: process.env.INTEGRA_API_KEY,
+});
 
-const answer = await fetch(`${API}/v1/agent/ask`, {
-  method: "POST",
-  headers: { ...H, "Content-Type": "application/json" },
-  body: JSON.stringify({ template: "trend_30d", commodity: "lng" }),
-}).then((r) => r.json());
+const sentimentApi = new SentimentHistoryApi(config);
+const agentApi = new AgentApi(config);
 
+// Sentiment time series
+const series = await sentimentApi.sentimentDaily({ commodity: "lng", days: 30 });
+console.log(`30-day LNG: ${series.series.length} days`);
+
+// Agent ask with a template
+const answer = await agentApi.ask({
+  askRequest: { template: "trend_30d", commodity: "lng" },
+});
 console.log(answer.answer);
 ```
+
+</CodeGroup>
+
+Prefer raw HTTP? Every endpoint above shows curl for clients in other
+languages — there's no behaviour the SDKs unlock that you can't get
+from the wire format.
 
 ## Beta limits
 
