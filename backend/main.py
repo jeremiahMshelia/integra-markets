@@ -122,13 +122,32 @@ if metrics_available:
 if news_user_available:
     app.include_router(news_user_router)
 
-# Add CORS middleware to allow requests from your React Native app
+# CORS — explicit allow-list of origins that may call the API from a
+# browser. allow_origins=["*"] + allow_credentials=True is invalid per
+# the CORS spec (browsers reject credentialed cross-origin requests with
+# wildcard origins) — so we enumerate the production + preview origins
+# we actually serve. The mobile app is unaffected (native HTTP, not CORS).
+# Override the list at deploy time via INTEGRA_ALLOWED_ORIGINS=a,b,c.
+_default_allowed_origins = [
+    "https://integramarkets.app",
+    "https://www.integramarkets.app",
+    "https://dashboard.integramarkets.app",
+    "https://docs.integramarkets.app",
+]
+_env_origins = os.environ.get("INTEGRA_ALLOWED_ORIGINS", "").strip()
+ALLOWED_ORIGINS = (
+    [o.strip() for o in _env_origins.split(",") if o.strip()]
+    if _env_origins
+    else _default_allowed_origins
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your app's domain
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept"],
+    max_age=86400,
 )
 
 # Get Supabase URL and Key from environment variables

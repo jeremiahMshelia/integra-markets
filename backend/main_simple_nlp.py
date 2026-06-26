@@ -1,5 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+# Auth dep: derives the calling user from the Bearer api_key.
+# Routes that require authentication add `auth: Dict[str, Any] = Depends(verify_api_key)`
+# to their signature, then trust auth["user_id"] (never the request body).
+from services.api_key_auth import verify_api_key
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import os
@@ -165,13 +169,29 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS — explicit allow-list, same policy as main.py. Wildcard + credentials
+# is invalid per the CORS spec and browsers reject it. Override via the
+# INTEGRA_ALLOWED_ORIGINS env var (comma-separated).
+_default_allowed_origins = [
+    "https://integramarkets.app",
+    "https://www.integramarkets.app",
+    "https://dashboard.integramarkets.app",
+    "https://docs.integramarkets.app",
+]
+_env_origins = os.environ.get("INTEGRA_ALLOWED_ORIGINS", "").strip()
+ALLOWED_ORIGINS = (
+    [o.strip() for o in _env_origins.split(",") if o.strip()]
+    if _env_origins
+    else _default_allowed_origins
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept"],
+    max_age=86400,
 )
 
 # Beta disclosure middleware. Stamps every response with headers that:
@@ -279,7 +299,15 @@ class ConnectorCredentialRequest(BaseModel):
     persist_secret: bool = Field(True, description="Store the credential encrypted for future connector runs")
 
 class PolymarketConnectorRequest(BaseModel):
-    user_id: str = Field(..., description="Owning user ID")
+    # NOTE: user_id is no longer trusted from the request body. It is
+    # derived from the authenticated API key in the route handler and
+    # any value supplied here is ignored (and will eventually be removed
+    # from the schema entirely once all docs/clients drop it).
+    user_id: Optional[str] = Field(
+        None,
+        description="Deprecated; ignored. user_id is derived from the API key.",
+        deprecated=True,
+    )
     name: str = Field(..., min_length=1, description="User-visible connector name")
     source_mode: str = Field("tenant_private", description="shared, hybrid, or tenant_private")
     base_url: Optional[str] = Field("https://polymarket.com", description="Base endpoint or portal URL for the connector")
@@ -741,7 +769,12 @@ def get_models_status():
     }
 
 @app.post('/api/prediction-market/connectors/polymarket/validate')
-def validate_polymarket_connector(request: PolymarketConnectorValidationRequest):
+def validate_polymarket_connector(
+    request: PolymarketConnectorValidationRequest,
+    auth: Dict[str, Any] = Depends(verify_api_key),
+):
+    # user_id is the API-key owner, regardless of what the request body says.
+    request.connector.user_id = auth["user_id"]
     validation = validate_polymarket_connector_request(request.connector)
     payload = normalize_polymarket_connector_payload(request.connector, encrypt_secret=False)
     return {
@@ -770,7 +803,11 @@ def validate_polymarket_connector(request: PolymarketConnectorValidationRequest)
     }
 
 @app.post('/api/prediction-market/connectors/polymarket')
-def create_polymarket_connector(request: PolymarketConnectorRequest):
+def create_polymarket_connector(
+    request: PolymarketConnectorRequest,
+    auth: Dict[str, Any] = Depends(verify_api_key),
+):
+    request.user_id = auth["user_id"]
     validate_polymarket_connector_request(request)
     db = require_supabase()
     payload = normalize_polymarket_connector_payload(request)
@@ -786,8 +823,10 @@ def create_polymarket_connector(request: PolymarketConnectorRequest):
     saved["message"] = "Connector stored. Your app can now replay this tenant-scoped credential for Polymarket-related sentiment and source fetches."
     return saved
 
-@app.get('/api/prediction-market/connectors/polymarket/{user_id}')
-def list_polymarket_connectors(user_id: str):
+@app.get('/api/prediction-market/connectors/polymarket')
+def list_polymarket_connectors(auth: Dict[str, Any] = Depends(verify_api_key)):
+    # No more {user_id} path param — derive from the authenticated key.
+    user_id = auth["user_id"]
     db = require_supabase()
     result = db.table(PREDICTION_MARKET_CONNECTORS_TABLE).select("*").eq("provider", "polymarket").eq("user_id", user_id).order("created_at", desc=True).execute()
     connectors = [serialize_saved_polymarket_connector(record) for record in (getattr(result, "data", None) or [])]
@@ -798,18 +837,32 @@ def list_polymarket_connectors(user_id: str):
     }
 
 @app.delete('/api/prediction-market/connectors/polymarket/{connector_id}')
-def delete_polymarket_connector(connector_id: str, user_id: Optional[str] = None):
+def delete_polymarket_connector(
+    connector_id: str,
+    auth: Dict[str, Any] = Depends(verify_api_key),
+):
+    user_id = auth["user_id"]
     db = require_supabase()
-    query = db.table(PREDICTION_MARKET_CONNECTORS_TABLE).delete().eq("id", connector_id).eq("provider", "polymarket")
-    if user_id:
-        query = query.eq("user_id", user_id)
+    # Always scope delete to the authenticated user so callers cannot
+    # remove other tenants' connectors even if they guess a connector_id.
+    query = (
+        db.table(PREDICTION_MARKET_CONNECTORS_TABLE)
+        .delete()
+        .eq("id", connector_id)
+        .eq("provider", "polymarket")
+        .eq("user_id", user_id)
+    )
     result = query.execute()
     if not getattr(result, "data", None):
         raise HTTPException(status_code=404, detail="Polymarket connector not found")
     return {"success": True, "deleted_id": connector_id}
 
 @app.post('/api/prediction-market/polymarket/sentiment')
-async def get_polymarket_connector_sentiment(request: PolymarketSentimentRequest):
+async def get_polymarket_connector_sentiment(
+    request: PolymarketSentimentRequest,
+    auth: Dict[str, Any] = Depends(verify_api_key),
+):
+    request.user_id = auth["user_id"]
     connector_record = None
     credentials_summary = serialize_connector_credentials(request.credentials)
 

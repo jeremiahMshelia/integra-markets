@@ -34,12 +34,15 @@ curl -X POST https://api.integramarkets.app/api/prediction-market/connectors/pol
   -H "Content-Type: application/json" \
   -d '{
     "connector": {
-      "user_id": "<supabase-user-uuid>",
       "name": "my-polymarket",
       "event_url": "https://polymarket.com/event/will-fed-cut-rates-march"
     }
   }'
 ```
+
+The connector's owner is derived from the API key in the `Authorization`
+header — you do not pass a `user_id`. (If you have legacy clients that still
+send one, it is accepted and ignored.)
 
 The response echoes the connector with any normalised fields and surfaces
 any validation issues (bad URL, unreachable host, invalid credentials).
@@ -50,10 +53,6 @@ Nothing is persisted.
 <api>POST https://api.integramarkets.app/api/prediction-market/connectors/polymarket</api>
 
 ### Body
-
-<ParamField body="user_id" type="string" required>
-  Owning Supabase user UUID. Connectors are scoped per user.
-</ParamField>
 
 <ParamField body="name" type="string" required>
   User-visible name (e.g. `personal`, `team-alpha`).
@@ -139,7 +138,6 @@ curl -X POST https://api.integramarkets.app/api/prediction-market/connectors/pol
   -H "Authorization: Bearer $INTEGRA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": "<supabase-user-uuid>",
     "name": "personal",
     "event_url": "https://polymarket.com/event/will-fed-cut-rates-march",
     "credentials": {
@@ -152,13 +150,13 @@ curl -X POST https://api.integramarkets.app/api/prediction-market/connectors/pol
 
 ## List
 
-<api>GET https://api.integramarkets.app/api/prediction-market/connectors/polymarket/{user_id}</api>
+<api>GET https://api.integramarkets.app/api/prediction-market/connectors/polymarket</api>
 
-Returns all connectors owned by `user_id`. Credentials are never returned
-in plaintext — only metadata (name, event URL, last used, etc.).
+Returns all connectors owned by the API key holder. Credentials are never
+returned in plaintext — only metadata (name, event URL, last used, etc.).
 
 ```bash
-curl https://api.integramarkets.app/api/prediction-market/connectors/polymarket/<user-id> \
+curl https://api.integramarkets.app/api/prediction-market/connectors/polymarket \
   -H "Authorization: Bearer $INTEGRA_API_KEY"
 ```
 
